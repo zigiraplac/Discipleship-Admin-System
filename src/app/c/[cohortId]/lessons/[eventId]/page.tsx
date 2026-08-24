@@ -42,7 +42,7 @@ export default async function RegisterPage({
   const recorded = isRecorded(ev);
   const isFuture = ev.date > today;
   const canWriteRole = user.role === "facilitator" || user.role === "admin";
-  const editable = canWriteRole && !isFuture && (!recorded || user.role === "admin");
+  const editable = canWriteRole && !isFuture;
 
   const roster: RegisterRosterEntry[] = agg.roster.map((s) => ({
     id: s.id,

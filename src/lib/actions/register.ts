@@ -15,8 +15,9 @@ export interface SaveRegisterInput {
 
 /**
  * The one write path for attendance in the whole product (08-backend-notes.md).
- * A save on an already-recorded register is a *correction* and requires
- * admin — everyone else's registers are read-only once saved.
+ * A save on an already-recorded register is a *correction* — allowed for
+ * the same facilitator/admin roles as the original save, logged to
+ * audit_log either way so a correction is never silent.
  */
 export async function saveRegister(input: SaveRegisterInput): Promise<void> {
   const user = await requireRole("facilitator", "admin");
@@ -55,9 +56,6 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
   if (existingErr) throw existingErr;
 
   const isCorrection = !!existing?.recorded_at;
-  if (isCorrection && user.role !== "admin") {
-    throw new Error("Only an administrator can correct an already-saved register.");
-  }
 
   const now = new Date().toISOString();
   const patch: RegisterUpdate = {
