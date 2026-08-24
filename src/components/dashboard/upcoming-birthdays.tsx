@@ -1,13 +1,17 @@
-import Link from "next/link";
-import { Cake } from "@phosphor-icons/react/dist/ssr";
-import { Card } from "@/components/ui/card";
-import { formatBirthdayDate, formatDaysUntil, type UpcomingBirthday } from "@/lib/domain/birthdays";
-import { cn } from "@/lib/utils";
+import { formatBirthdayDate, type UpcomingBirthday } from "@/lib/domain/birthdays";
+import { UpcomingEventsCard, type UpcomingEventRow } from "@/components/shared/upcoming-events";
+
+function dayLabel(daysUntil: number, day: number, month: number): string {
+  if (daysUntil === 0) return "Today";
+  if (daysUntil === 1) return "Tomorrow";
+  return formatBirthdayDate(day, month);
+}
 
 /** Surfaces who's coming up soon without having to scroll the calendar
- * forward month by month. `studentHref` is null when the signed-in role
- * has no Students screen to link to (teacher) — the row still renders,
- * just not as a link. */
+ * forward month by month — same card as "Up next" and the Calendar's
+ * "This week" panel, so every "what's coming up" list reads the same way.
+ * `studentHref` is null when the signed-in role has no Students screen to
+ * link to (teacher) — the row still renders, just not as a link. */
 export function UpcomingBirthdaysCard({
   birthdays,
   studentHref,
@@ -15,42 +19,15 @@ export function UpcomingBirthdaysCard({
   birthdays: UpcomingBirthday[];
   studentHref: ((studentId: string) => string) | null;
 }) {
-  return (
-    <Card className="p-[18px]">
-      <div className="flex items-center gap-2">
-        <span className="grid size-6 flex-none place-items-center rounded-[7px] bg-yellow-100 text-yellow-ink">
-          <Cake size={14} />
-        </span>
-        <div className="text-[15px] font-bold text-ink">Upcoming birthdays</div>
-      </div>
-      <div className="mt-3.5 grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-        {birthdays.map((b) => {
-          const row = (
-            <span className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 hover:bg-hover">
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{b.name}</span>
-              <span className="text-xs text-ink-muted tabular">{formatBirthdayDate(b.day, b.month)}</span>
-              <span
-                className={cn(
-                  "flex-none rounded-pill px-2 py-px text-[11px] font-semibold",
-                  b.daysUntil <= 1 ? "bg-yellow-100 text-yellow-ink" : "bg-page text-ink-tertiary"
-                )}
-              >
-                {formatDaysUntil(b.daysUntil)}
-              </span>
-            </span>
-          );
-          return studentHref ? (
-            <Link key={b.studentId} href={studentHref(b.studentId)}>
-              {row}
-            </Link>
-          ) : (
-            <div key={b.studentId}>{row}</div>
-          );
-        })}
-        {birthdays.length === 0 && (
-          <div className="px-2.5 py-3 text-xs text-ink-muted">No birthdays on file yet.</div>
-        )}
-      </div>
-    </Card>
-  );
+  const rows: UpcomingEventRow[] = birthdays.map((b) => ({
+    id: `birthday-${b.studentId}`,
+    tone: "yellow",
+    kind: "birthday",
+    title: b.name,
+    meta: "Birthday",
+    dateLabel: dayLabel(b.daysUntil, b.day, b.month),
+    href: studentHref ? studentHref(b.studentId) : null,
+  }));
+
+  return <UpcomingEventsCard title="Upcoming birthdays" rows={rows} emptyLabel="No birthdays on file yet." />;
 }

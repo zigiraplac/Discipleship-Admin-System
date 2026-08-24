@@ -47,9 +47,3 @@ const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep
 export function formatBirthdayDate(day: number, month: number): string {
   return `${day} ${MONTH_ABBR[month - 1]}`;
 }
-
-export function formatDaysUntil(daysUntil: number): string {
-  if (daysUntil === 0) return "Today";
-  if (daysUntil === 1) return "Tomorrow";
-  return `In ${daysUntil} days`;
-}
