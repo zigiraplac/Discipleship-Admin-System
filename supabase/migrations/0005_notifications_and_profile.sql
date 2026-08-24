@@ -3,7 +3,7 @@
 -- permission check) — there is no insert/update policy for `authenticated`
 -- here on purpose, so a signed-in client can never post a notification to
 -- itself or anyone else, only read its own.
-create table notification (
+create table if not exists notification (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references app_user on delete cascade,
   kind       text not null,
@@ -18,10 +18,11 @@ create table notification (
   created_at timestamptz not null default now()
 );
 
-create index notification_user_created_idx on notification (user_id, created_at desc);
-create unique index notification_dedupe_idx on notification (user_id, dedupe_key) where dedupe_key is not null;
+create index if not exists notification_user_created_idx on notification (user_id, created_at desc);
+create unique index if not exists notification_dedupe_idx on notification (user_id, dedupe_key) where dedupe_key is not null;
 
 alter table notification enable row level security;
+drop policy if exists notification_read_self on notification;
 create policy notification_read_self on notification for select using (user_id = auth.uid());
 
 -- Self-service profile: a user may change their own name, never their own

@@ -3,7 +3,7 @@
 -- already-generated schedule exactly as is; new cohorts choose this in the
 -- wizard (default 2, per the product's stated ideal pace).
 alter table cohort
-  add column lessons_per_session smallint not null default 1
+  add column if not exists lessons_per_session smallint not null default 1
   check (lessons_per_session >= 1 and lessons_per_session <= 5);
 
 -- No new RLS policy for postponing a lesson: the write goes through the
