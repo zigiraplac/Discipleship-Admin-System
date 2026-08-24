@@ -1,17 +1,29 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { HealthPill } from "@/components/ui/pill";
-import { ProgressBar } from "@/components/ui/progress-bar";
+import { HealthPill, Pill } from "@/components/ui/pill";
+import { CompletionRing } from "@/components/ui/completion-ring";
 import { buttonVariants } from "@/components/ui/button";
+import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
 import type { Cohort } from "@/lib/domain/types";
 import type { CohortAggregate } from "@/lib/domain/metrics";
 
 /** One tile in the Cohorts grid. `agg` is `aggregateCohort(...)` run
  * against that cohort's own students + lesson events — it already carries
- * enrolled/rate/atRisk/health/classIndex/recordedCount in one shape. */
-export function CohortCard({ cohort, agg }: { cohort: Cohort; agg: CohortAggregate }) {
-  const pct = (agg.recordedCount / 80) * 100;
+ * enrolled/rate/atRisk/health/classIndex/recordedCount in one shape.
+ * `paceGap` is `computePace(...)`'s gap: positive = behind, 0/negative =
+ * on or ahead of this cohort's own ideal plan. */
+export function CohortCard({
+  cohort,
+  agg,
+  paceGap,
+}: {
+  cohort: Cohort;
+  agg: CohortAggregate;
+  paceGap: number;
+}) {
+  const pct = (agg.recordedCount / TOTAL_LESSONS) * 100;
+  const current = agg.recordedCount < TOTAL_LESSONS ? lessonAt(agg.recordedCount) : null;
 
   return (
     <Card className="flex flex-col gap-4 p-[18px]">
@@ -31,12 +43,31 @@ export function CohortCard({ cohort, agg }: { cohort: Cohort; agg: CohortAggrega
         <Figure value={agg.atRisk} caption="Need help" />
       </div>
 
-      <div>
-        <div className="mb-1.5 flex items-center justify-between text-xs text-ink-muted">
-          <span>Class {agg.classIndex + 1} of 7</span>
-          <span className="tabular">{agg.recordedCount}/80</span>
+      <div className="flex items-center justify-between gap-2 rounded-[9px] bg-subtle px-3 py-2">
+        <span className="min-w-0 truncate text-xs text-ink-secondary">
+          {current ? (
+            <>
+              Now at <span className="font-semibold text-ink tabular">{current.ref}</span>
+            </>
+          ) : (
+            <span className="font-semibold text-ink">Curriculum complete</span>
+          )}
+        </span>
+        <Pill tone={paceGap > 0 ? "magenta" : "cyan"} className="flex-none">
+          {paceGap > 0 ? `${paceGap} behind` : "On pace"}
+        </Pill>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <CompletionRing pct={pct} tone="cyan" size={56} strokeWidth={5}>
+          <span className="text-[12px] font-bold text-ink tabular">{Math.round(pct)}%</span>
+        </CompletionRing>
+        <div className="min-w-0">
+          <div className="text-xs text-ink-muted">Class {agg.classIndex + 1} of 7</div>
+          <div className="text-[13px] font-semibold text-ink tabular">
+            {agg.recordedCount}/{TOTAL_LESSONS} lessons
+          </div>
         </div>
-        <ProgressBar pct={pct} tone="cyan" />
       </div>
 
       <Link href={`/c/${cohort.id}`} className={cn(buttonVariants({ variant: "outlineAccent" }), "w-full")}>

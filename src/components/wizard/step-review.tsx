@@ -13,6 +13,7 @@ export function StepReview({
   city,
   startDate,
   teachingDays,
+  lessonsPerSession,
   events,
   enrolledCount,
   creating,
@@ -24,6 +25,7 @@ export function StepReview({
   city: string;
   startDate: string;
   teachingDays: number[];
+  lessonsPerSession: number;
   events: GeneratedEvent[];
   enrolledCount: number;
   creating: boolean;
@@ -43,6 +45,7 @@ export function StepReview({
     ["First lesson", startDate ? `${formatShortDate(startDate)} ${firstYear}` : "—"],
     ["Last lesson", last ? `${formatShortDate(last)} ${lastYear}` : "—"],
     ["Teaching days", daysLabel || "—"],
+    ["Lessons per session", lessonsPerSession],
     ["Students", enrolledCount],
     ["Events created", eventsCreated],
   ];
@@ -53,6 +56,7 @@ export function StepReview({
       onBack={onBack}
       onContinue={onContinue}
       continueDisabled={creating}
+      continuePending={creating}
       continueLabel={creating ? "Creating…" : "Create cohort"}
     >
       <div className="flex flex-col items-center gap-2 py-2 text-center">

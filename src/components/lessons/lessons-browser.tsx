@@ -1,17 +1,29 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CaretDown, CaretRight } from "@phosphor-icons/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { CaretDown, CaretRight, Check } from "@phosphor-icons/react";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogTrigger,
+  DialogPopup,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
 import { ProgressBar, type BarTone } from "@/components/ui/progress-bar";
 import { Pill } from "@/components/ui/pill";
 import { Card } from "@/components/ui/card";
+import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/spinner";
 import { CURRICULUM } from "@/lib/domain/curriculum";
-import { formatShortDate } from "@/lib/utils";
+import { cn, formatShortDate } from "@/lib/utils";
+import { postponeLesson } from "@/lib/actions/schedule";
 import type { Role } from "@/lib/domain/types";
-import Link from "next/link";
 
 export type LessonRowStatus = "recorded" | "missing" | "upcoming";
 
@@ -22,12 +34,10 @@ export interface LessonRow {
   classNumber: number;
   lessonRef: string;
   lessonTitle: string;
-  hasQuiz: boolean;
   status: LessonRowStatus;
   presentText: string; // "29/34" or "—"
   ratePct: number | null;
   tone: BarTone;
-  quizText: string; // "82", "quiz", or "—"
 }
 
 const FILTER_OPTIONS: SegmentedOption<"all" | LessonRowStatus>[] = [
@@ -81,13 +91,20 @@ export function LessonsBrowser({
     return map;
   }, [rows]);
 
-  // Initialized once from the "current position" lesson (first missing, else first
-  // upcoming) — that class starts expanded, every other class starts collapsed.
-  const [expandedClasses, setExpandedClasses] = useState<Set<number>>(() => {
-    const currentPositionId = findCurrentPositionId(rows);
-    const current = rows.find((r) => r.eventId === currentPositionId);
-    return new Set(current ? [current.classNumber] : []);
-  });
+  // "Current position" (first missing, else first upcoming) doubles as the
+  // one visual highlight in the whole list — its class badge and its own
+  // row get the accent treatment; everything else stays neutral.
+  const currentPositionId = useMemo(() => findCurrentPositionId(rows), [rows]);
+  const currentClassNumber = useMemo(
+    () => rows.find((r) => r.eventId === currentPositionId)?.classNumber ?? null,
+    [rows, currentPositionId]
+  );
+
+  // Initialized once from the current-position lesson's class — that class
+  // starts expanded, every other class starts collapsed.
+  const [expandedClasses, setExpandedClasses] = useState<Set<number>>(
+    () => new Set(currentClassNumber != null ? [currentClassNumber] : [])
+  );
 
   function toggleClass(n: number) {
     setExpandedClasses((prev) => {
@@ -111,9 +128,14 @@ export function LessonsBrowser({
           const missingCount = classRows.filter((r) => r.status === "missing").length;
           const needsAttention = missingCount > 0;
           const isOpen = expandedClasses.has(cls.n);
+          const isCurrentClass = cls.n === currentClassNumber;
+          const isCompletedClass = classRows.length > 0 && classRows.every((r) => r.status === "recorded");
 
           return (
-            <Card key={cls.n} className="overflow-hidden">
+            <Card
+              key={cls.n}
+              className={cn("overflow-hidden", isCurrentClass && "border-violet-300")}
+            >
               <button
                 type="button"
                 onClick={() => toggleClass(cls.n)}
@@ -125,9 +147,22 @@ export function LessonsBrowser({
                 ) : (
                   <CaretRight size={16} weight="bold" className="flex-none text-ink-faint" />
                 )}
+                <span
+                  className={cn(
+                    "grid size-8 flex-none place-items-center rounded-full text-[13px] font-bold tabular",
+                    isCurrentClass
+                      ? "bg-violet-500 text-white"
+                      : isCompletedClass
+                        ? "bg-emerald-500 text-white"
+                        : "bg-divider text-ink-secondary"
+                  )}
+                >
+                  {cls.n}
+                </span>
                 <span className="flex flex-1 flex-col">
                   <span className="flex items-center gap-2 text-[15px] font-bold text-ink">
-                    Class {cls.n} · {cls.title}
+                    {cls.title}
+                    {isCurrentClass && <Pill tone="violet">In progress</Pill>}
                     {needsAttention && (
                       <span
                         aria-label={`${missingCount} missing register${missingCount === 1 ? "" : "s"} in this class`}
@@ -153,15 +188,19 @@ export function LessonsBrowser({
                       <TH>Date</TH>
                       <TH align="right">Present</TH>
                       <TH>Attendance</TH>
-                      <TH align="right">Quiz</TH>
                       <TH align="right" />
                     </THead>
                     <tbody>
                       {filteredRows.map((row) => (
                         <TR key={row.eventId}>
                           <TD>
-                            <div className="text-[13px] font-semibold text-ink">{row.lessonTitle}</div>
-                            <div className="mt-0.5 text-[11px] text-ink-muted">{row.lessonRef}</div>
+                            <span className="flex items-center gap-2.5">
+                              <StatusDot status={row.status} isCurrent={row.eventId === currentPositionId} />
+                              <span>
+                                <div className="text-[13px] font-semibold text-ink">{row.lessonTitle}</div>
+                                <div className="mt-0.5 text-[11px] text-ink-muted">{row.lessonRef}</div>
+                              </span>
+                            </span>
                           </TD>
                           <TD className="tabular">{formatShortDate(row.date)}</TD>
                           <TD align="right" className="tabular">
@@ -175,20 +214,19 @@ export function LessonsBrowser({
                               </span>
                             </span>
                           </TD>
-                          <TD
-                            align="right"
-                            className={row.quizText === "quiz" ? "text-ink-faint tabular" : "tabular"}
-                          >
-                            {row.quizText}
-                          </TD>
                           <TD align="right">
-                            <RowAction cohortId={cohortId} row={row} canOpenRegister={canOpenRegister} />
+                            <span className="flex items-center justify-end gap-2">
+                              {row.status === "missing" && canOpenRegister && (
+                                <PostponeButton cohortId={cohortId} eventId={row.eventId} lessonRef={row.lessonRef} />
+                              )}
+                              <RowAction cohortId={cohortId} row={row} canOpenRegister={canOpenRegister} />
+                            </span>
                           </TD>
                         </TR>
                       ))}
                       {filteredRows.length === 0 && (
                         <TR>
-                          <TD colSpan={6} className="py-6 text-center text-ink-faint">
+                          <TD colSpan={5} className="py-6 text-center text-ink-faint">
                             0 lessons match this filter.
                           </TD>
                         </TR>
@@ -203,6 +241,26 @@ export function LessonsBrowser({
       </div>
     </div>
   );
+}
+
+/** A quick "where am I" read down the left of each lesson row — green
+ * check for a saved register, a blue outline for whichever one is next up,
+ * red for backlog that's overdue, plain grey for anything further out. */
+function StatusDot({ status, isCurrent }: { status: LessonRowStatus; isCurrent: boolean }) {
+  if (status === "recorded") {
+    return (
+      <span className="grid size-5 flex-none place-items-center rounded-full bg-emerald-500 text-white">
+        <Check size={11} weight="bold" />
+      </span>
+    );
+  }
+  if (isCurrent) {
+    return <span className="size-5 flex-none rounded-full border-2 border-accent" />;
+  }
+  if (status === "missing") {
+    return <span className="size-5 flex-none rounded-full border-2 border-accent-2-400" />;
+  }
+  return <span className="size-5 flex-none rounded-full border-2 border-border" />;
 }
 
 function RowAction({
@@ -231,5 +289,73 @@ function RowAction({
     <Link href={href} className={buttonVariants({ variant, size: "row" })}>
       {label}
     </Link>
+  );
+}
+
+/**
+ * "We didn't get to this today" — explicit and manual, never inferred
+ * from a date just passing, per the product decision: a facilitator
+ * might simply not have entered the register yet, and auto-shifting on
+ * that assumption would reshuffle the calendar under them.
+ */
+function PostponeButton({
+  cohortId,
+  eventId,
+  lessonRef,
+}: {
+  cohortId: string;
+  eventId: string;
+  lessonRef: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { show } = useToast();
+  const router = useRouter();
+
+  async function handleConfirm() {
+    setPending(true);
+    setError(null);
+    try {
+      const result = await postponeLesson({ cohortId, eventId });
+      setOpen(false);
+      show(
+        result.shiftedCount > 1
+          ? `${lessonRef} postponed — ${result.shiftedCount} lessons and crusade days shifted forward.`
+          : `${lessonRef} postponed to the next study day.`
+      );
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't postpone this lesson. Try again.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger className={buttonVariants({ variant: "secondary", size: "row" })}>
+        Postpone
+      </DialogTrigger>
+      <DialogPopup width={380}>
+        <div className="px-5 pt-5">
+          <DialogTitle className="text-[15px] font-bold text-ink">Postpone {lessonRef}?</DialogTitle>
+          <DialogDescription className="mt-1 text-xs text-ink-muted">
+            This pushes it, and every lesson and crusade day after it that hasn&rsquo;t been
+            taught yet, forward by one study day. Already-recorded lessons are never touched.
+          </DialogDescription>
+        </div>
+        {error && (
+          <div className="px-5 pb-1 pt-3 text-xs font-medium text-accent-2-700">{error}</div>
+        )}
+        <div className="mt-3 flex justify-end gap-2 border-t border-divider px-5 py-4">
+          <DialogClose render={<Button type="button" variant="secondary" />}>Cancel</DialogClose>
+          <Button type="button" variant="primary" disabled={pending} onClick={handleConfirm}>
+            {pending && <Spinner />}
+            {pending ? "Postponing…" : "Postpone"}
+          </Button>
+        </div>
+      </DialogPopup>
+    </Dialog>
   );
 }

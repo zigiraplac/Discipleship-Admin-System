@@ -29,6 +29,8 @@ export interface CreateCohortInput {
   city: string;
   startDate: string; // YYYY-MM-DD
   teachingDays: number[];
+  /** Lessons covered per study session — the target pace (1-5). */
+  lessonsPerSession: number;
   csvText: string;
   includedRegistrantIds: string[];
 }
@@ -60,12 +62,15 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
   if (!input.teachingDays.length) {
     throw new Error("Pick at least one teaching day.");
   }
+  if (input.lessonsPerSession < 1 || input.lessonsPerSession > 5) {
+    throw new Error("Lessons per session must be between 1 and 5.");
+  }
 
   const { registrants } = dedupeRegistrations(parseRegistrationsCsv(input.csvText));
   const included = new Set(input.includedRegistrantIds);
   const enrol = registrants.filter((r) => included.has(r.id));
 
-  const events = buildEvents(input.startDate, input.teachingDays);
+  const events = buildEvents(input.startDate, input.teachingDays, input.lessonsPerSession);
   const admin = createAdminClient();
 
   await ensureCurriculumSeeded(admin);
@@ -83,6 +88,7 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
       city: input.city,
       start_date: input.startDate,
       teaching_days: input.teachingDays,
+      lessons_per_session: input.lessonsPerSession,
       status: "running",
     })
     .select("id")

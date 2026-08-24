@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
-import { HealthPill } from "@/components/ui/pill";
+import { HealthPill, Pill } from "@/components/ui/pill";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
-import { CURRICULUM } from "@/lib/domain/curriculum";
+import { CURRICULUM, lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
 import type { Cohort, Bands } from "@/lib/domain/types";
-import type { CohortAggregate, MonthlyRate } from "@/lib/domain/metrics";
+import type { CohortAggregate, MonthlyRate, PaceStatus } from "@/lib/domain/metrics";
 
 export interface CohortOverviewRow {
   cohort: Cohort;
   agg: CohortAggregate;
   monthly: MonthlyRate[];
+  pace: PaceStatus;
 }
 
 /** Cross-cohort "executive" summary — sits above the Cohorts card grid so
@@ -60,8 +61,8 @@ export function ExecutiveOverview({ rows, bands }: { rows: CohortOverviewRow[]; 
         <div className="px-[18px] pt-4 pb-3.5 text-[15px] font-bold text-ink">By cohort</div>
         <div className="overflow-x-auto">
           <div className="min-w-[720px] flex flex-col">
-            {rows.map(({ cohort, agg, monthly }) => (
-              <CohortRow key={cohort.id} cohort={cohort} agg={agg} monthly={monthly} bands={bands} />
+            {rows.map(({ cohort, agg, monthly, pace }) => (
+              <CohortRow key={cohort.id} cohort={cohort} agg={agg} monthly={monthly} pace={pace} bands={bands} />
             ))}
           </div>
         </div>
@@ -74,17 +75,20 @@ function CohortRow({
   cohort,
   agg,
   monthly,
+  pace,
   bands,
 }: {
   cohort: Cohort;
   agg: CohortAggregate;
   monthly: MonthlyRate[];
+  pace: PaceStatus;
   bands: Bands;
 }) {
   const tone = toneForRate(agg.rate, bands.activeThreshold, bands.helpThreshold);
   const recent = monthly.slice(-4);
   const delta =
     monthly.length >= 2 ? monthly[monthly.length - 1].rate - monthly[monthly.length - 2].rate : null;
+  const current = agg.recordedCount < TOTAL_LESSONS ? lessonAt(agg.recordedCount) : null;
 
   return (
     <div className="flex items-center gap-4 border-t border-divider px-[18px] py-3 first:border-t-0">
@@ -102,8 +106,13 @@ function CohortRow({
         <ProgressBar pct={agg.recordedCount ? agg.rate : null} tone={tone} />
       </div>
 
-      <div className="w-[90px] flex-none text-[12px] text-ink-muted">
-        Class {agg.classIndex + 1} of {CURRICULUM.length}
+      <div className="w-[110px] flex-none">
+        <div className="text-[12px] text-ink-muted">
+          {current ? current.ref : `Class ${agg.classIndex + 1} of ${CURRICULUM.length}`}
+        </div>
+        <Pill tone={pace.gap > 0 ? "magenta" : "cyan"} className="mt-1">
+          {pace.gap > 0 ? `${pace.gap} behind` : "On pace"}
+        </Pill>
       </div>
 
       <div className="w-[130px] flex-none">

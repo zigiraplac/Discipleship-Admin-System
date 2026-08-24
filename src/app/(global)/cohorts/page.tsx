@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { listCohorts, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
-import { aggregateCohort, monthlyRates } from "@/lib/domain/metrics";
+import { aggregateCohort, computePace, monthlyRates } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { CohortCard } from "@/components/cohorts/cohort-card";
@@ -34,7 +34,8 @@ export default async function CohortsPage() {
       ]);
       const agg = aggregateCohort(students, lessonEvents, bands, today);
       const monthly = monthlyRates(lessonEvents, agg.enrolled);
-      return { cohort, agg, monthly };
+      const pace = computePace(cohort, agg.recordedCount, today);
+      return { cohort, agg, monthly, pace };
     })
   );
 
@@ -46,8 +47,8 @@ export default async function CohortsPage() {
         className="grid gap-4"
         style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
       >
-        {cards.map(({ cohort, agg }) => (
-          <CohortCard key={cohort.id} cohort={cohort} agg={agg} />
+        {cards.map(({ cohort, agg, pace }) => (
+          <CohortCard key={cohort.id} cohort={cohort} agg={agg} paceGap={pace.gap} />
         ))}
         {user.role === "admin" && <NewCohortTile />}
       </div>

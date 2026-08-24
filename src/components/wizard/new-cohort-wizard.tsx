@@ -37,6 +37,7 @@ export function NewCohortWizard() {
   const [city, setCity] = useState("");
   const [startDate, setStartDate] = useState(() => todayISO());
   const [teachingDays, setTeachingDays] = useState<number[]>([]);
+  const [lessonsPerSession, setLessonsPerSession] = useState(2);
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,10 @@ export function NewCohortWizard() {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  const events = useMemo(() => buildEvents(startDate, teachingDays), [startDate, teachingDays]);
+  const events = useMemo(
+    () => buildEvents(startDate, teachingDays, lessonsPerSession),
+    [startDate, teachingDays, lessonsPerSession]
+  );
   const enrolledCount = dedupe ? dedupe.registrants.length - excludedIds.size : 0;
 
   function toggleDay(day: number) {
@@ -104,6 +108,7 @@ export function NewCohortWizard() {
         city,
         startDate,
         teachingDays,
+        lessonsPerSession,
         csvText,
         includedRegistrantIds,
       });
@@ -144,6 +149,8 @@ export function NewCohortWizard() {
               setStartDate={setStartDate}
               teachingDays={teachingDays}
               toggleDay={toggleDay}
+              lessonsPerSession={lessonsPerSession}
+              setLessonsPerSession={setLessonsPerSession}
               events={events}
               onContinue={goNext}
             />
@@ -176,6 +183,7 @@ export function NewCohortWizard() {
               city={city}
               startDate={startDate}
               teachingDays={teachingDays}
+              lessonsPerSession={lessonsPerSession}
               events={events}
               enrolledCount={enrolledCount}
               creating={creating}
@@ -185,7 +193,13 @@ export function NewCohortWizard() {
             />
           )}
         </div>
-        <SummaryCard name={name} teachingDays={teachingDays} studentsCount={enrolledCount} events={events} />
+        <SummaryCard
+          name={name}
+          teachingDays={teachingDays}
+          lessonsPerSession={lessonsPerSession}
+          studentsCount={enrolledCount}
+          events={events}
+        />
       </div>
     </div>
   );

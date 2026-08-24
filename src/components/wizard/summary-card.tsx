@@ -9,11 +9,13 @@ import { formatTeachingDays } from "./day-defs";
 export function SummaryCard({
   name,
   teachingDays,
+  lessonsPerSession,
   studentsCount,
   events,
 }: {
   name: string;
   teachingDays: number[];
+  lessonsPerSession: number;
   studentsCount: number;
   events: GeneratedEvent[];
 }) {
@@ -24,6 +26,7 @@ export function SummaryCard({
   const rows: [string, React.ReactNode][] = [
     ["Name", name || "—"],
     ["Days", daysLabel || "—"],
+    ["Pace", `${lessonsPerSession}/session`],
     ["Students", studentsCount],
     ["Lessons", lessonsCount],
     ["Crusades", crusadesCount],
@@ -41,7 +44,7 @@ export function SummaryCard({
         ))}
       </div>
       <p className="border-t border-divider pt-3 text-xs text-ink-muted">
-        Every lesson is created with an empty register and quiz sheet.
+        Every lesson is created with an empty register.
       </p>
     </Card>
   );

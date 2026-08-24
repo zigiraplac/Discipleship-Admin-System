@@ -12,6 +12,8 @@ import { DAY_DEFS } from "./day-defs";
  * via `buildEvents`, which is pure and cheap enough (<=80 iterations) to
  * call directly on every render.
  */
+const PACE_OPTIONS = [1, 2] as const;
+
 export function StepCohort({
   name,
   setName,
@@ -21,6 +23,8 @@ export function StepCohort({
   setStartDate,
   teachingDays,
   toggleDay,
+  lessonsPerSession,
+  setLessonsPerSession,
   events,
   onContinue,
 }: {
@@ -32,6 +36,8 @@ export function StepCohort({
   setStartDate: (v: string) => void;
   teachingDays: number[];
   toggleDay: (day: number) => void;
+  lessonsPerSession: number;
+  setLessonsPerSession: (n: number) => void;
   events: GeneratedEvent[];
   onContinue: () => void;
 }) {
@@ -97,10 +103,38 @@ export function StepCohort({
         </div>
       </div>
 
+      <div>
+        <Label>Lessons per session</Label>
+        <div className="flex flex-wrap gap-2">
+          {PACE_OPTIONS.map((n) => {
+            const active = lessonsPerSession === n;
+            return (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setLessonsPerSession(n)}
+                className={cn(
+                  "rounded-control border px-3.5 py-2 text-xs font-semibold transition-colors",
+                  active
+                    ? "border-accent bg-accent text-white"
+                    : "border-border bg-card text-ink-secondary hover:bg-hover"
+                )}
+              >
+                {n} {n === 1 ? "lesson" : "lessons"}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-xs text-ink-muted">
+          The target pace. If a session only gets through part of this, postpone the rest from
+          the Lessons screen — it shifts forward instead of getting stuck.
+        </p>
+      </div>
+
       <p className="text-xs text-ink-muted">
         {teachingDays.length === 0
           ? "Pick at least one day."
-          : `${teachingDays.length} lessons a week. 80 lessons finish ${last ? formatShortDate(last) : "—"} ${year}.`}
+          : `${teachingDays.length * lessonsPerSession} lessons a week. 80 lessons finish ${last ? formatShortDate(last) : "—"} ${year}.`}
       </p>
     </StepCard>
   );
