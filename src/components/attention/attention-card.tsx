@@ -3,7 +3,8 @@ import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill } from "@/components/ui/pill";
 import { buttonVariants } from "@/components/ui/button";
-import { OutcomeModal, outcomeShortLabel } from "@/components/outcome/outcome-modal";
+import { OutcomeModal } from "@/components/outcome/outcome-modal";
+import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
 import { cn } from "@/lib/utils";
 import type { Outcome, StudentAggregate } from "@/lib/domain/types";
 
@@ -35,7 +36,7 @@ export function AttentionCard({
           </div>
         </div>
         {resolved ? (
-          <Pill tone="cyan">{outcomeShortLabel(outcome.kind)}</Pill>
+          <Pill tone={outcomeTone(outcome.kind)}>{outcomeShortLabel(outcome.kind)}</Pill>
         ) : overdue ? (
           <Pill tone="magenta">Overdue</Pill>
         ) : (

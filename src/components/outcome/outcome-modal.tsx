@@ -13,37 +13,11 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/spinner";
 import { recordOutcome } from "@/lib/actions/outcomes";
 import { cn } from "@/lib/utils";
 import type { OutcomeKind } from "@/lib/domain/types";
-
-/**
- * The three outcomes a facilitator/admin can record for a student, plus the
- * narrative copy used both here and on Student detail's History card — one
- * source of truth so the wording never drifts between the two screens.
- */
-export const OUTCOME_NARRATIVE: Record<
-  OutcomeKind,
-  { title: string; text: (missed: number) => string }
-> = {
-  catchup: {
-    title: "On catch-up",
-    text: (missed) => `Stays in the cohort and makes up ${missed} missed lesson${missed === 1 ? "" : "s"}.`,
-  },
-  continuing: {
-    title: "Still with us",
-    text: () => "Spoke to them. No change needed.",
-  },
-  left: {
-    title: "Left the cohort",
-    text: () => "No longer continuing. History is kept.",
-  },
-};
-
-/** Short form used on Students and Attention, where space is tight. */
-export function outcomeShortLabel(kind: OutcomeKind): string {
-  return { catchup: "On catch-up", continuing: "Continuing", left: "Left cohort" }[kind];
-}
+import { OUTCOME_NARRATIVE, outcomeShortLabel } from "./outcome-copy";
 
 const OPTIONS: OutcomeKind[] = ["catchup", "continuing", "left"];
 
@@ -151,6 +125,7 @@ export function OutcomeModal({
         <div className="flex justify-end gap-2 border-t border-divider px-5 py-4">
           <DialogClose render={<Button type="button" variant="secondary" />}>Cancel</DialogClose>
           <Button type="button" variant="primary" disabled={!kind || pending} onClick={handleSave}>
+            {pending && <Spinner />}
             {pending ? "Saving…" : "Save"}
           </Button>
         </div>

@@ -1,5 +1,5 @@
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/card";
-import { OUTCOME_NARRATIVE } from "@/components/outcome/outcome-modal";
+import { OUTCOME_NARRATIVE, outcomeTone } from "@/components/outcome/outcome-copy";
 import { toneForStatus } from "@/components/ui/pill";
 import { formatShortDate, todayISO } from "@/lib/utils";
 import type { Bands, Outcome, StudentAggregate } from "@/lib/domain/types";
@@ -36,7 +36,7 @@ export function HistoryCard({
   if (latestOutcome) {
     const narrative = OUTCOME_NARRATIVE[latestOutcome.kind];
     entries.push({
-      tone: "cyan",
+      tone: outcomeTone(latestOutcome.kind),
       title: narrative.title,
       date: formatShortDate(latestOutcome.recordedAt.slice(0, 10)),
       text: narrative.text(student.missed),

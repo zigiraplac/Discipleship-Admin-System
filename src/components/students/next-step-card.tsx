@@ -1,6 +1,7 @@
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { OutcomeModal, OUTCOME_NARRATIVE } from "@/components/outcome/outcome-modal";
+import { OutcomeModal } from "@/components/outcome/outcome-modal";
+import { OUTCOME_NARRATIVE } from "@/components/outcome/outcome-copy";
 import type { Outcome, StudentAggregate } from "@/lib/domain/types";
 
 export function NextStepCard({
