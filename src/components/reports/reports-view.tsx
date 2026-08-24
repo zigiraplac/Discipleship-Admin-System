@@ -1,0 +1,90 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
+import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import type { Bands, CrusadeEventView } from "@/lib/domain/types";
+import { ByClassCard } from "./by-class-card";
+import { MonthChartCard } from "./month-chart-card";
+import { HighlightCards } from "./highlight-cards";
+import { CrusadesTable } from "./crusades-table";
+import { formatRangeLabel, inRange, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
+
+const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
+  { value: "Month", label: "Month" },
+  { value: "Quarter", label: "Quarter" },
+  { value: "All", label: "All" },
+];
+
+export function ReportsView({
+  lessons,
+  crusadeEvents,
+  enrolled,
+  bands,
+  today,
+}: {
+  lessons: ReportLesson[];
+  crusadeEvents: CrusadeEventView[];
+  enrolled: number;
+  bands: Bands;
+  today: string;
+}) {
+  const [period, setPeriod] = useState<Period>("Month");
+
+  const range = useMemo(() => resolvePeriodRange(period, today, lessons), [period, today, lessons]);
+  const rangeLabel = useMemo(() => formatRangeLabel(range.start, range.end), [range]);
+
+  const inPeriod = useMemo(
+    () => lessons.filter((l) => inRange(l.date, range.start, range.end)),
+    [lessons, range]
+  );
+  const recordedInPeriod = useMemo(() => inPeriod.filter((l) => l.recorded), [inPeriod]);
+
+  const lessonsTaught = inPeriod.length;
+  const sumPresent = recordedInPeriod.reduce((a, l) => a + (l.present ?? 0), 0);
+  const sumAbsent = recordedInPeriod.reduce((a, l) => a + (l.absent ?? 0), 0);
+  const attendanceRate =
+    recordedInPeriod.length && enrolled
+      ? Math.round((sumPresent / (enrolled * recordedInPeriod.length)) * 100)
+      : null;
+
+  // Cohort-wide, not period-filtered, per spec.
+  const quizLessons = lessons.filter((l) => l.recorded && l.hasQuiz && l.quizAvg != null);
+  const quizAvgOverall = quizLessons.length
+    ? Math.round(quizLessons.reduce((a, l) => a + (l.quizAvg ?? 0), 0) / quizLessons.length)
+    : null;
+
+  return (
+    <div className="flex flex-col gap-[18px]">
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented options={PERIOD_OPTIONS} value={period} onChange={setPeriod} solid />
+        <span className="text-xs text-ink-muted">{rangeLabel}</span>
+      </div>
+
+      <StatGrid>
+        <StatCard label="Lessons" value={lessonsTaught} sub={`${recordedInPeriod.length} recorded`} />
+        <StatCard
+          label="Attendance"
+          value={attendanceRate != null ? `${attendanceRate}%` : "—"}
+          sub={`target ${bands.activeThreshold}%`}
+        />
+        <StatCard label="Absences" value={sumAbsent} sub="seats missed" />
+        <StatCard
+          label="Quiz average"
+          value={quizAvgOverall != null ? `${quizAvgOverall}%` : "—"}
+          sub="cohort overall"
+        />
+      </StatGrid>
+
+      <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)" }}>
+        <ByClassCard lessons={lessons} enrolled={enrolled} bands={bands} />
+        <div className="flex flex-col gap-4">
+          <MonthChartCard lessons={lessons} enrolled={enrolled} bands={bands} />
+          <HighlightCards recordedInPeriod={recordedInPeriod} enrolled={enrolled} />
+        </div>
+      </div>
+
+      <CrusadesTable crusadeEvents={crusadeEvents} today={today} />
+    </div>
+  );
+}

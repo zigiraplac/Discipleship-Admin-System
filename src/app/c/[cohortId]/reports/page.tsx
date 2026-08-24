@@ -1,0 +1,85 @@
+import { notFound } from "next/navigation";
+import { NAV_BY_ROLE, requireUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { getBands, getCohort } from "@/lib/data/cohorts";
+import { getStudents } from "@/lib/data/students";
+import { getCrusadeEvents, getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
+import { lessonQuizAvg, lessonStats } from "@/lib/domain/metrics";
+import { todayISO } from "@/lib/utils";
+import { PageHead } from "@/components/shell/page-head";
+import { ReportsView } from "@/components/reports/reports-view";
+import type { ReportLesson } from "@/components/reports/report-utils";
+
+export default async function ReportsPage({
+  params,
+}: {
+  params: Promise<{ cohortId: string }>;
+}) {
+  const { cohortId } = await params;
+  const user = await requireUser();
+  if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
+
+  const supabase = await createClient();
+  const [cohort, bands, students, crusadeEvents] = await Promise.all([
+    getCohort(supabase, cohortId),
+    getBands(supabase),
+    getStudents(supabase, cohortId),
+    getCrusadeEvents(supabase, cohortId),
+  ]);
+  if (!cohort) notFound();
+
+  const enrolled = students.length;
+  let lessons: ReportLesson[];
+
+  if (user.role === "teacher") {
+    const pub = await getLessonEventsPublic(supabase, cohortId);
+    lessons = pub.map((p) => ({
+      eventId: p.eventId,
+      date: p.date,
+      globalIndex: p.globalIndex,
+      classIndex: p.classIndex,
+      classNumber: p.classNumber,
+      lessonRef: p.lessonRef,
+      lessonTitle: p.lessonTitle,
+      hasQuiz: p.hasQuiz,
+      recorded: p.recorded,
+      present: p.present,
+      absent: p.absent,
+      rate: p.rate,
+      quizAvg: p.quizAvg,
+    }));
+  } else {
+    const full = await getLessonEvents(supabase, cohortId);
+    lessons = full.map((e) => {
+      const stats = lessonStats(e, enrolled);
+      return {
+        eventId: e.eventId,
+        date: e.date,
+        globalIndex: e.globalIndex,
+        classIndex: e.classIndex,
+        classNumber: e.classNumber,
+        lessonRef: e.lessonRef,
+        lessonTitle: e.lessonTitle,
+        hasQuiz: e.hasQuiz,
+        recorded: stats !== null,
+        present: stats?.present ?? null,
+        absent: stats?.absent ?? null,
+        rate: stats?.rate ?? null,
+        quizAvg: lessonQuizAvg(e),
+      };
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-[18px]">
+      <PageHead title="Reports" subtitle={cohort.name} />
+      <ReportsView
+        lessons={lessons}
+        crusadeEvents={crusadeEvents}
+        enrolled={enrolled}
+        bands={bands}
+        today={todayISO()}
+      />
+    </div>
+  );
+}
