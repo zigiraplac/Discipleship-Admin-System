@@ -1,26 +1,110 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Broadsheet tokens (see design/05-design-tokens.md for the source spec).
+  Light-only by product decision — this app has no dark mode.
+*/
+@theme {
+  --font-sans: var(--font-jakarta), system-ui, sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* interactive — cyan */
+  --color-accent-100: #e9f8ff;
+  --color-accent-300: #99e0ff;
+  --color-accent: #0088b0;
+  --color-accent-600: #1186ac;
+  --color-accent-700: #006786;
+  --color-accent-800: #004961;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* problems — magenta */
+  --color-accent-2-100: #fff1f4;
+  --color-accent-2-200: #ffdee6;
+  --color-accent-2-300: #ffc0d0;
+  --color-accent-2-400: #ff90b1;
+  --color-accent-2-500: #ff458e;
+  --color-accent-2-700: #aa0b56;
+
+  /* warning — yellow */
+  --color-yellow-100: #fdf3d6;
+  --color-yellow-ink: #7a5c00;
+  --color-yellow: #edbb00;
+
+  /* neutrals — page */
+  --color-page: #f1f2f4;
+  --color-card: #ffffff;
+  --color-subtle: #f8f9fa;
+  --color-cell: #fafbfc;
+  --color-hover: #f4f5f7;
+  --color-border: #e4e7eb;
+  --color-border-soft: #e9ecef;
+  --color-divider: #eef0f2;
+  --color-dashed: #d3d8de;
+  --color-neutral-border: #cfd4da;
+
+  /* neutrals — ink */
+  --color-ink: #1b1f24;
+  --color-ink-secondary: #4b5563;
+  --color-ink-tertiary: #6b7280;
+  --color-ink-muted: #7c848e;
+  --color-ink-faint: #9aa1a9;
+
+  --radius-control: 9px;
+  --radius-card: 12px;
+  --radius-modal: 14px;
+  --radius-pill: 20px;
+  --radius-login: 16px;
+
+  --shadow-dropdown: 0 12px 30px rgba(20, 25, 32, 0.13);
+  --shadow-login: 0 18px 50px rgba(20, 25, 32, 0.1);
+  --shadow-modal: 0 24px 60px rgba(20, 25, 32, 0.24);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.02em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
