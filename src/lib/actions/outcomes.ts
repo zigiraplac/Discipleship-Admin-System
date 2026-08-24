@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
+import { createNotifications } from "@/lib/data/notifications";
+import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
 import type { OutcomeKind } from "@/lib/domain/types";
 
 export interface RecordOutcomeInput {
@@ -24,6 +27,25 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
     recorded_by: user.id,
   });
   if (error) throw error;
+
+  const admin = createAdminClient();
+  const [{ data: student }, { data: members }] = await Promise.all([
+    admin.from("student").select("full_name").eq("id", input.studentId).maybeSingle(),
+    admin.from("cohort_member").select("user_id").eq("cohort_id", input.cohortId).neq("user_id", user.id),
+  ]);
+  const recipientIds = new Set((members ?? []).map((m) => m.user_id));
+  if (recipientIds.size && student) {
+    await createNotifications(
+      admin,
+      [...recipientIds].map((userId) => ({
+        userId,
+        kind: "outcome_recorded",
+        title: `${student.full_name}: ${outcomeShortLabel(input.kind)}`,
+        body: "An outcome was just recorded for them.",
+        href: `/c/${input.cohortId}/students/${input.studentId}`,
+      }))
+    );
+  }
 
   const base = `/c/${input.cohortId}`;
   revalidatePath(base);

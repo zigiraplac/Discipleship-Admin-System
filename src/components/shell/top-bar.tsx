@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CaretDown } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { HealthPill } from "@/components/ui/pill";
 import { Avatar } from "@/components/ui/avatar";
+import { NotificationsBell } from "./notifications-bell";
 import { usePageHead } from "./page-head";
 import { signOutAction } from "@/lib/actions/auth";
 import type { CohortHealth } from "@/lib/domain/types";
+import type { NotificationView } from "@/lib/data/notifications";
 
 export interface CohortSwitcherItem {
   id: string;
@@ -21,11 +24,13 @@ export function TopBar({
   activeCohortId,
   userName,
   roleLabel,
+  notifications,
 }: {
   cohorts: CohortSwitcherItem[];
   activeCohortId: string | null;
   userName: string;
   roleLabel: string;
+  notifications: NotificationView[];
 }) {
   const { title, subtitle } = usePageHead();
   const router = useRouter();
@@ -69,6 +74,8 @@ export function TopBar({
         </Popover>
       )}
 
+      <NotificationsBell notifications={notifications} />
+
       <Popover>
         <PopoverTrigger className="flex items-center gap-2.5 border-0 bg-transparent p-[3px]">
           <Avatar name={userName} size="md" tinted />
@@ -79,10 +86,13 @@ export function TopBar({
           <CaretDown size={13} className="text-ink-muted" />
         </PopoverTrigger>
         <PopoverPanel width={200} align="end">
+          <Link href="/profile" className="block w-full px-3.5 py-[11px] text-left text-[13px] text-ink-secondary hover:bg-hover">
+            Profile
+          </Link>
           <form action={signOutAction}>
             <button
               type="submit"
-              className="block w-full px-3.5 py-[11px] text-left text-[13px] text-ink-muted hover:bg-hover"
+              className="block w-full border-t border-divider px-3.5 py-[11px] text-left text-[13px] text-ink-muted hover:bg-hover"
             >
               Sign out
             </button>

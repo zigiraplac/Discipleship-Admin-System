@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, roleLabel } from "@/lib/auth";
 import { listCohorts, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
 import { getQuickStats } from "@/lib/data/quick-stats";
+import { listNotifications, ensureBirthdayNotifications } from "@/lib/data/notifications";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
@@ -91,6 +93,10 @@ export async function Shell({
         getLessonEvents(supabase, activeCohortId),
         getOutcomesForCohort(supabase, activeCohortId),
       ]);
+      // Opportunistic — a birthday has no discrete moment to notify at, so
+      // this just ensures the next 7 days' worth exist every time someone
+      // with access to this cohort happens to load its dashboard.
+      await ensureBirthdayNotifications(createAdminClient(), user.id, students, today);
       const agg = aggregateCohort(students, lessonEvents, bands, today);
       const latest = latestByStudent(outcomes);
       const toContact = agg.roster.filter((s) => s.status !== "On track" && !latest.has(s.id)).length;
@@ -117,6 +123,8 @@ export async function Shell({
     }
   }
 
+  const notifications = await listNotifications(supabase, user.id, 20);
+
   return (
     <SearchProvider index={searchIndex}>
       <PageHeadProvider>
@@ -129,6 +137,7 @@ export async function Shell({
                 activeCohortId={activeCohortId}
                 userName={user.name}
                 roleLabel={roleLabel(user.role)}
+                notifications={notifications}
               />
               <main className="min-w-0 flex-1 px-[26px] py-[22px] pb-[70px]">{children}</main>
             </div>

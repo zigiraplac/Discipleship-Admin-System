@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
+import { createNotification } from "@/lib/data/notifications";
+import { roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
 
 export interface InvitePersonInput {
@@ -116,6 +118,16 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
     entity_id: userId,
     action: "invite",
     after: { name, email, role: input.role, cohortIds: input.cohortIds },
+  });
+
+  // Sitting there waiting the first time they actually sign in — inviting
+  // someone doesn't give them a session yet, so there's nothing to notify
+  // "now"; this just means they aren't greeted by an empty bell.
+  await createNotification(admin, {
+    userId,
+    kind: "welcome",
+    title: "Welcome to BCC Discipleship",
+    body: `You've been added as ${roleLabel(input.role)}.`,
   });
 
   revalidatePath("/settings");
