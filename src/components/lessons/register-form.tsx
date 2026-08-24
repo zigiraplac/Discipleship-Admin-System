@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/spinner";
 import { saveRegister } from "@/lib/actions/register";
 import { cn } from "@/lib/utils";
 
@@ -26,10 +27,8 @@ export interface RegisterFormProps {
   lessonTitle: string;
   lessonRef: string;
   dateLong: string;
-  hasQuiz: boolean;
   roster: RegisterRosterEntry[];
   initialAttendance: Record<string, "present" | "absent">;
-  initialQuiz: Record<string, number>;
   recorded: boolean;
   isFuture: boolean;
   /** True when the signed-in user may tap tiles, enter scores, and save. */
@@ -49,10 +48,8 @@ export function RegisterForm({
   lessonTitle,
   lessonRef,
   dateLong,
-  hasQuiz,
   roster,
   initialAttendance,
-  initialQuiz,
   recorded,
   isFuture,
   editable,
@@ -66,7 +63,6 @@ export function RegisterForm({
   const { show } = useToast();
 
   const [attendance, setAttendance] = useState<Record<string, "present" | "absent">>(initialAttendance);
-  const [quiz, setQuiz] = useState<Record<string, number>>(initialQuiz);
   const [query, setQuery] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,30 +73,6 @@ export function RegisterForm({
     if (!editable) return;
     const next: "present" | "absent" = isPresent(id) ? "absent" : "present";
     setAttendance((prev) => ({ ...prev, [id]: next }));
-    if (next === "absent") {
-      setQuiz((prev) => {
-        if (!(id in prev)) return prev;
-        const rest = { ...prev };
-        delete rest[id];
-        return rest;
-      });
-    }
-  }
-
-  function setScore(id: string, raw: string) {
-    if (!editable) return;
-    if (raw === "") {
-      setQuiz((prev) => {
-        if (!(id in prev)) return prev;
-        const rest = { ...prev };
-        delete rest[id];
-        return rest;
-      });
-      return;
-    }
-    const n = Number(raw);
-    if (Number.isNaN(n)) return;
-    setQuiz((prev) => ({ ...prev, [id]: Math.max(0, Math.min(100, Math.round(n))) }));
   }
 
   const allPresentEnabled = editable && !recorded;
@@ -127,17 +99,6 @@ export function RegisterForm({
       ? Math.round(((totalPresentExcludingThis + presentCount) / (enrolled * recordedCountAfter)) * 100)
       : 0;
 
-  const quizAvgDraft = useMemo(() => {
-    if (isFuture || !hasQuiz) return null;
-    const scores = roster
-      .filter((r) => isPresent(r.id))
-      .map((r) => quiz[r.id])
-      .filter((v): v is number => typeof v === "number");
-    if (!scores.length) return null;
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFuture, hasQuiz, roster, quiz, attendance]);
-
   let buttonLabel: string;
   if (isFuture) buttonLabel = "Not taught yet";
   else if (!editable) buttonLabel = recorded ? "Register saved" : "View only";
@@ -152,14 +113,8 @@ export function RegisterForm({
     setIsSaving(true);
     const fullAttendance: Record<string, "present" | "absent"> = {};
     for (const r of roster) fullAttendance[r.id] = isPresent(r.id) ? "present" : "absent";
-    const fullQuiz: Record<string, number> = {};
-    if (hasQuiz) {
-      for (const [id, score] of Object.entries(quiz)) {
-        if (fullAttendance[id] === "present") fullQuiz[id] = score;
-      }
-    }
     try {
-      await saveRegister({ cohortId, eventId, attendance: fullAttendance, quiz: fullQuiz });
+      await saveRegister({ cohortId, eventId, attendance: fullAttendance });
       show(
         `${lessonRef} saved · ${presentCount} present, ${absentCount} absent. Cohort attendance is now ${
           projectedPct ?? 0
@@ -210,20 +165,14 @@ export function RegisterForm({
 
         <div className="p-[18px]">
           <div className="mb-3 text-xs text-ink-muted">Tap a name to mark absent.</div>
-          <div
-            className="grid gap-2.5"
-            style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${hasQuiz ? 238 : 190}px, 1fr))` }}
-          >
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
             {filteredRoster.map((entry) => (
               <StudentTile
                 key={entry.id}
                 entry={entry}
                 present={isPresent(entry.id)}
-                score={quiz[entry.id]}
-                hasQuiz={hasQuiz}
                 editable={editable}
                 onToggle={() => toggle(entry.id)}
-                onScoreChange={(v) => setScore(entry.id, v)}
               />
             ))}
             {filteredRoster.length === 0 && (
@@ -271,13 +220,6 @@ export function RegisterForm({
             </span>
           </div>
 
-          {hasQuiz && (
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <span className="font-semibold text-ink-tertiary">Quiz average</span>
-              <span className="tabular font-semibold text-ink">{quizAvgDraft ?? "—"}</span>
-            </div>
-          )}
-
           {error && <div className="mt-3 text-xs font-medium text-accent-2-700">{error}</div>}
 
           <Button
@@ -287,12 +229,11 @@ export function RegisterForm({
             onClick={handleSave}
             className="mt-4 w-full"
           >
+            {isSaving && <Spinner />}
             {buttonLabel}
           </Button>
         </Card>
-        <div className="px-1 text-xs text-ink-muted">
-          Every lesson is created with an empty register and quiz sheet.
-        </div>
+        <div className="px-1 text-xs text-ink-muted">Every lesson is created with an empty register.</div>
       </div>
     </div>
   );
@@ -301,19 +242,13 @@ export function RegisterForm({
 function StudentTile({
   entry,
   present,
-  score,
-  hasQuiz,
   editable,
   onToggle,
-  onScoreChange,
 }: {
   entry: RegisterRosterEntry;
   present: boolean;
-  score: number | undefined;
-  hasQuiz: boolean;
   editable: boolean;
   onToggle: () => void;
-  onScoreChange: (value: string) => void;
 }) {
   return (
     <div
@@ -350,19 +285,6 @@ function StudentTile({
           {present ? `${entry.rate}% · ${entry.attended}/${entry.expected}` : "Absent"}
         </span>
       </span>
-      {hasQuiz && (
-        <input
-          type="number"
-          min={0}
-          max={100}
-          inputMode="numeric"
-          disabled={!editable || !present}
-          value={score ?? ""}
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => onScoreChange(e.target.value)}
-          className="h-[34px] w-[54px] flex-none rounded-[7px] border border-border bg-card px-1.5 text-center text-[13px] text-ink tabular focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-accent disabled:bg-page disabled:text-ink-faint"
-        />
-      )}
     </div>
   );
 }

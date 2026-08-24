@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBands, getCohort } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getCrusadeEvents, getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
-import { lessonQuizAvg, lessonStats } from "@/lib/domain/metrics";
+import { computePace, lessonStats } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { ReportsView } from "@/components/reports/reports-view";
@@ -41,12 +41,10 @@ export default async function ReportsPage({
       classNumber: p.classNumber,
       lessonRef: p.lessonRef,
       lessonTitle: p.lessonTitle,
-      hasQuiz: p.hasQuiz,
       recorded: p.recorded,
       present: p.present,
       absent: p.absent,
       rate: p.rate,
-      quizAvg: p.quizAvg,
     }));
   } else {
     const full = await getLessonEvents(supabase, cohortId);
@@ -60,15 +58,17 @@ export default async function ReportsPage({
         classNumber: e.classNumber,
         lessonRef: e.lessonRef,
         lessonTitle: e.lessonTitle,
-        hasQuiz: e.hasQuiz,
         recorded: stats !== null,
         present: stats?.present ?? null,
         absent: stats?.absent ?? null,
         rate: stats?.rate ?? null,
-        quizAvg: lessonQuizAvg(e),
       };
     });
   }
+
+  const today = todayISO();
+  const recordedCount = lessons.filter((l) => l.recorded).length;
+  const pace = computePace(cohort, recordedCount, today);
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -78,7 +78,8 @@ export default async function ReportsPage({
         crusadeEvents={crusadeEvents}
         enrolled={enrolled}
         bands={bands}
-        today={todayISO()}
+        today={today}
+        paceGap={pace.gap}
       />
     </div>
   );

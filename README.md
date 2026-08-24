@@ -1,8 +1,8 @@
 # BCC Console
 
 A role-based discipleship operations platform for running Bible-study cohorts — attendance,
-quizzes, a follow-up loop for students who fall behind, and the calendar/reports that come
-from it. Built with Next.js 16, React 19, TypeScript, Tailwind CSS v4, Base UI, and Supabase
+a follow-up loop for students who fall behind, and the calendar/reports that come from it.
+Built with Next.js 16, React 19, TypeScript, Tailwind CSS v4, Base UI, and Supabase
 Postgres, from the design spec bundle in this repo's history (product brief, domain model,
 screen-by-screen spec, design tokens, RBAC rules).
 

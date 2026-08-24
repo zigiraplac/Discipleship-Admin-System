@@ -16,12 +16,10 @@ export interface ReportLesson {
   classNumber: number;
   lessonRef: string;
   lessonTitle: string;
-  hasQuiz: boolean;
   recorded: boolean;
   present: number | null;
   absent: number | null;
   rate: number | null;
-  quizAvg: number | null;
 }
 
 export interface MonthlyRate {

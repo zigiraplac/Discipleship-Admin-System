@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
+import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic, getCrusadeEvents } from "@/lib/data/lessons";
-import { isRecorded, lessonStats, lessonQuizAvg } from "@/lib/domain/metrics";
+import { isRecorded, lessonStats } from "@/lib/domain/metrics";
 import { toneForRate } from "@/components/ui/progress-bar";
 import { TOTAL_LESSONS, CURRICULUM } from "@/lib/domain/curriculum";
 import { todayISO, formatShortDate } from "@/lib/utils";
@@ -49,17 +50,10 @@ export default async function LessonsPage({
         classNumber: p.classNumber,
         lessonRef: p.lessonRef,
         lessonTitle: p.lessonTitle,
-        hasQuiz: p.hasQuiz,
         status,
         presentText: p.recorded ? `${p.present}/${p.enrolled}` : "—",
         ratePct,
         tone: ratePct !== null ? toneForRate(ratePct, bands.activeThreshold, bands.helpThreshold) : "grey",
-        quizText:
-          p.recorded && p.hasQuiz && p.quizAvg !== null
-            ? String(p.quizAvg)
-            : status === "upcoming" && p.hasQuiz
-              ? "quiz"
-              : "—",
       };
     });
   } else {
@@ -77,7 +71,6 @@ export default async function LessonsPage({
           ? "missing"
           : "upcoming";
       const stats = lessonStats(ev, enrolled);
-      const quizAvg = lessonQuizAvg(ev);
       const ratePct = stats ? stats.rate : null;
       return {
         eventId: ev.eventId,
@@ -86,13 +79,10 @@ export default async function LessonsPage({
         classNumber: ev.classNumber,
         lessonRef: ev.lessonRef,
         lessonTitle: ev.lessonTitle,
-        hasQuiz: ev.hasQuiz,
         status,
         presentText: stats ? `${stats.present}/${enrolled}` : "—",
         ratePct,
         tone: ratePct !== null ? toneForRate(ratePct, bands.activeThreshold, bands.helpThreshold) : "grey",
-        quizText:
-          quizAvg !== null ? String(quizAvg) : status === "upcoming" && ev.hasQuiz ? "quiz" : "—",
       };
     });
   }
@@ -116,7 +106,13 @@ export default async function LessonsPage({
 
       <StatGrid>
         <StatCard label="Recorded" value={recordedCount} sub={`of ${TOTAL_LESSONS} lessons`} />
-        <StatCard label="Missing register" value={missingRows.length} sub={missingSub} />
+        <StatCard
+          label="Missing register"
+          value={missingRows.length}
+          sub={missingSub}
+          icon={missingRows.length > 0 ? WarningCircle : undefined}
+          tone="magenta"
+        />
         <StatCard
           label="Remaining"
           value={TOTAL_LESSONS - recordedCount}

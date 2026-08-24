@@ -77,10 +77,8 @@ export default async function RegisterPage({
         lessonTitle={ev.lessonTitle}
         lessonRef={ev.lessonRef}
         dateLong={dateLong}
-        hasQuiz={ev.hasQuiz}
         roster={roster}
         initialAttendance={recorded ? ev.register.attendance : {}}
-        initialQuiz={recorded ? ev.register.quiz : {}}
         recorded={recorded}
         isFuture={isFuture}
         editable={editable}

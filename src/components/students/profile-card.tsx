@@ -26,10 +26,9 @@ export function ProfileCard({ student }: { student: StudentAggregate }) {
         <StatusPill status={student.status} />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 border-t border-divider pt-4 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-3 gap-4 border-t border-divider pt-4">
         <Stat label="Attendance" value={`${student.rate}%`} />
         <Stat label="Attended" value={`${student.attended}/${student.expected}`} />
-        <Stat label="Quiz" value={student.quizAvg ?? "—"} />
         <Stat label="To make up" value={student.missed} />
       </div>
     </Card>

@@ -9,7 +9,7 @@ import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { buttonVariants } from "@/components/ui/button";
-import { outcomeShortLabel } from "@/components/outcome/outcome-modal";
+import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
 import type { Bands, OutcomeKind, StudentAggregate } from "@/lib/domain/types";
 
 type Filter = "all" | "On track" | "Needs help" | "At risk";
@@ -61,7 +61,6 @@ export function StudentsTable({
           <TH>Student</TH>
           <TH>Attended</TH>
           <TH>Attendance</TH>
-          <TH>Quiz</TH>
           <TH>Status</TH>
           <TH>Last outcome</TH>
           <TH align="right" />
@@ -94,7 +93,6 @@ export function StudentsTable({
                     <span className="text-[12px] font-semibold tabular">{pct === null ? "—" : `${pct}%`}</span>
                   </span>
                 </TD>
-                <TD className="tabular">{s.quizAvg ?? "—"}</TD>
                 <TD>
                   <StatusPill status={s.status} />
                 </TD>
@@ -112,7 +110,7 @@ export function StudentsTable({
           })}
           {rows.length === 0 && (
             <TR>
-              <TD colSpan={7} className="py-6 text-center text-ink-faint">
+              <TD colSpan={6} className="py-6 text-center text-ink-faint">
                 No students match.
               </TD>
             </TR>

@@ -22,12 +22,15 @@ export function ReportsView({
   enrolled,
   bands,
   today,
+  paceGap,
 }: {
   lessons: ReportLesson[];
   crusadeEvents: CrusadeEventView[];
   enrolled: number;
   bands: Bands;
   today: string;
+  /** Positive = behind the cohort's own ideal pace, 0/negative = on or ahead. */
+  paceGap: number;
 }) {
   const [period, setPeriod] = useState<Period>("Month");
 
@@ -48,12 +51,6 @@ export function ReportsView({
       ? Math.round((sumPresent / (enrolled * recordedInPeriod.length)) * 100)
       : null;
 
-  // Cohort-wide, not period-filtered, per spec.
-  const quizLessons = lessons.filter((l) => l.recorded && l.hasQuiz && l.quizAvg != null);
-  const quizAvgOverall = quizLessons.length
-    ? Math.round(quizLessons.reduce((a, l) => a + (l.quizAvg ?? 0), 0) / quizLessons.length)
-    : null;
-
   return (
     <div className="flex flex-col gap-[18px]">
       <div className="flex flex-wrap items-center gap-3">
@@ -70,9 +67,9 @@ export function ReportsView({
         />
         <StatCard label="Absences" value={sumAbsent} sub="seats missed" />
         <StatCard
-          label="Quiz average"
-          value={quizAvgOverall != null ? `${quizAvgOverall}%` : "—"}
-          sub="cohort overall"
+          label="Pace"
+          value={paceGap <= 0 ? "On pace" : `${paceGap} behind`}
+          sub="vs. this cohort's own ideal plan"
         />
       </StatGrid>
 
