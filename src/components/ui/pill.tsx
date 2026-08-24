@@ -1,13 +1,22 @@
 import { cn } from "@/lib/utils";
 import type { Status, CohortHealth } from "@/lib/domain/types";
 
-export type PillTone = "cyan" | "yellow" | "magenta" | "grey";
+// cyan/yellow/magenta/grey are the app's status meaning (on track/needs
+// help/at risk) — reused wherever something is genuinely good/warning/bad.
+// violet/teal/sky/amber carry no status meaning at all: they're for telling
+// categories apart (a role, a kind) where nothing is "wrong", so reusing a
+// status color there would misread as a health signal that isn't real.
+export type PillTone = "cyan" | "yellow" | "magenta" | "grey" | "violet" | "teal" | "sky" | "amber";
 
 const TONE_CLASSES: Record<PillTone, string> = {
   cyan: "bg-accent-100 text-accent-800",
   yellow: "bg-yellow-100 text-yellow-ink",
   magenta: "bg-accent-2-100 text-accent-2-700",
   grey: "bg-page text-ink-tertiary",
+  violet: "bg-violet-100 text-violet-700",
+  teal: "bg-teal-100 text-teal-700",
+  sky: "bg-sky-100 text-sky-700",
+  amber: "bg-amber-100 text-amber-800",
 };
 
 export function Pill({

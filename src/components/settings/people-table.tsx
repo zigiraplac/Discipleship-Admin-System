@@ -6,11 +6,13 @@ import { roleLabel } from "@/lib/auth";
 import { describeScope } from "@/lib/data/people";
 import type { AppUser, Role } from "@/lib/domain/types";
 
+// A role isn't a health signal, so it gets its own identity colors rather
+// than borrowing the status tones (which would misread admin as "at risk").
 const ROLE_TONE: Record<Role, PillTone> = {
-  admin: "magenta",
-  facilitator: "cyan",
-  teacher: "grey",
-  leadership: "yellow",
+  admin: "violet",
+  facilitator: "teal",
+  teacher: "sky",
+  leadership: "amber",
 };
 
 export function PeopleTable({

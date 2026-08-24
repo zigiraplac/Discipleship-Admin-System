@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { WarningCircle, ArrowUUpLeft, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
@@ -47,9 +48,14 @@ export default async function AttentionPage({
       <PageHead title="Attention" subtitle={`${cohort.name} · ${flagged.length} below the band`} />
 
       <StatGrid>
-        <StatCard label="To contact" value={toContact} />
-        <StatCard label="On catch-up" value={onCatchup} />
-        <StatCard label="Left cohort" value={leftCohort} />
+        <StatCard
+          label="To contact"
+          value={toContact}
+          icon={toContact > 0 ? WarningCircle : undefined}
+          tone="yellow"
+        />
+        <StatCard label="On catch-up" value={onCatchup} icon={onCatchup > 0 ? ArrowUUpLeft : undefined} tone="cyan" />
+        <StatCard label="Left cohort" value={leftCohort} icon={leftCohort > 0 ? SignOut : undefined} tone="grey" />
       </StatGrid>
 
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
