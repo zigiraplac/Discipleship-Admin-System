@@ -179,47 +179,6 @@ export function studentClassMarks(
     });
 }
 
-export interface AtRiskPoint {
-  globalIndex: number;
-  lessonRef: string;
-  atRiskCount: number;
-}
-
-/**
- * A real historical line, not a fabricated one: for every lesson already
- * recorded, re-derives how many students would have been flagged (the
- * exact same `statusOf` rule `aggregateCohort` uses) using only the
- * attendance recorded up to that point. No snapshot table, no scheduler —
- * just re-running the one trusted formula at each past cutoff.
- */
-export function atRiskTrend(
-  students: Student[],
-  lessonEvents: LessonEventView[],
-  bands: Bands
-): AtRiskPoint[] {
-  const recorded = lessonEvents.filter(isRecorded).sort((a, b) => a.globalIndex - b.globalIndex);
-  const attended = new Map<string, number>();
-  for (const s of students) attended.set(s.id, 0);
-
-  const points: AtRiskPoint[] = [];
-  let recordedCount = 0;
-  for (const ev of recorded) {
-    recordedCount++;
-    for (const s of students) {
-      if (ev.register.attendance[s.id] === "present") {
-        attended.set(s.id, (attended.get(s.id) ?? 0) + 1);
-      }
-    }
-    let atRiskCount = 0;
-    for (const s of students) {
-      const rate = Math.round(((attended.get(s.id) ?? 0) / recordedCount) * 100);
-      if (statusOf(rate, bands) !== "On track") atRiskCount++;
-    }
-    points.push({ globalIndex: ev.globalIndex, lessonRef: ev.lessonRef, atRiskCount });
-  }
-  return points;
-}
-
 export interface PaceStatus {
   /** How many lessons the cohort's own ideal plan (its real start date,
    * teaching days, and lessons-per-session) says should be done by now. */

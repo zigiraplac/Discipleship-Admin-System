@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
-import { aggregateCohort, isRecorded, lessonStats, computePace, atRiskTrend, type AtRiskPoint } from "@/lib/domain/metrics";
+import { aggregateCohort, isRecorded, lessonStats, computePace, classRate } from "@/lib/domain/metrics";
 import { CURRICULUM, classSpans } from "@/lib/domain/curriculum";
 import { upcomingBirthdays } from "@/lib/domain/birthdays";
 import { todayISO, formatShortDate } from "@/lib/utils";
@@ -14,16 +14,35 @@ import { PageHead } from "@/components/shell/page-head";
 import { KpiRow, KpiCard, type DeltaTone } from "@/components/dashboard/kpi-card";
 import { AttendanceChart, type ChartBar } from "@/components/dashboard/attendance-chart";
 import { UpcomingEventsCard, type UpcomingEventRow } from "@/components/shared/upcoming-events";
-import { AtRiskTrendCard } from "@/components/dashboard/at-risk-trend-chart";
+import { NeedsAttentionTable } from "@/components/dashboard/needs-attention-table";
 import { UpcomingBirthdaysCard } from "@/components/dashboard/upcoming-birthdays";
 import { Greeting } from "@/components/dashboard/greeting";
 import type { Student } from "@/lib/domain/types";
 
-function buildChartBars(lessons: { globalIndex: number; lessonRef: string; rate: number }[]): ChartBar[] {
-  return lessons.slice(-16).map((l) => ({
-    label: `L${l.globalIndex + 1}`,
-    title: `${l.lessonRef} · ${l.rate}%`,
-    rate: l.rate,
+/** Only lessons already due (recorded or not) — a future, not-yet-taught
+ * lesson has nothing to show yet and would just read as a false "0%". A
+ * missing register for a due lesson, on the other hand, genuinely is 0%
+ * and stays visible as a gap in the trend rather than quietly vanishing. */
+function buildLessonBars(
+  lessons: { globalIndex: number; lessonRef: string; date: string; recorded: boolean; rate: number }[],
+  todayISO: string
+): ChartBar[] {
+  return lessons
+    .filter((l) => l.date <= todayISO)
+    .sort((a, b) => a.globalIndex - b.globalIndex)
+    .slice(-16)
+    .map((l) => ({
+      label: `L${l.globalIndex + 1}`,
+      title: l.recorded ? `${l.lessonRef} · ${l.rate}%` : `${l.lessonRef} · not recorded`,
+      rate: l.recorded ? l.rate : 0,
+    }));
+}
+
+function classBarsFromRates(rates: (number | null)[]): ChartBar[] {
+  return rates.map((rate, ci) => ({
+    label: `C${ci + 1}`,
+    title: rate === null ? `${CURRICULUM[ci].title} · not started` : `${CURRICULUM[ci].title} · ${rate}%`,
+    rate: rate ?? 0,
   }));
 }
 
@@ -43,9 +62,10 @@ export default async function DashboardPage({
 
   let recordedCount = 0;
   let rate = 0;
-  let chartBars: ChartBar[] = [];
+  let lessonBars: ChartBar[] = [];
+  let classBars: ChartBar[] = [];
   let upNext: UpcomingEventRow[] = [];
-  let trendPoints: AtRiskPoint[] | null = null;
+  let attentionRows: Awaited<ReturnType<typeof aggregateCohort>>["roster"] | null = null;
   let atRiskCount = 0;
   let enrolled = 0;
   let studentsForBirthdays: Student[] = [];
@@ -61,7 +81,19 @@ export default async function DashboardPage({
     enrolled = pub[0]?.enrolled ?? 0;
     const totalPresent = recorded.reduce((a, p) => a + (p.present ?? 0), 0);
     rate = enrolled && recordedCount ? Math.round((totalPresent / (enrolled * recordedCount)) * 100) : 0;
-    chartBars = buildChartBars(recorded.map((p) => ({ globalIndex: p.globalIndex, lessonRef: p.lessonRef, rate: p.rate ?? 0 })));
+    lessonBars = buildLessonBars(
+      pub.map((p) => ({ globalIndex: p.globalIndex, lessonRef: p.lessonRef, date: p.date, recorded: p.recorded, rate: p.rate ?? 0 })),
+      today
+    );
+    classBars = classBarsFromRates(
+      CURRICULUM.map((_, ci) => {
+        const inClass = pub.filter((p) => p.classIndex === ci && p.recorded);
+        if (!inClass.length) return null;
+        const totalPresentInClass = inClass.reduce((a, p) => a + (p.present ?? 0), 0);
+        const totalEnrolledInClass = inClass.reduce((a, p) => a + (p.enrolled ?? 0), 0);
+        return totalEnrolledInClass ? Math.round((totalPresentInClass / totalEnrolledInClass) * 100) : null;
+      })
+    );
 
     const outstanding = pub.filter((p) => !p.recorded && p.date <= today).sort((a, b) => a.globalIndex - b.globalIndex);
     const upcoming = pub.filter((p) => !p.recorded && p.date > today).slice(0, outstanding.length ? 3 : 4);
@@ -89,10 +121,17 @@ export default async function DashboardPage({
     enrolled = agg.enrolled;
     atRiskCount = agg.atRisk;
 
-    const recorded = lessonEvents.filter(isRecorded);
-    chartBars = buildChartBars(
-      recorded.map((e) => ({ globalIndex: e.globalIndex, lessonRef: e.lessonRef, rate: lessonStats(e, agg.enrolled)!.rate }))
+    lessonBars = buildLessonBars(
+      lessonEvents.map((e) => ({
+        globalIndex: e.globalIndex,
+        lessonRef: e.lessonRef,
+        date: e.date,
+        recorded: isRecorded(e),
+        rate: lessonStats(e, agg.enrolled)?.rate ?? 0,
+      })),
+      today
     );
+    classBars = classBarsFromRates(CURRICULUM.map((_, ci) => classRate(lessonEvents, ci, agg.enrolled)));
 
     const upcoming = lessonEvents.filter((e) => !isRecorded(e) && e.date > today).slice(0, agg.outstanding.length ? 3 : 4);
     upNext = [...agg.outstanding.slice(0, 1), ...upcoming].map((e) => {
@@ -108,7 +147,10 @@ export default async function DashboardPage({
       };
     });
 
-    trendPoints = atRiskTrend(students, lessonEvents, bands);
+    attentionRows = agg.roster
+      .filter((s) => s.status !== "On track")
+      .sort((a, b) => a.rate - b.rate)
+      .slice(0, 6);
   }
 
   let classIndex = spans.findIndex(([a, b]) => recordedCount >= a && recordedCount <= b);
@@ -142,7 +184,7 @@ export default async function DashboardPage({
 
       <KpiRow>
         <KpiCard icon={CheckCircle} label="Attendance" value={`${rate}%`} delta={attendanceDelta} deltaTone={attendanceTone} sub={`Target ${bands.activeThreshold}%`} />
-        {trendPoints !== null && (
+        {attentionRows !== null && (
           <KpiCard icon={WarningCircle} label="Needs attention" value={atRiskCount} sub={`of ${enrolled} students`} />
         )}
         <KpiCard
@@ -161,17 +203,17 @@ export default async function DashboardPage({
         />
       </KpiRow>
 
-      <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "minmax(0,1.6fr) minmax(0,1fr)" }}>
-        <AttendanceChart bars={chartBars} />
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <AttendanceChart lessonBars={lessonBars} classBars={classBars} />
         <UpcomingEventsCard title="Up next" rows={upNext} emptyLabel="Nothing left to teach — 80 of 80 recorded." />
       </div>
 
-      {trendPoints !== null ? (
-        <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
-          <AtRiskTrendCard
-            points={trendPoints}
-            enrolled={enrolled}
-            current={atRiskCount}
+      {attentionRows !== null ? (
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <NeedsAttentionTable
+            cohortId={cohortId}
+            rows={attentionRows}
+            bands={bands}
             attentionHref={`/c/${cohortId}/attention`}
           />
           <UpcomingBirthdaysCard birthdays={birthdays} studentHref={studentHref} />
