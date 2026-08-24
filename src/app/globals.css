@@ -2,7 +2,10 @@
 
 /*
   Broadsheet tokens (see design/05-design-tokens.md for the source spec).
-  Light-only by product decision — this app has no dark mode.
+  Dark mode added on top of the original light-only decision: every surface/
+  border/ink token gets a dark equivalent below, but accent/accent-2/yellow
+  (the brand blue/red/yellow) are deliberately identical in both themes —
+  the same blue that's already used everywhere, not a second color.
 */
 @theme {
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
@@ -58,12 +61,58 @@
   --shadow-modal: 0 24px 60px rgba(20, 25, 32, 0.24);
 }
 
+/* Dark surfaces/borders/ink — a blue-tinted navy (the same family as the
+   login screen's dark panel), not neutral black/grey. Applies when the OS
+   is set to dark (unless the toggle below explicitly picked light), and
+   always when the toggle explicitly picked dark — the second block wins
+   over the first at equal specificity because it comes later. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-page: #0a1226;
+    --color-card: #111a2e;
+    --color-subtle: #16213a;
+    --color-cell: #131c30;
+    --color-hover: #1c2843;
+    --color-border: #283454;
+    --color-border-soft: #212c48;
+    --color-divider: #1d2740;
+    --color-dashed: #2c3856;
+    --color-neutral-border: #384467;
+
+    --color-ink: #eef1f8;
+    --color-ink-secondary: #c3cadf;
+    --color-ink-tertiary: #99a2c0;
+    --color-ink-muted: #7e88a8;
+    --color-ink-faint: #5f6a8a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --color-page: #0a1226;
+  --color-card: #111a2e;
+  --color-subtle: #16213a;
+  --color-cell: #131c30;
+  --color-hover: #1c2843;
+  --color-border: #283454;
+  --color-border-soft: #212c48;
+  --color-divider: #1d2740;
+  --color-dashed: #2c3856;
+  --color-neutral-border: #384467;
+
+  --color-ink: #eef1f8;
+  --color-ink-secondary: #c3cadf;
+  --color-ink-tertiary: #99a2c0;
+  --color-ink-muted: #7e88a8;
+  --color-ink-faint: #5f6a8a;
+}
+
 body {
   background: var(--color-page);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.55;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 h1,

@@ -14,9 +14,26 @@ export const metadata: Metadata = {
     "A role-based discipleship operations platform for running Bible-study cohorts.",
 };
 
+// Runs before hydration so the very first paint already has the right
+// theme — without this, the page would flash light (or dark) for a beat
+// before React mounts and applies the stored preference.
+const THEME_INIT_SCRIPT = `
+(function () {
+  try {
+    var stored = localStorage.getItem("theme");
+    if (stored === "light" || stored === "dark") {
+      document.documentElement.setAttribute("data-theme", stored);
+    }
+  } catch (e) {}
+})();
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} h-full antialiased`}>
+    <html lang="en" className={`${jakarta.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full">{children}</body>
     </html>
   );
