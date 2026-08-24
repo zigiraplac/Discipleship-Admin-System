@@ -7,21 +7,21 @@
 @theme {
   --font-sans: var(--font-jakarta), system-ui, sans-serif;
 
-  /* interactive — cyan */
-  --color-accent-100: #e9f8ff;
-  --color-accent-300: #99e0ff;
-  --color-accent: #0088b0;
-  --color-accent-600: #1186ac;
-  --color-accent-700: #006786;
-  --color-accent-800: #004961;
+  /* interactive — brand blue, from the BCC logo's globe */
+  --color-accent-100: #eaf1fc;
+  --color-accent-300: #8fb6e8;
+  --color-accent: #1e4fa5;
+  --color-accent-600: #2c5fb0;
+  --color-accent-700: #163e82;
+  --color-accent-800: #0f2c5c;
 
-  /* problems — magenta */
-  --color-accent-2-100: #fff1f4;
-  --color-accent-2-200: #ffdee6;
-  --color-accent-2-300: #ffc0d0;
-  --color-accent-2-400: #ff90b1;
-  --color-accent-2-500: #ff458e;
-  --color-accent-2-700: #aa0b56;
+  /* problems — brand red, from the BCC logo's cross */
+  --color-accent-2-100: #fdecec;
+  --color-accent-2-200: #fbd3d3;
+  --color-accent-2-300: #f4a8a8;
+  --color-accent-2-400: #e96b6b;
+  --color-accent-2-500: #dc2626;
+  --color-accent-2-700: #8f1d1d;
 
   /* warning — yellow */
   --color-yellow-100: #fdf3d6;

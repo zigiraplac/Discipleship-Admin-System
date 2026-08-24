@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { activateAccount } from "@/lib/actions/account";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 
 type Status = "checking" | "ready" | "invalid" | "saving" | "done";
 
@@ -145,7 +146,7 @@ export default function SetPasswordPage() {
           <div className="grid size-[34px] flex-none place-items-center rounded-[10px] bg-accent text-base font-bold text-white">
             B
           </div>
-          <div className="text-[16px] font-bold text-ink">BCC Family</div>
+          <div className="text-[16px] font-bold text-ink">BCC Discipleship</div>
         </div>
 
         {status === "checking" && (
@@ -201,8 +202,16 @@ export default function SetPasswordPage() {
                 </div>
               )}
               <Button type="submit" disabled={status === "saving" || status === "done"} className="mt-1.5 w-full">
-                {status === "saving" ? "Saving…" : "Set password and continue"}
-                <ArrowRight size={15} />
+                {status === "saving" ? (
+                  <>
+                    <Spinner /> Saving…
+                  </>
+                ) : (
+                  <>
+                    Set password and continue
+                    <ArrowRight size={15} />
+                  </>
+                )}
               </Button>
             </form>
           </>

@@ -1,7 +1,9 @@
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
+import Image from "next/image";
+import { Lock, Quotes, Sparkle, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { signInAction } from "@/lib/actions/auth";
 import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { PasswordField } from "./password-field";
 
 export default async function LoginPage({
   searchParams,
@@ -9,42 +11,92 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string; email?: string; next?: string }>;
 }) {
   const params = await searchParams;
+  const year = new Date().getFullYear();
 
   return (
-    <div className="grid min-h-screen place-items-center bg-page p-6">
-      <div className="w-full max-w-[420px] rounded-login border border-border bg-card p-8 shadow-login">
-        <div className="flex items-center gap-2.5">
-          <div className="grid size-[34px] flex-none place-items-center rounded-[10px] bg-accent text-base font-bold text-white">
-            B
+    <main className="flex min-h-screen flex-col lg:flex-row">
+      <div className="relative hidden min-h-screen flex-col items-center justify-between overflow-hidden bg-[#0a1226] p-16 text-white lg:flex lg:w-1/2">
+        <div className="absolute -left-24 -top-24 size-96 rounded-full bg-accent/30 blur-3xl" />
+        <div className="absolute -bottom-24 -right-24 size-96 rounded-full bg-accent/20 blur-3xl" />
+
+        <div className="relative flex max-w-md flex-col items-center pt-4 text-center">
+          <Image
+            src="/logo.jpg"
+            alt="Bible Communication Center"
+            width={128}
+            height={128}
+            className="size-32 rounded-full border-2 border-white/20 bg-white p-1.5 ring-4 ring-accent/25 object-cover"
+          />
+          <div className="mt-5">
+            <div className="font-serif text-4xl font-extrabold tracking-tight [text-shadow:0_0_24px_rgba(143,180,240,0.45)]">
+              BCC Discipleship
+            </div>
+            <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-white/65">
+              Equipping and tracking disciples through intentional, structured formation.
+            </p>
           </div>
-          <div className="text-[16px] font-bold text-ink">BCC Family</div>
         </div>
 
-        <div className="mt-6 text-2xl font-bold text-ink">Sign in</div>
-        <div className="mt-1 text-[13px] text-ink-muted">Use your registered email.</div>
+        <div className="relative z-10 my-auto w-full max-w-lg py-6">
+          <div className="relative space-y-4 rounded-3xl bg-slate-900/60 p-8 shadow-2xl backdrop-blur-md">
+            <Quotes size={32} weight="fill" className="text-accent-300 opacity-80" />
+            <p className="font-serif text-sm italic leading-relaxed tracking-wide text-slate-200 lg:text-base">
+              &ldquo;To prepare/raise an army (a race) of life givers disciples, totally consecrated to
+              the Lord Jesus Christ, restored and from different backgrounds but interconnected in a
+              family spirit, restored, trained and sent determined to proclaim Jesus Christ the Lord of
+              this generation.&rdquo;
+            </p>
+            <div className="flex items-center gap-1.5 border-t border-white/15 pt-3 font-sans text-[11px] font-extrabold uppercase tracking-widest text-accent-300">
+             
+              Vision Statement · BCC
+            </div>
+          </div>
+        </div>
 
-        {params.error && (
-          <div className="mt-4 rounded-[9px] border border-accent-2-200 bg-accent-2-100 px-3 py-2.5 text-[13px] text-accent-2-700">
-            {params.error}
-          </div>
-        )}
-
-        <form action={signInAction} className="mt-[22px] flex flex-col gap-[13px]">
-          <input type="hidden" name="next" value={params.next ?? "/"} />
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required defaultValue={params.email} className="bg-subtle" />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input id="password" name="password" type="password" required className="bg-subtle" />
-          </div>
-          <Button type="submit" className="mt-1.5 w-full">
-            Sign in
-            <ArrowRight size={15} />
-          </Button>
-        </form>
+        <p className="relative text-center text-xs text-slate-400">
+          © {year} BCC Discipleship · All rights reserved
+        </p>
       </div>
-    </div>
+
+      <div className="flex min-h-screen w-full items-center justify-center bg-white p-8 sm:p-12 lg:w-1/2 lg:p-16">
+        <div className="w-full max-w-md space-y-8">
+          <div>
+            <div className="font-serif text-3xl font-extrabold tracking-tight text-ink">Welcome back</div>
+            <div className="mt-2 text-[13px] text-ink-muted">Sign in to your account to continue.</div>
+          </div>
+
+          <form action={signInAction} className="flex flex-col gap-6">
+            <input type="hidden" name="next" value={params.next ?? "/"} />
+            <div>
+              <Label htmlFor="email" className="text-[11px] uppercase tracking-wide">
+                Email
+              </Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                required
+                defaultValue={params.email}
+                className="h-12 rounded-xl bg-subtle px-4"
+              />
+            </div>
+
+            <PasswordField />
+
+            {params.error && (
+              <div className="flex items-center gap-2 rounded-xl border border-accent-2-200 bg-accent-2-100 p-3.5 text-[13px] text-accent-2-700">
+                <WarningCircle size={16} className="flex-none" />
+                {params.error}
+              </div>
+            )}
+
+            <SubmitButton className="h-12 w-full rounded-xl" pendingLabel="Signing in…">
+              <Lock size={16} />
+              Sign in
+            </SubmitButton>
+          </form>
+        </div>
+      </div>
+    </main>
   );
 }

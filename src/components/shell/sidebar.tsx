@@ -78,8 +78,7 @@ export function Sidebar({
           B
         </div>
         <div className="min-w-0">
-          <div className="text-[15px] font-bold leading-tight text-ink">BCC Family</div>
-          <div className="text-[11px] text-ink-muted">Discipleship</div>
+          <div className="text-[15px] font-bold leading-tight text-ink">BCC Discipleship</div>
         </div>
       </div>
 
