@@ -131,7 +131,7 @@ export function RegisterForm({
     thisLessonPct !== null ? toneForRate(thisLessonPct, activeThreshold, helpThreshold) : "grey";
 
   return (
-    <div className="grid items-start gap-4" style={{ gridTemplateColumns: "minmax(0,1fr) 290px" }}>
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
       <Card className="min-w-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
           <div className="min-w-0 flex-1">

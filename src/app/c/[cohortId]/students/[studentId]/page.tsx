@@ -51,7 +51,7 @@ export default async function StudentDetailPage({
         <ArrowLeft size={14} /> All students
       </Link>
 
-      <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "minmax(0,1fr) 300px" }}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex flex-col gap-4">
           <ProfileCard student={studentAgg} />
           <AttendanceByClassCard studentId={studentId} lessonEvents={lessonEvents} />

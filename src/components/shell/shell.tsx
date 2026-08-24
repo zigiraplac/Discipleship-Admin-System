@@ -130,16 +130,19 @@ export async function Shell({
       <PageHeadProvider>
         <ToastProvider>
           <div className="flex min-h-screen bg-page">
-            <Sidebar role={user.role} activeCohortId={linkCohortId} badges={badges} />
+            <Sidebar role={user.role} activeCohortId={linkCohortId} badges={badges} className="hidden lg:flex" />
             <div className="flex min-w-0 flex-1 flex-col">
               <TopBar
+                role={user.role}
                 cohorts={switcherItems}
                 activeCohortId={activeCohortId}
+                navCohortId={linkCohortId}
                 userName={user.name}
                 roleLabel={roleLabel(user.role)}
                 notifications={notifications}
+                badges={badges}
               />
-              <main className="min-w-0 flex-1 px-[26px] py-[22px] pb-[70px]">{children}</main>
+              <main className="min-w-0 flex-1 px-4 py-[18px] pb-[70px] sm:px-[26px] sm:py-[22px]">{children}</main>
             </div>
           </div>
         </ToastProvider>

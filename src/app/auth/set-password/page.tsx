@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "@phosphor-icons/react";
 import { createClient } from "@/lib/supabase/browser";
@@ -143,9 +144,13 @@ export default function SetPasswordPage() {
     <div className="grid min-h-screen place-items-center bg-page p-6">
       <div className="w-full max-w-[420px] rounded-login border border-border bg-card p-8 shadow-login">
         <div className="flex items-center gap-2.5">
-          <div className="grid size-[34px] flex-none place-items-center rounded-[10px] bg-accent text-base font-bold text-white">
-            B
-          </div>
+          <Image
+            src="/logo.jpg"
+            alt="BCC Discipleship"
+            width={34}
+            height={34}
+            className="size-[34px] flex-none rounded-full object-cover"
+          />
           <div className="text-[16px] font-bold text-ink">BCC Discipleship</div>
         </div>
 

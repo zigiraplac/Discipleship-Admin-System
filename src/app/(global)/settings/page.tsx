@@ -26,7 +26,7 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Settings" subtitle="Roles and thresholds" />
-      <div className="grid items-start gap-4" style={{ gridTemplateColumns: "minmax(0,1fr) 320px" }}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <PeopleTable
           people={people}
           scopesByUser={scopesByUser}

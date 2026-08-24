@@ -137,7 +137,7 @@ export function NewCohortWizard() {
   return (
     <div className="flex flex-col gap-[18px]">
       <Stepper steps={STEPS} current={step} />
-      <div className="grid items-start gap-4" style={{ gridTemplateColumns: "minmax(0,1fr) 300px" }}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div>
           {step === 1 && (
             <StepCohort

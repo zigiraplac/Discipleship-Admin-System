@@ -64,7 +64,7 @@ export function CalendarView({
   );
 
   return (
-    <div className="grid items-start gap-4" style={{ gridTemplateColumns: "300px minmax(0,1fr)" }}>
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
       <UpcomingEventsCard title="This week" subtitle="Next 7 days, across the cohort" rows={upcomingRows} />
 
       <Card>

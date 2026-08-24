@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
 import { NAV_ITEMS, type NavItem } from "./nav-items";
 import { SearchTrigger } from "./search-palette";
 import { cn } from "@/lib/utils";
-import { NAV_BY_ROLE } from "@/lib/roles";
+import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
 
 function isActive(id: string, pathname: string, cohortId: string | null): boolean {
@@ -24,16 +25,19 @@ function SidebarNavItem({
   href,
   active,
   badge,
+  onNavigate,
 }: {
   item: NavItem;
   href: string;
   active: boolean;
   badge?: number;
+  onNavigate?: () => void;
 }) {
   const Icon = item.icon;
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-2.5 rounded-control px-2.5 py-[9px] text-[13px] font-medium text-ink-secondary hover:bg-hover",
         active && "bg-accent-100 font-bold text-accent-800 hover:bg-accent-100"
@@ -54,10 +58,18 @@ export function Sidebar({
   role,
   activeCohortId,
   badges,
+  className,
+  onNavigate,
 }: {
   role: Role;
   activeCohortId: string | null;
   badges: { lessons?: number; attention?: number };
+  /** Lets the desktop instance stay hidden below `lg` while the mobile
+   * drawer's copy (always visible once opened) uses the default. */
+  className?: string;
+  /** Called after any nav link is clicked — the mobile drawer uses this to
+   * close itself; the persistent desktop sidebar has no need for it. */
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const allowed = new Set(NAV_BY_ROLE[role]);
@@ -72,13 +84,18 @@ export function Sidebar({
   const canCreateCohort = role === "admin";
 
   return (
-    <aside className="sticky top-0 flex h-screen w-60 flex-none flex-col border-r border-border bg-card">
+    <aside className={cn("sticky top-0 flex h-screen w-60 flex-none flex-col border-r border-border bg-card", className)}>
       <div className="flex items-center gap-2.5 p-[18px] pb-4">
-        <div className="grid size-8 flex-none place-items-center rounded-[9px] bg-accent text-sm font-bold text-white">
-          B
-        </div>
+        <Image
+          src="/logo.jpg"
+          alt="BCC Discipleship"
+          width={32}
+          height={32}
+          className="size-8 flex-none rounded-full object-cover"
+        />
         <div className="min-w-0">
-          <div className="text-[15px] font-bold leading-tight text-ink">BCC Discipleship</div>
+          <div className="text-[15px] font-bold leading-tight text-ink">Discipleship</div>
+          <div className="text-[11px] font-semibold text-accent-700">{roleLabel(role)}</div>
         </div>
       </div>
 
@@ -96,7 +113,9 @@ export function Sidebar({
             const href = item.href(activeCohortId);
             const active = isActive(item.id, pathname, activeCohortId);
             const badge = item.id === "lessons" ? badges.lessons : item.id === "attention" ? badges.attention : undefined;
-            return <SidebarNavItem key={item.id} item={item} href={href} active={active} badge={badge} />;
+            return (
+              <SidebarNavItem key={item.id} item={item} href={href} active={active} badge={badge} onNavigate={onNavigate} />
+            );
           })}
         </div>
 
@@ -108,7 +127,7 @@ export function Sidebar({
             {manage.map((item) => {
               const href = item.href(activeCohortId);
               const active = isActive(item.id, pathname, activeCohortId);
-              return <SidebarNavItem key={item.id} item={item} href={href} active={active} />;
+              return <SidebarNavItem key={item.id} item={item} href={href} active={active} onNavigate={onNavigate} />;
             })}
           </div>
         )}
@@ -118,6 +137,7 @@ export function Sidebar({
         <div className="border-t border-divider p-3">
           <Link
             href="/cohorts/new"
+            onClick={onNavigate}
             className="flex w-full items-center justify-center gap-1.5 rounded-control bg-accent px-2.5 py-2.5 text-[13px] font-semibold text-white hover:bg-accent-600"
           >
             <Plus size={15} />
