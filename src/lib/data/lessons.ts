@@ -6,10 +6,10 @@ interface LessonEventRow {
   id: string;
   event_date: string;
   edited: boolean;
-  lesson: { global_index: number; title: string; has_quiz: boolean } | { global_index: number; title: string; has_quiz: boolean }[] | null;
+  lesson: { global_index: number; title: string } | { global_index: number; title: string }[] | null;
   register:
-    | { attendance: Record<string, "present" | "absent">; quiz: Record<string, number>; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }
-    | { attendance: Record<string, "present" | "absent">; quiz: Record<string, number>; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }[]
+    | { attendance: Record<string, "present" | "absent">; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }
+    | { attendance: Record<string, "present" | "absent">; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }[]
     | null;
 }
 
@@ -19,7 +19,6 @@ function one<T>(v: T | T[] | null): T | null {
 
 const EMPTY_REGISTER = {
   attendance: {} as Record<string, "present" | "absent">,
-  quiz: {} as Record<string, number>,
   recorded_by: null as string | null,
   recorded_at: null as string | null,
   updated_by: null as string | null,
@@ -37,7 +36,7 @@ export async function getLessonEvents(db: DB, cohortId: string): Promise<LessonE
   const { data, error } = await db
     .from("event")
     .select(
-      "id, event_date, edited, lesson:lesson_id(global_index, title, has_quiz), register(attendance, quiz, recorded_by, recorded_at, updated_by, updated_at)"
+      "id, event_date, edited, lesson:lesson_id(global_index, title), register(attendance, recorded_by, recorded_at, updated_by, updated_at)"
     )
     .eq("cohort_id", cohortId)
     .eq("kind", "lesson")
@@ -60,12 +59,10 @@ export async function getLessonEvents(db: DB, cohortId: string): Promise<LessonE
         classIndex: loc.classIndex,
         lessonRef: loc.ref,
         lessonTitle: lesson.title,
-        hasQuiz: lesson.has_quiz,
         edited: row.edited,
         register: {
           eventId: row.id,
           attendance: reg.attendance ?? {},
-          quiz: reg.quiz ?? {},
           recordedBy: reg.recorded_by ?? null,
           recordedAt: reg.recorded_at ?? null,
           updatedBy: reg.updated_by ?? null,
@@ -87,22 +84,20 @@ export interface LessonPublicView {
   classIndex: number;
   lessonRef: string;
   lessonTitle: string;
-  hasQuiz: boolean;
   recorded: boolean;
   present: number | null;
   absent: number | null;
   rate: number | null;
-  quizAvg: number | null;
   enrolled: number;
 }
 
 /** Teacher-safe: aggregate counts only, via the `cohort_lesson_public_stats`
- * SECURITY DEFINER function — never the per-student attendance/quiz maps. */
+ * SECURITY DEFINER function — never the per-student attendance map. */
 export async function getLessonEventsPublic(db: DB, cohortId: string): Promise<LessonPublicView[]> {
   const [{ data: eventRows, error: eventErr }, { data: statRows, error: statErr }] = await Promise.all([
     db
       .from("event")
-      .select("id, event_date, lesson:lesson_id(global_index, title, has_quiz)")
+      .select("id, event_date, lesson:lesson_id(global_index, title)")
       .eq("cohort_id", cohortId)
       .eq("kind", "lesson")
       .order("event_date"),
@@ -129,12 +124,10 @@ export async function getLessonEventsPublic(db: DB, cohortId: string): Promise<L
         classIndex: loc.classIndex,
         lessonRef: loc.ref,
         lessonTitle: lesson.title,
-        hasQuiz: lesson.has_quiz,
         recorded: s?.recorded ?? false,
         present: s?.recorded ? s.present : null,
         absent: s?.recorded ? s.absent : null,
         rate: s?.recorded ? s.rate : null,
-        quizAvg: s?.recorded ? s.quiz_avg : null,
         enrolled: s?.enrolled ?? 0,
       };
       return view;

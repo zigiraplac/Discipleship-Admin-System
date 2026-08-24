@@ -10,6 +10,7 @@ interface CohortRow {
   teaching_days: number[];
   facilitator_id: string | null;
   status: "running" | "complete" | "archived";
+  lessons_per_session: number;
   created_at: string;
   facilitator: { name: string } | { name: string }[] | null;
 }
@@ -25,12 +26,13 @@ function mapCohortRow(row: CohortRow): Cohort {
     facilitatorId: row.facilitator_id,
     facilitatorName: facilitator?.name ?? null,
     status: row.status,
+    lessonsPerSession: row.lessons_per_session,
     createdAt: row.created_at,
   };
 }
 
 const COHORT_SELECT =
-  "id, name, city, start_date, teaching_days, facilitator_id, status, created_at, facilitator:app_user!cohort_facilitator_id_fkey(name)";
+  "id, name, city, start_date, teaching_days, facilitator_id, status, lessons_per_session, created_at, facilitator:app_user!cohort_facilitator_id_fkey(name)";
 
 /** RLS scopes this to whatever the signed-in user may see — no manual filtering needed. */
 export async function listCohorts(db: DB): Promise<Cohort[]> {

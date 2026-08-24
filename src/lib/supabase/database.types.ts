@@ -29,7 +29,6 @@ export interface Database {
           index_in_class: number;
           global_index: number;
           title: string;
-          has_quiz: boolean;
         };
         Insert: Partial<Database["public"]["Tables"]["lesson"]["Row"]>;
         Update: Partial<Database["public"]["Tables"]["lesson"]["Row"]>;
@@ -62,6 +61,7 @@ export interface Database {
           teaching_days: number[];
           facilitator_id: string | null;
           status: "running" | "complete" | "archived";
+          lessons_per_session: number;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["cohort"]["Row"]> & {
@@ -161,7 +161,6 @@ export interface Database {
         Row: {
           event_id: string;
           attendance: Json;
-          quiz: Json;
           recorded_by: string | null;
           recorded_at: string | null;
           updated_by: string | null;
@@ -257,6 +256,34 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["audit_log"]["Row"]>;
         Relationships: [];
       };
+      notification: {
+        Row: {
+          id: string;
+          user_id: string;
+          kind: string;
+          title: string;
+          body: string | null;
+          href: string | null;
+          dedupe_key: string | null;
+          read_at: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["notification"]["Row"]> & {
+          user_id: string;
+          kind: string;
+          title: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["notification"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "notification_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "app_user";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -267,13 +294,13 @@ export interface Database {
           present: number;
           absent: number;
           rate: number;
-          quiz_avg: number | null;
           enrolled: number;
           recorded: boolean;
         }[];
       };
       is_admin: { Args: Record<string, never>; Returns: boolean };
       activate_self: { Args: Record<string, never>; Returns: undefined };
+      update_own_name: { Args: { new_name: string }; Returns: undefined };
     };
     Enums: Record<string, never>;
   };

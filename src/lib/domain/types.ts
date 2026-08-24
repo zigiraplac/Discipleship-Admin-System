@@ -24,15 +24,6 @@ export interface ClassRef {
   position: number;
 }
 
-export interface LessonRef {
-  id: number;
-  classId: number;
-  indexInClass: number; // 1..n — the L in "C3 · L7"
-  globalIndex: number; // 0..79
-  title: string;
-  hasQuiz: boolean;
-}
-
 export interface Cohort {
   id: string;
   name: string;
@@ -42,6 +33,10 @@ export interface Cohort {
   facilitatorId: string | null;
   facilitatorName: string | null;
   status: CohortStatus;
+  /** Lessons covered per study session — the target pace. Defaults to 1;
+   * a postponed lesson (and everything after it) reflows around whatever
+   * this cohort's actual value is. */
+  lessonsPerSession: number;
   createdAt: string;
 }
 
@@ -75,7 +70,6 @@ export interface CohortEvent {
 export interface Register {
   eventId: string;
   attendance: Record<string, "present" | "absent">;
-  quiz: Record<string, number>;
   recordedBy: string | null;
   recordedAt: string | null;
   updatedBy: string | null;
@@ -134,7 +128,6 @@ export interface LessonEventView {
   classIndex: number;
   lessonRef: string; // "C2 · L13"
   lessonTitle: string;
-  hasQuiz: boolean;
   edited: boolean;
   /** Always present — every lesson event is created with an empty register.
    * Use `register.recordedAt != null` to tell "saved" from "outstanding". */
@@ -155,6 +148,5 @@ export interface StudentAggregate extends Student {
   expected: number; // lessons recorded so far
   missed: number;
   rate: number; // 0..100
-  quizAvg: number | null;
   status: Status;
 }

@@ -31,7 +31,6 @@ export async function ensureCurriculumSeeded(db: DB): Promise<void> {
     index_in_class: number;
     global_index: number;
     title: string;
-    has_quiz: boolean;
   }[] = [];
   for (const cls of CURRICULUM) {
     cls.lessons.forEach((title, li) => {
@@ -40,7 +39,6 @@ export async function ensureCurriculumSeeded(db: DB): Promise<void> {
         index_in_class: li + 1,
         global_index: globalIndex,
         title,
-        has_quiz: globalIndex % 4 === 3,
       });
       globalIndex++;
     });

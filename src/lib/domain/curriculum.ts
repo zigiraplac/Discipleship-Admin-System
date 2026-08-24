@@ -145,11 +145,6 @@ export const CURRICULUM: CurriculumClass[] = [
 
 export const TOTAL_LESSONS = CURRICULUM.reduce((n, c) => n + c.lessons.length, 0); // 80
 
-/** Every fourth lesson (global index) carries a quiz: 3, 7, 11, ... 79. */
-export function isQuizLesson(globalIndex: number): boolean {
-  return globalIndex % 4 === 3;
-}
-
 export interface LessonLocator {
   classIndex: number; // 0-based
   classNumber: number; // 1-based

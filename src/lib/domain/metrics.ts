@@ -1,7 +1,9 @@
 import { CURRICULUM, classSpans } from "./curriculum";
 import { cohortHealth, statusOf } from "./bands";
+import { buildEvents } from "./generator";
 import type {
   Bands,
+  Cohort,
   LessonEventView,
   Student,
   StudentAggregate,
@@ -24,7 +26,6 @@ export interface CohortAggregate {
   roster: StudentAggregate[];
   rate: number;
   atRisk: number;
-  quizAvg: number;
   recordedCount: number;
   classIndex: number; // 0-based — the class containing lesson index `recordedCount`
   health: ReturnType<typeof cohortHealth>;
@@ -43,11 +44,8 @@ export function aggregateCohort(
   const recordedCount = recorded.length;
   const enrolled = students.length;
 
-  const tally = new Map<
-    string,
-    { attended: number; quizSum: number; quizN: number }
-  >();
-  for (const s of students) tally.set(s.id, { attended: 0, quizSum: 0, quizN: 0 });
+  const tally = new Map<string, { attended: number }>();
+  for (const s of students) tally.set(s.id, { attended: 0 });
 
   let totalPresent = 0;
   for (const ev of recorded) {
@@ -57,13 +55,6 @@ export function aggregateCohort(
       totalPresent++;
       const t = tally.get(s.id)!;
       t.attended++;
-      if (ev.hasQuiz) {
-        const score = reg.quiz[s.id];
-        if (typeof score === "number") {
-          t.quizSum += score;
-          t.quizN++;
-        }
-      }
     }
   }
 
@@ -82,7 +73,6 @@ export function aggregateCohort(
       expected: recordedCount,
       missed: recordedCount - t.attended,
       rate,
-      quizAvg: t.quizN ? Math.round(t.quizSum / t.quizN) : null,
       status,
     };
   });
@@ -92,10 +82,6 @@ export function aggregateCohort(
       ? Math.round((totalPresent / (enrolled * recordedCount)) * 100)
       : 0;
   const atRisk = roster.filter((r) => r.status !== "On track").length;
-  const withQuiz = roster.filter((r) => r.quizAvg !== null);
-  const quizAvg = withQuiz.length
-    ? Math.round(withQuiz.reduce((a, r) => a + (r.quizAvg ?? 0), 0) / withQuiz.length)
-    : 0;
 
   const spans = classSpans();
   let classIndex = spans.findIndex(([a, b]) => recordedCount >= a && recordedCount <= b);
@@ -111,7 +97,6 @@ export function aggregateCohort(
     roster,
     rate,
     atRisk,
-    quizAvg,
     recordedCount,
     classIndex,
     health,
@@ -135,16 +120,6 @@ export function lessonStats(ev: LessonEventView, enrolled: number): LessonStats 
     absent: enrolled - present,
     rate: enrolled ? Math.round((present / enrolled) * 100) : 0,
   };
-}
-
-export function lessonQuizAvg(ev: LessonEventView): number | null {
-  if (!isRecorded(ev) || !ev.hasQuiz) return null;
-  const scores = Object.entries(ev.register.quiz)
-    .filter(([sid]) => ev.register.attendance[sid] === "present")
-    .map(([, v]) => v)
-    .filter((v) => typeof v === "number");
-  if (!scores.length) return null;
-  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
 export function classRate(
@@ -204,8 +179,71 @@ export function studentClassMarks(
     });
 }
 
-export function studentQuizScore(studentId: string, ev: LessonEventView): number | null {
-  if (!isRecorded(ev)) return null;
-  const v = ev.register.quiz[studentId];
-  return typeof v === "number" ? v : null;
+export interface AtRiskPoint {
+  globalIndex: number;
+  lessonRef: string;
+  atRiskCount: number;
+}
+
+/**
+ * A real historical line, not a fabricated one: for every lesson already
+ * recorded, re-derives how many students would have been flagged (the
+ * exact same `statusOf` rule `aggregateCohort` uses) using only the
+ * attendance recorded up to that point. No snapshot table, no scheduler —
+ * just re-running the one trusted formula at each past cutoff.
+ */
+export function atRiskTrend(
+  students: Student[],
+  lessonEvents: LessonEventView[],
+  bands: Bands
+): AtRiskPoint[] {
+  const recorded = lessonEvents.filter(isRecorded).sort((a, b) => a.globalIndex - b.globalIndex);
+  const attended = new Map<string, number>();
+  for (const s of students) attended.set(s.id, 0);
+
+  const points: AtRiskPoint[] = [];
+  let recordedCount = 0;
+  for (const ev of recorded) {
+    recordedCount++;
+    for (const s of students) {
+      if (ev.register.attendance[s.id] === "present") {
+        attended.set(s.id, (attended.get(s.id) ?? 0) + 1);
+      }
+    }
+    let atRiskCount = 0;
+    for (const s of students) {
+      const rate = Math.round(((attended.get(s.id) ?? 0) / recordedCount) * 100);
+      if (statusOf(rate, bands) !== "On track") atRiskCount++;
+    }
+    points.push({ globalIndex: ev.globalIndex, lessonRef: ev.lessonRef, atRiskCount });
+  }
+  return points;
+}
+
+export interface PaceStatus {
+  /** How many lessons the cohort's own ideal plan (its real start date,
+   * teaching days, and lessons-per-session) says should be done by now. */
+  expectedByNow: number;
+  actual: number;
+  /** Positive = behind pace, 0 = on pace, negative = ahead of pace. */
+  gap: number;
+}
+
+/**
+ * No stored "pace" figure — it's re-derived every time by re-running the
+ * generator with the cohort's real settings and counting how many lessons
+ * its *ideal* schedule says should be done by today, then comparing to
+ * what's actually recorded. Postponing a lesson (src/lib/actions/schedule.ts)
+ * changes future dates, not this formula — the gap just naturally closes
+ * back toward 0 as recorded lessons catch up to wherever the reflowed
+ * schedule now expects them to be.
+ */
+export function computePace(
+  cohort: Pick<Cohort, "startDate" | "teachingDays" | "lessonsPerSession">,
+  recordedCount: number,
+  todayISO: string
+): PaceStatus {
+  const events = buildEvents(cohort.startDate, cohort.teachingDays, cohort.lessonsPerSession);
+  const expectedByNow = events.filter((e) => e.kind === "lesson" && e.date <= todayISO).length;
+  return { expectedByNow, actual: recordedCount, gap: expectedByNow - recordedCount };
 }
