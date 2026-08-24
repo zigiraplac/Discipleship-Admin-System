@@ -6,6 +6,7 @@ const TONE_CLASSES: Record<ChipTone, string> = {
   cyan: "bg-accent-100 text-accent-800",
   magenta: "bg-accent-2-100 text-accent-2-700",
   yellow: "bg-yellow-100 text-yellow-ink",
+  violet: "bg-violet-100 text-violet-700",
 };
 
 /** A single event chip inside a calendar cell — a link when the viewer's

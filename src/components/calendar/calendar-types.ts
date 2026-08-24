@@ -20,7 +20,7 @@ export interface BirthdayEntry {
   dobMonth: number;
 }
 
-export type ChipTone = "cyan" | "magenta" | "yellow";
+export type ChipTone = "cyan" | "magenta" | "yellow" | "violet";
 
 export interface ChipData {
   key: string;

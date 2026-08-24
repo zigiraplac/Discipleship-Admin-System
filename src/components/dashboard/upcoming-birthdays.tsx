@@ -23,7 +23,7 @@ export function UpcomingBirthdaysCard({
         </span>
         <div className="text-[15px] font-bold text-ink">Upcoming birthdays</div>
       </div>
-      <div className="mt-3.5 flex flex-col gap-1">
+      <div className="mt-3.5 grid gap-1" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
         {birthdays.map((b) => {
           const row = (
             <span className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 hover:bg-hover">

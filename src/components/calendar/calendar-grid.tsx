@@ -2,6 +2,8 @@ import { cn } from "@/lib/utils";
 import { CalendarChip } from "./calendar-chip";
 import type { BirthdayEntry, CalendarLessonEvent, ChipData, CrusadeEventView } from "./calendar-types";
 
+export type CalendarFilter = "all" | "lesson" | "crusade" | "birthday";
+
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function pad2(n: number): string {
@@ -17,6 +19,7 @@ export function CalendarGrid({
   year,
   month,
   today,
+  filter = "all",
   lessonEvents,
   crusadeEvents,
   birthdays,
@@ -28,6 +31,7 @@ export function CalendarGrid({
   year: number;
   month: number; // 1-based
   today: string;
+  filter?: CalendarFilter;
   lessonEvents: CalendarLessonEvent[];
   crusadeEvents: CrusadeEventView[];
   birthdays: BirthdayEntry[];
@@ -77,6 +81,7 @@ export function CalendarGrid({
           const chips: ChipData[] = [];
 
           for (const ev of lessonEvents) {
+            if (filter !== "all" && filter !== "lesson") break;
             if (ev.date !== cell.date) continue;
             if (ev.recorded) {
               chips.push({
@@ -106,10 +111,11 @@ export function CalendarGrid({
           }
 
           for (const ev of crusadeEvents) {
+            if (filter !== "all" && filter !== "crusade") break;
             if (ev.date !== cell.date) continue;
             chips.push({
               key: `c-${ev.eventId}`,
-              tone: "magenta",
+              tone: "violet",
               title: `Crusade day ${ev.crusadeDay + 1}`,
               detail: `After class ${ev.afterClass}`,
               href: null,
@@ -117,6 +123,7 @@ export function CalendarGrid({
           }
 
           for (const b of birthdays) {
+            if (filter !== "all" && filter !== "birthday") break;
             if (b.dobMonth !== month || b.dobDay !== cell.dayNum) continue;
             chips.push({
               key: `b-${b.id}`,
