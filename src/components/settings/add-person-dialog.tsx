@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/spinner";
 import { invitePerson } from "@/lib/actions/people";
 import { roleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -200,6 +201,7 @@ export function AddPersonDialog({ cohorts }: { cohorts: { id: string; name: stri
             <div className="flex justify-end gap-2 border-t border-divider px-5 py-4">
               <DialogClose render={<Button type="button" variant="secondary" />}>Cancel</DialogClose>
               <Button type="button" variant="primary" disabled={!name.trim() || !email.trim() || pending} onClick={handleSave}>
+                {pending && <Spinner />}
                 {pending ? "Inviting…" : "Send invite"}
               </Button>
             </div>

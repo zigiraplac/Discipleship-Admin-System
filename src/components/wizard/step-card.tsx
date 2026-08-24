@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 
 /** Shared step-body chrome: content area + footer with Back (hidden on
  * step 1) / "Step X of 4" / Continue (relabelled "Create cohort" on step 4). */
@@ -10,6 +11,7 @@ export function StepCard({
   onBack,
   onContinue,
   continueDisabled,
+  continuePending = false,
   continueLabel = "Continue",
   children,
 }: {
@@ -17,6 +19,7 @@ export function StepCard({
   onBack?: () => void;
   onContinue: () => void;
   continueDisabled?: boolean;
+  continuePending?: boolean;
   continueLabel?: string;
   children: React.ReactNode;
 }) {
@@ -33,6 +36,7 @@ export function StepCard({
         )}
         <span className="text-xs text-ink-muted">Step {step} of 4</span>
         <Button type="button" variant="primary" onClick={onContinue} disabled={continueDisabled}>
+          {continuePending && <Spinner />}
           {continueLabel}
         </Button>
       </div>

@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { updateBands } from "@/lib/actions/settings";
 import { useToast } from "@/components/ui/toast";
+import { Spinner } from "@/components/ui/spinner";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -97,6 +98,7 @@ export function BandsForm({ bands }: { bands: Bands }) {
         </div>
 
         <Button type="button" onClick={handleSave} disabled={pending} className="w-full">
+          {pending && <Spinner />}
           {pending ? "Saving…" : "Save"}
         </Button>
 
