@@ -11,7 +11,6 @@ export interface SaveRegisterInput {
   cohortId: string;
   eventId: string;
   attendance: Record<string, "present" | "absent">;
-  quiz: Record<string, number>;
 }
 
 /**
@@ -25,7 +24,7 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
 
   const { data: eventRow, error: eventErr } = await supabase
     .from("event")
-    .select("event_date, cohort_id, lesson:lesson_id(has_quiz)")
+    .select("event_date, cohort_id")
     .eq("id", input.eventId)
     .single();
   if (eventErr) throw eventErr;
@@ -35,10 +34,6 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
   const todayISO = new Date().toISOString().slice(0, 10);
   if (eventRow.event_date > todayISO) {
     throw new Error("This lesson hasn't been taught yet.");
-  }
-  const lesson = Array.isArray(eventRow.lesson) ? eventRow.lesson[0] : eventRow.lesson;
-  if (!lesson?.has_quiz && Object.keys(input.quiz).length > 0) {
-    throw new Error("This lesson has no quiz.");
   }
 
   const { data: students, error: studentsErr } = await supabase
@@ -50,11 +45,6 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
 
   for (const sid of Object.keys(input.attendance)) {
     if (!validIds.has(sid)) throw new Error("Unknown student in register.");
-  }
-  for (const [sid, score] of Object.entries(input.quiz)) {
-    if (!validIds.has(sid)) throw new Error("Unknown student in register.");
-    if (input.attendance[sid] !== "present") throw new Error("Cannot score an absent student.");
-    if (score < 0 || score > 100) throw new Error("Score must be 0–100.");
   }
 
   const { data: existing, error: existingErr } = await supabase
@@ -72,7 +62,6 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
   const now = new Date().toISOString();
   const patch: RegisterUpdate = {
     attendance: input.attendance as unknown as Json,
-    quiz: input.quiz as unknown as Json,
     ...(isCorrection ? { updated_by: user.id, updated_at: now } : { recorded_by: user.id, recorded_at: now }),
   };
 
