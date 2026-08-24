@@ -34,15 +34,15 @@ export function outcomeShortLabel(kind: OutcomeKind): string {
   return { catchup: "On catch-up", continuing: "Continuing", left: "Left cohort" }[kind];
 }
 
-/** Pill/dot tone per outcome kind — these three genuinely differ (still
- * working on it / resolved fine / no longer applicable), so they shouldn't
- * all render the same color the way a single hardcoded tone would. */
-const OUTCOME_TONE: Record<OutcomeKind, "yellow" | "cyan" | "grey"> = {
+/** Pill/dot tone per outcome kind, using the standard status palette:
+ * yellow for still-being-addressed (at risk/warning), green for resolved
+ * and healthy (on track), grey for no longer applicable. */
+const OUTCOME_TONE: Record<OutcomeKind, "yellow" | "green" | "grey"> = {
   catchup: "yellow",
-  continuing: "cyan",
+  continuing: "green",
   left: "grey",
 };
 
-export function outcomeTone(kind: OutcomeKind): "yellow" | "cyan" | "grey" {
+export function outcomeTone(kind: OutcomeKind): "yellow" | "green" | "grey" {
   return OUTCOME_TONE[kind];
 }

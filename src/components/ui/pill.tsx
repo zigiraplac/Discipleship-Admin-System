@@ -1,18 +1,24 @@
 import { cn } from "@/lib/utils";
 import type { Status, CohortHealth } from "@/lib/domain/types";
 
-// cyan/yellow/magenta/grey are the app's status meaning (on track/needs
-// help/at risk) — reused wherever something is genuinely good/warning/bad.
-// violet/teal/sky/amber carry no status meaning at all: they're for telling
-// categories apart (a role, a kind) where nothing is "wrong", so reusing a
-// status color there would misread as a health signal that isn't real.
-export type PillTone = "cyan" | "yellow" | "magenta" | "grey" | "violet" | "teal" | "sky" | "amber";
+// cyan/yellow/magenta/grey are the app's original status meaning (on
+// track/needs help/at risk) — reused wherever something is genuinely
+// good/warning/bad. green is the standard "on track, no risk" status color
+// (distinct from cyan/blue, which stays this app's "healthy" tone for the
+// attendance-band system already built on it — green is for newer, smaller-
+// scoped status reads like a lesson's own state, not a wholesale rename of
+// that established system). violet/teal/sky/amber carry no status meaning
+// at all: they're for telling categories apart (a role, a kind) where
+// nothing is "wrong", so reusing a status color there would misread as a
+// health signal that isn't real.
+export type PillTone = "cyan" | "yellow" | "magenta" | "grey" | "green" | "violet" | "teal" | "sky" | "amber";
 
 const TONE_CLASSES: Record<PillTone, string> = {
   cyan: "bg-accent-100 text-accent-800",
   yellow: "bg-yellow-100 text-yellow-ink",
   magenta: "bg-accent-2-100 text-accent-2-700",
   grey: "bg-page text-ink-tertiary",
+  green: "bg-emerald-100 text-emerald-700",
   violet: "bg-violet-100 text-violet-700",
   teal: "bg-teal-100 text-teal-700",
   sky: "bg-sky-100 text-sky-700",

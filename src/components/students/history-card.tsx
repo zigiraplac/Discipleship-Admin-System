@@ -5,7 +5,7 @@ import { formatShortDate, todayISO } from "@/lib/utils";
 import type { Bands, Outcome, StudentAggregate } from "@/lib/domain/types";
 
 interface Entry {
-  tone: "cyan" | "yellow" | "magenta" | "grey";
+  tone: "cyan" | "yellow" | "magenta" | "grey" | "green";
   title: string;
   date: string;
   text: string;
@@ -16,6 +16,7 @@ const DOT_CLASSES: Record<Entry["tone"], string> = {
   yellow: "bg-yellow",
   magenta: "bg-accent-2-500",
   grey: "bg-neutral-border",
+  green: "bg-emerald-500",
 };
 
 export function HistoryCard({

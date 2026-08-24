@@ -8,6 +8,7 @@ const ICON_TONE_CLASSES: Record<PillTone, string> = {
   yellow: "bg-yellow-100 text-yellow-ink",
   magenta: "bg-accent-2-100 text-accent-2-700",
   grey: "bg-page text-ink-tertiary",
+  green: "bg-emerald-100 text-emerald-700",
   violet: "bg-violet-100 text-violet-700",
   teal: "bg-teal-100 text-teal-700",
   sky: "bg-sky-100 text-sky-700",

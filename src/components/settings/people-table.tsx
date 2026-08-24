@@ -58,7 +58,11 @@ export function PeopleTable({
               <TD className="text-[13px] text-ink-secondary">
                 {describeScope(person.role, scopesByUser.get(person.id))}
               </TD>
-              <TD className="text-xs text-ink-muted">{person.state === "active" ? "Active" : "Invited"}</TD>
+              <TD>
+                <Pill tone={person.state === "active" ? "green" : "grey"}>
+                  {person.state === "active" ? "Active" : "Invited"}
+                </Pill>
+              </TD>
             </TR>
           ))}
           {people.length === 0 && (
