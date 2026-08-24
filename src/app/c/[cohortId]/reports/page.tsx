@@ -74,6 +74,7 @@ export default async function ReportsPage({
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Reports" subtitle={cohort.name} />
       <ReportsView
+        cohortName={cohort.name}
         lessons={lessons}
         crusadeEvents={crusadeEvents}
         enrolled={enrolled}

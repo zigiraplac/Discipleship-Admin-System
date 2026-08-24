@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DownloadSimple } from "@phosphor-icons/react";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import { Button } from "@/components/ui/button";
 import type { Bands, CrusadeEventView } from "@/lib/domain/types";
 import { ByClassCard } from "./by-class-card";
 import { MonthChartCard } from "./month-chart-card";
 import { HighlightCards } from "./highlight-cards";
 import { CrusadesTable } from "./crusades-table";
+import { downloadLessonsCsv } from "./csv-export";
 import { formatRangeLabel, inRange, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
 
 const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
@@ -17,6 +20,7 @@ const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
 ];
 
 export function ReportsView({
+  cohortName,
   lessons,
   crusadeEvents,
   enrolled,
@@ -24,6 +28,7 @@ export function ReportsView({
   today,
   paceGap,
 }: {
+  cohortName: string;
   lessons: ReportLesson[];
   crusadeEvents: CrusadeEventView[];
   enrolled: number;
@@ -56,6 +61,16 @@ export function ReportsView({
       <div className="flex flex-wrap items-center gap-3">
         <Segmented options={PERIOD_OPTIONS} value={period} onChange={setPeriod} solid />
         <span className="text-xs text-ink-muted">{rangeLabel}</span>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="ml-auto"
+          onClick={() => downloadLessonsCsv(inPeriod, cohortName, `${period}-${rangeLabel}`)}
+        >
+          <DownloadSimple size={14} />
+          Download report
+        </Button>
       </div>
 
       <StatGrid>
@@ -73,7 +88,7 @@ export function ReportsView({
         />
       </StatGrid>
 
-      <div className="grid gap-4 items-start" style={{ gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)" }}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <ByClassCard lessons={lessons} enrolled={enrolled} bands={bands} />
         <div className="flex flex-col gap-4">
           <MonthChartCard lessons={lessons} enrolled={enrolled} bands={bands} />
