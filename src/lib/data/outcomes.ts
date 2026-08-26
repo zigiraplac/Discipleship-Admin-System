@@ -5,7 +5,7 @@ interface OutcomeRow {
   id: string;
   student_id: string;
   cohort_id: string;
-  kind: "catchup" | "continuing" | "left";
+  kind: "catchup" | "left";
   note: string | null;
   recorded_by: string;
   recorded_at: string;

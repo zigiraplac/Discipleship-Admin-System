@@ -7,11 +7,13 @@ import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudent, getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { getOutcomesForStudent } from "@/lib/data/outcomes";
-import { aggregateCohort } from "@/lib/domain/metrics";
+import { getCatchupEventIds } from "@/lib/data/catchup";
+import { aggregateCohort, attendanceSince } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { ProfileCard } from "@/components/students/profile-card";
 import { AttendanceByClassCard } from "@/components/students/attendance-by-class-card";
+import { CatchupChecklist } from "@/components/students/catchup-checklist";
 import { HistoryCard } from "@/components/students/history-card";
 import { NextStepCard } from "@/components/students/next-step-card";
 import { DetailsCard } from "@/components/students/details-card";
@@ -26,13 +28,14 @@ export default async function StudentDetailPage({
   if (!NAV_BY_ROLE[user.role].includes("students")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, student, students, lessonEvents, outcomes] = await Promise.all([
+  const [cohort, bands, student, students, lessonEvents, outcomes, caughtUpEventIds] = await Promise.all([
     getCohort(supabase, cohortId),
     getBands(supabase),
     getStudent(supabase, studentId),
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
     getOutcomesForStudent(supabase, studentId),
+    getCatchupEventIds(supabase, studentId),
   ]);
 
   if (!cohort || !student || student.cohortId !== cohortId) notFound();
@@ -43,6 +46,8 @@ export default async function StudentDetailPage({
 
   const latestOutcome = outcomes[0] ?? null;
   const canRecord = user.role === "facilitator" || user.role === "admin";
+  const sinceProgress =
+    latestOutcome?.kind === "catchup" ? attendanceSince(studentId, lessonEvents, latestOutcome.recordedAt) : null;
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -54,7 +59,16 @@ export default async function StudentDetailPage({
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex flex-col gap-4">
           <ProfileCard student={studentAgg} />
-          <AttendanceByClassCard studentId={studentId} lessonEvents={lessonEvents} />
+          <AttendanceByClassCard
+            cohortId={cohortId}
+            studentId={studentId}
+            lessonEvents={lessonEvents}
+            caughtUpEventIds={[...caughtUpEventIds]}
+            canRecord={canRecord}
+          />
+          {canRecord && latestOutcome?.kind === "catchup" && (
+            <CatchupChecklist cohortId={cohortId} studentId={studentId} lessonEvents={lessonEvents} />
+          )}
           <HistoryCard
             student={studentAgg}
             latestOutcome={latestOutcome}
@@ -64,8 +78,21 @@ export default async function StudentDetailPage({
           />
         </div>
         <div className="flex flex-col gap-4">
-          <NextStepCard cohortId={cohortId} student={studentAgg} latestOutcome={latestOutcome} canRecord={canRecord} />
-          <DetailsCard student={student} cohortName={cohort.name} facilitatorName={cohort.facilitatorName} />
+          <NextStepCard
+            cohortId={cohortId}
+            student={studentAgg}
+            latestOutcome={latestOutcome}
+            canRecord={canRecord}
+            sinceProgress={sinceProgress}
+            bands={bands}
+          />
+          <DetailsCard
+            cohortId={cohortId}
+            student={student}
+            cohortName={cohort.name}
+            facilitatorName={cohort.facilitatorName}
+            canEdit={user.role === "admin"}
+          />
         </div>
       </div>
     </div>

@@ -28,6 +28,16 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
   });
   if (error) throw error;
 
+  // Recording "left" is what actually marks them departed — stops
+  // counting toward the cohort's own numbers everywhere they're used.
+  // Recording "catchup" reinstates them, in case they'd previously left
+  // and are now being given another chance.
+  const { error: studentErr } = await supabase
+    .from("student")
+    .update({ left_at: input.kind === "left" ? new Date().toISOString() : null })
+    .eq("id", input.studentId);
+  if (studentErr) throw studentErr;
+
   const admin = createAdminClient();
   const [{ data: student }, { data: members }] = await Promise.all([
     admin.from("student").select("full_name").eq("id", input.studentId).maybeSingle(),

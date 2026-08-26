@@ -95,11 +95,20 @@ export async function Shell({
       ]);
       // Opportunistic — a birthday has no discrete moment to notify at, so
       // this just ensures the next 7 days' worth exist every time someone
-      // with access to this cohort happens to load its dashboard.
-      await ensureBirthdayNotifications(createAdminClient(), user.id, students, today);
+      // with access to this cohort happens to load its dashboard. Also
+      // covered by the daily cron sweep (src/app/api/cron/notifications)
+      // at a fixed time regardless of whether anyone visits.
+      await ensureBirthdayNotifications(
+        createAdminClient(),
+        user.id,
+        students.filter((s) => !s.leftAt),
+        today
+      );
       const agg = aggregateCohort(students, lessonEvents, bands, today);
       const latest = latestByStudent(outcomes);
-      const toContact = agg.roster.filter((s) => s.status !== "On track" && !latest.has(s.id)).length;
+      // Left students stay in the search index (still findable) but don't
+      // count toward the attention badge — they're no longer tracked.
+      const toContact = agg.roster.filter((s) => !s.leftAt && s.status !== "On track" && !latest.has(s.id)).length;
       badges = {
         lessons: agg.outstanding.length || undefined,
         attention: allowedNav.has("attention") ? toContact || undefined : undefined,

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import type { OutcomeKind } from "@/lib/domain/types";
 import { OUTCOME_NARRATIVE, outcomeShortLabel } from "./outcome-copy";
 
-const OPTIONS: OutcomeKind[] = ["catchup", "continuing", "left"];
+const OPTIONS: OutcomeKind[] = ["catchup", "left"];
 
 export interface OutcomeModalProps {
   studentId: string;

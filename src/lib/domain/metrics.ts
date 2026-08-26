@@ -158,7 +158,7 @@ export function monthlyRates(
     .map(([month, { present, n }]) => ({ month, rate: n ? Math.round((present / n) * 100) : 0 }));
 }
 
-export type ClassMarkStatus = "present" | "absent" | "not-taught";
+export type ClassMarkStatus = "present" | "absent" | "caught-up" | "not-taught";
 
 export interface ClassMark {
   status: ClassMarkStatus;
@@ -168,15 +168,46 @@ export interface ClassMark {
 export function studentClassMarks(
   studentId: string,
   lessonEvents: LessonEventView[],
-  classIndex: number
+  classIndex: number,
+  /** Present marks that came from correcting a lesson via catch-up rather
+   * than being there on the day — same status ("present") either way for
+   * every calculation, just colored differently here. */
+  caughtUpEventIds: Set<string> = new Set()
 ): ClassMark[] {
   return lessonEvents
     .filter((e) => e.classIndex === classIndex)
     .map((ev) => {
       if (!isRecorded(ev)) return { status: "not-taught" as const, ev };
       const mark = ev.register.attendance[studentId];
-      return { status: (mark === "present" ? "present" : "absent") as ClassMarkStatus, ev };
+      if (mark !== "present") return { status: "absent" as const, ev };
+      if (caughtUpEventIds.has(ev.eventId)) return { status: "caught-up" as const, ev };
+      return { status: "present" as const, ev };
     });
+}
+
+export interface AttendanceSince {
+  attended: number;
+  expected: number;
+  rate: number | null; // null when nothing's been recorded since sinceISO yet
+}
+
+/**
+ * "Are they actually attending now" — a student's overall rate is a
+ * cumulative average since enrollment, which can take a long time to
+ * recover even once someone's genuinely back on track. This instead only
+ * looks at lessons recorded *after* a given date (a catch-up decision's
+ * `recordedAt`), so following up on a catch-up plan has a real, honest
+ * number to check rather than watching a slow-moving lifetime average.
+ */
+export function attendanceSince(studentId: string, lessonEvents: LessonEventView[], sinceISO: string): AttendanceSince {
+  const since = sinceISO.slice(0, 10);
+  const recorded = lessonEvents.filter((e) => isRecorded(e) && e.date > since);
+  const attended = recorded.filter((e) => e.register.attendance[studentId] === "present").length;
+  return {
+    attended,
+    expected: recorded.length,
+    rate: recorded.length ? Math.round((attended / recorded.length) * 100) : null,
+  };
 }
 
 export interface PaceStatus {

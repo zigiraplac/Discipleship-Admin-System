@@ -10,7 +10,7 @@ export type CohortStatus = "running" | "complete" | "archived";
 
 export type EventKind = "lesson" | "crusade";
 
-export type OutcomeKind = "catchup" | "continuing" | "left";
+export type OutcomeKind = "catchup" | "left";
 
 export type Status = "On track" | "Needs help" | "At risk";
 

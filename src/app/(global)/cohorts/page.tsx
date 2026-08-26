@@ -28,10 +28,11 @@ export default async function CohortsPage() {
   // used everywhere else, rather than a partial figure from getQuickStats.
   const cards = await Promise.all(
     cohorts.map(async (cohort) => {
-      const [students, lessonEvents] = await Promise.all([
+      const [allStudents, lessonEvents] = await Promise.all([
         getStudents(supabase, cohort.id),
         getLessonEvents(supabase, cohort.id),
       ]);
+      const students = allStudents.filter((s) => !s.leftAt);
       const agg = aggregateCohort(students, lessonEvents, bands, today);
       const monthly = monthlyRates(lessonEvents, agg.enrolled);
       const pace = computePace(cohort, agg.recordedCount, today);

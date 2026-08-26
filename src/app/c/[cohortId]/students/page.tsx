@@ -35,10 +35,11 @@ export default async function StudentsPage({
   const latest = latestByStudent(outcomes);
   const outcomesByStudent: Record<string, OutcomeKind> = {};
   for (const [studentId, outcome] of latest) outcomesByStudent[studentId] = outcome.kind;
+  const activeCount = students.filter((s) => !s.leftAt).length;
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <PageHead title="Students" subtitle={`${cohort.name} · ${agg.enrolled} enrolled`} />
+      <PageHead title="Students" subtitle={`${cohort.name} · ${activeCount} enrolled`} />
       <Card className="overflow-hidden">
         <StudentsTable cohortId={cohortId} roster={agg.roster} outcomesByStudent={outcomesByStudent} bands={bands} />
       </Card>

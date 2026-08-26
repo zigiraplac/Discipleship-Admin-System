@@ -1,9 +1,14 @@
 import type { OutcomeKind } from "@/lib/domain/types";
 
 /**
- * The three outcomes a facilitator/admin can record for a student, plus the
+ * The two outcomes a facilitator/admin can record for a student, plus the
  * narrative copy used on the outcome modal, Student detail's History card,
  * and the Attention cards — one source of truth so wording never drifts.
+ * Deliberately just two: attention flags an attendance problem, so the
+ * decision recorded against it should actually resolve something — either
+ * the missed lessons get made up, or the student's no longer continuing.
+ * A middle "no change needed" option used to exist here but resolved
+ * neither, so it was removed.
  *
  * Deliberately its own plain module (no "use client"): several Server
  * Components (attention-card.tsx, history-card.tsx, students-table.tsx)
@@ -19,10 +24,6 @@ export const OUTCOME_NARRATIVE: Record<
     title: "On catch-up",
     text: (missed) => `Stays in the cohort and makes up ${missed} missed lesson${missed === 1 ? "" : "s"}.`,
   },
-  continuing: {
-    title: "Still with us",
-    text: () => "Spoke to them. No change needed.",
-  },
   left: {
     title: "Left the cohort",
     text: () => "No longer continuing. History is kept.",
@@ -31,18 +32,17 @@ export const OUTCOME_NARRATIVE: Record<
 
 /** Short form used on Students and Attention, where space is tight. */
 export function outcomeShortLabel(kind: OutcomeKind): string {
-  return { catchup: "On catch-up", continuing: "Continuing", left: "Left cohort" }[kind];
+  return { catchup: "On catch-up", left: "Left cohort" }[kind];
 }
 
 /** Pill/dot tone per outcome kind, using the standard status palette:
- * yellow for still-being-addressed (at risk/warning), green for resolved
- * and healthy (on track), grey for no longer applicable. */
-const OUTCOME_TONE: Record<OutcomeKind, "yellow" | "green" | "grey"> = {
+ * yellow for still-being-addressed (at risk/warning), grey for no longer
+ * applicable. */
+const OUTCOME_TONE: Record<OutcomeKind, "yellow" | "grey"> = {
   catchup: "yellow",
-  continuing: "green",
   left: "grey",
 };
 
-export function outcomeTone(kind: OutcomeKind): "yellow" | "green" | "grey" {
+export function outcomeTone(kind: OutcomeKind): "yellow" | "grey" {
   return OUTCOME_TONE[kind];
 }

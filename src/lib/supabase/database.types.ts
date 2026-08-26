@@ -185,7 +185,7 @@ export interface Database {
           id: string;
           student_id: string;
           cohort_id: string;
-          kind: "catchup" | "continuing" | "left";
+          kind: "catchup" | "left";
           note: string | null;
           recorded_by: string;
           recorded_at: string;
@@ -193,7 +193,7 @@ export interface Database {
         Insert: Partial<Database["public"]["Tables"]["outcome"]["Row"]> & {
           student_id: string;
           cohort_id: string;
-          kind: "catchup" | "continuing" | "left";
+          kind: "catchup" | "left";
           recorded_by: string;
         };
         Update: Partial<Database["public"]["Tables"]["outcome"]["Row"]>;
@@ -284,6 +284,35 @@ export interface Database {
           },
         ];
       };
+      lesson_catchup: {
+        Row: {
+          student_id: string;
+          event_id: string;
+          caught_up_at: string;
+          recorded_by: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["lesson_catchup"]["Row"]> & {
+          student_id: string;
+          event_id: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lesson_catchup"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "lesson_catchup_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "student";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "lesson_catchup_event_id_fkey";
+            columns: ["event_id"];
+            isOneToOne: false;
+            referencedRelation: "event";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -301,6 +330,18 @@ export interface Database {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       activate_self: { Args: Record<string, never>; Returns: undefined };
       update_own_name: { Args: { new_name: string }; Returns: undefined };
+      create_cohort_with_schedule: {
+        Args: {
+          p_name: string;
+          p_city: string | null;
+          p_start_date: string;
+          p_teaching_days: number[];
+          p_lessons_per_session: number;
+          p_students: Json;
+          p_events: Json;
+        };
+        Returns: string;
+      };
     };
     Enums: Record<string, never>;
   };

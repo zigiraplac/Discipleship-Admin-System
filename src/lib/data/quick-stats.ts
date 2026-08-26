@@ -29,7 +29,7 @@ export async function getQuickStats(
 ): Promise<QuickStats> {
   if (role === "teacher") {
     const [{ count }, pub] = await Promise.all([
-      db.from("student").select("id", { count: "exact", head: true }).eq("cohort_id", cohortId),
+      db.from("student").select("id", { count: "exact", head: true }).eq("cohort_id", cohortId).is("left_at", null),
       getLessonEventsPublic(db, cohortId),
     ]);
     const enrolled = count ?? 0;
@@ -39,10 +39,13 @@ export async function getQuickStats(
     return { enrolled, rate, health: cohortHealth(rate, 0, enrolled) };
   }
 
-  const [students, lessonEvents] = await Promise.all([
+  const [allStudents, lessonEvents] = await Promise.all([
     getStudents(db, cohortId),
     getLessonEvents(db, cohortId),
   ]);
+  // A student marked "left" stops dragging the cohort's own numbers down —
+  // they still appear in the roster (Students screen), just not counted here.
+  const students = allStudents.filter((s) => !s.leftAt);
   const agg = aggregateCohort(students, lessonEvents, bands, todayISO);
   return { enrolled: agg.enrolled, rate: agg.rate, health: agg.health };
 }

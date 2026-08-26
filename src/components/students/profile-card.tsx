@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { StatusPill } from "@/components/ui/pill";
+import { Pill, StatusPill } from "@/components/ui/pill";
+import { formatShortDate } from "@/lib/utils";
 import type { StudentAggregate } from "@/lib/domain/types";
 
 function Stat({ label, value }: { label: string; value: React.ReactNode }) {
@@ -13,6 +14,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function ProfileCard({ student }: { student: StudentAggregate }) {
+  const left = student.leftAt != null;
   return (
     <Card className="p-[18px]">
       <div className="flex items-start gap-3.5">
@@ -23,8 +25,14 @@ export function ProfileCard({ student }: { student: StudentAggregate }) {
             {student.email ?? "No email"} · {student.country ?? "—"}
           </div>
         </div>
-        <StatusPill status={student.status} />
+        {left ? <Pill tone="grey">Left</Pill> : <StatusPill status={student.status} />}
       </div>
+
+      {left && (
+        <div className="mt-3.5 rounded-control border border-border-soft bg-page px-3 py-2.5 text-xs font-semibold text-ink-tertiary">
+          No longer part of the cohort — left {formatShortDate(student.leftAt!.slice(0, 10))}.
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-3 gap-4 border-t border-divider pt-4">
         <Stat label="Attendance" value={`${student.rate}%`} />

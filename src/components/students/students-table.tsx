@@ -3,13 +3,14 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
-import { StatusPill } from "@/components/ui/pill";
+import { Pill, StatusPill } from "@/components/ui/pill";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { buttonVariants } from "@/components/ui/button";
 import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
+import { cn } from "@/lib/utils";
 import type { Bands, OutcomeKind, StudentAggregate } from "@/lib/domain/types";
 
 type Filter = "all" | "On track" | "Needs help" | "At risk";
@@ -69,13 +70,17 @@ export function StudentsTable({
           {rows.map((s) => {
             const outcome = outcomesByStudent[s.id];
             const pct = s.expected === 0 ? null : s.rate;
+            const left = s.leftAt != null;
             return (
-              <TR key={s.id}>
+              <TR key={s.id} className={cn(left && "opacity-60")}>
                 <TD>
                   <span className="flex items-center gap-2.5">
                     <Avatar name={s.fullName} />
                     <span>
-                      <span className="block text-[13px] font-semibold text-ink">{s.fullName}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="block text-[13px] font-semibold text-ink">{s.fullName}</span>
+                        {left && <Pill tone="grey">Left</Pill>}
+                      </span>
                       <span className="block text-[11px] text-ink-muted">{s.country ?? "—"}</span>
                     </span>
                   </span>
@@ -93,9 +98,7 @@ export function StudentsTable({
                     <span className="text-[12px] font-semibold tabular">{pct === null ? "—" : `${pct}%`}</span>
                   </span>
                 </TD>
-                <TD>
-                  <StatusPill status={s.status} />
-                </TD>
+                <TD>{left ? <Pill tone="grey">No longer with us</Pill> : <StatusPill status={s.status} />}</TD>
                 <TD className="text-[13px] text-ink-secondary">{outcome ? outcomeShortLabel(outcome) : "—"}</TD>
                 <TD align="right">
                   <Link

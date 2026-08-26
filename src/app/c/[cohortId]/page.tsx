@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { CheckCircle, WarningCircle, BookOpen, Gauge } from "@phosphor-icons/react/dist/ssr";
+import { CheckCircle, WarningCircle, BookOpen, Gauge, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
@@ -68,6 +68,7 @@ export default async function DashboardPage({
   let attentionRows: Awaited<ReturnType<typeof aggregateCohort>>["roster"] | null = null;
   let atRiskCount = 0;
   let enrolled = 0;
+  let leftCount = 0;
   let studentsForBirthdays: Student[] = [];
 
   if (user.role === "teacher") {
@@ -75,7 +76,8 @@ export default async function DashboardPage({
       getLessonEventsPublic(supabase, cohortId),
       getStudents(supabase, cohortId),
     ]);
-    studentsForBirthdays = students;
+    leftCount = students.filter((s) => s.leftAt).length;
+    studentsForBirthdays = students.filter((s) => !s.leftAt);
     const recorded = pub.filter((p) => p.recorded);
     recordedCount = recorded.length;
     enrolled = pub[0]?.enrolled ?? 0;
@@ -110,11 +112,15 @@ export default async function DashboardPage({
       };
     });
   } else {
-    const [students, lessonEvents] = await Promise.all([
+    const [allStudents, lessonEvents] = await Promise.all([
       getStudents(supabase, cohortId),
       getLessonEvents(supabase, cohortId),
     ]);
-    studentsForBirthdays = students;
+    leftCount = allStudents.filter((s) => s.leftAt).length;
+    studentsForBirthdays = allStudents.filter((s) => !s.leftAt);
+    // A student marked "left" stops counting toward the cohort's own
+    // health — the dashboard reflects who's actually still being tracked.
+    const students = allStudents.filter((s) => !s.leftAt);
     const agg = aggregateCohort(students, lessonEvents, bands, today);
     recordedCount = agg.recordedCount;
     rate = agg.rate;
@@ -201,6 +207,7 @@ export default async function DashboardPage({
           deltaTone={onPace ? "ok" : "bad"}
           sub="vs. this cohort's own ideal plan"
         />
+        <KpiCard icon={SignOut} label="Left the program" value={leftCount} sub="No longer tracked in these numbers" />
       </KpiRow>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
