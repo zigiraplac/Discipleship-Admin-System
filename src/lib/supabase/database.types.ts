@@ -185,7 +185,7 @@ export interface Database {
           id: string;
           student_id: string;
           cohort_id: string;
-          kind: "catchup" | "left";
+          kind: "catchup" | "left" | "resolved";
           note: string | null;
           recorded_by: string;
           recorded_at: string;
@@ -193,7 +193,7 @@ export interface Database {
         Insert: Partial<Database["public"]["Tables"]["outcome"]["Row"]> & {
           student_id: string;
           cohort_id: string;
-          kind: "catchup" | "left";
+          kind: "catchup" | "left" | "resolved";
           recorded_by: string;
         };
         Update: Partial<Database["public"]["Tables"]["outcome"]["Row"]>;
@@ -341,6 +341,28 @@ export interface Database {
           p_events: Json;
         };
         Returns: string;
+      };
+      set_attendance_mark: {
+        Args: { p_event_id: string; p_student_id: string; p_present: boolean; p_actor: string };
+        Returns: undefined;
+      };
+      apply_event_date_updates: {
+        Args: { p_updates: Json };
+        Returns: undefined;
+      };
+      save_register: {
+        Args: {
+          p_event_id: string;
+          p_attendance: Json;
+          p_actor: string;
+          p_is_correction: boolean;
+          p_expected_version: string | null;
+        };
+        Returns: { event_id: string }[];
+      };
+      record_outcome_and_sync_left: {
+        Args: { p_student_id: string; p_cohort_id: string; p_kind: string; p_actor: string };
+        Returns: undefined;
       };
     };
     Enums: Record<string, never>;

@@ -2,10 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
-import type { Database, Json } from "@/lib/supabase/database.types";
-
-type RegisterUpdate = Database["public"]["Tables"]["register"]["Update"];
+import type { Json } from "@/lib/supabase/database.types";
 
 export interface ToggleLessonCatchupInput {
   studentId: string;
@@ -23,6 +22,12 @@ export interface ToggleLessonCatchupInput {
  * purely as a note that *this particular* present mark came from a
  * catch-up rather than being there on the day — used only so the
  * attendance grid can still color it differently.
+ *
+ * The actual attendance write goes through `set_attendance_mark`
+ * (0009_atomic_writes.sql), a single atomic UPDATE, rather than reading
+ * the whole attendance blob, editing it in JS, and writing it all back —
+ * two students on the same lesson toggled close together used to be able
+ * to race and silently revert each other.
  */
 export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Promise<void> {
   const user = await requireRole("facilitator", "admin");
@@ -33,16 +38,33 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
     .select("cohort_id, register(attendance, recorded_at)")
     .eq("id", input.eventId)
     .single();
-  if (eventErr) throw eventErr;
+  if (eventErr) throw new Error("Couldn't load this lesson. Please try again.");
   if (eventRow.cohort_id !== input.cohortId) {
     throw new Error("This lesson does not belong to that cohort.");
+  }
+
+  // RLS on `lesson_catchup`/`register` only verifies pastoral access to
+  // `input.cohortId` — it never confirms `input.studentId` actually
+  // belongs to that cohort's own roster. Without this, a caller with
+  // access to two cohorts could pass a foreign student's id alongside
+  // their own cohort's eventId and write a stray attendance mark for a
+  // student who was never enrolled there (mirrors the same check in
+  // recordOutcome, outcomes.ts).
+  const { data: student, error: studentErr } = await supabase
+    .from("student")
+    .select("cohort_id")
+    .eq("id", input.studentId)
+    .maybeSingle();
+  if (studentErr) throw new Error("Couldn't verify this student. Please try again.");
+  if (!student || student.cohort_id !== input.cohortId) {
+    throw new Error("This student does not belong to that cohort.");
   }
 
   const register = Array.isArray(eventRow.register) ? eventRow.register[0] : eventRow.register;
   if (!register?.recorded_at) {
     throw new Error("This lesson hasn't had a register recorded yet.");
   }
-  const attendance = { ...((register.attendance as Record<string, string> | null) ?? {}) };
+  const attendance = (register.attendance as Record<string, string> | null) ?? {};
 
   if (input.caughtUp) {
     if (attendance[input.studentId] === "present") {
@@ -51,8 +73,7 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
     const { error } = await supabase
       .from("lesson_catchup")
       .upsert({ student_id: input.studentId, event_id: input.eventId, recorded_by: user.id });
-    if (error) throw error;
-    attendance[input.studentId] = "present";
+    if (error) throw new Error("Couldn't save this catch-up. Please try again.");
   } else {
     const { data: existing, error: existingErr } = await supabase
       .from("lesson_catchup")
@@ -60,7 +81,7 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
       .eq("student_id", input.studentId)
       .eq("event_id", input.eventId)
       .maybeSingle();
-    if (existingErr) throw existingErr;
+    if (existingErr) throw new Error("Couldn't load this catch-up. Please try again.");
     if (!existing) {
       throw new Error("This lesson wasn't marked as a catch-up.");
     }
@@ -69,20 +90,22 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
       .delete()
       .eq("student_id", input.studentId)
       .eq("event_id", input.eventId);
-    if (error) throw error;
-    attendance[input.studentId] = "absent";
+    if (error) throw new Error("Couldn't undo this catch-up. Please try again.");
   }
 
-  const now = new Date().toISOString();
-  const patch: RegisterUpdate = {
-    attendance: attendance as unknown as Json,
-    updated_by: user.id,
-    updated_at: now,
-  };
-  const { error: updateErr } = await supabase.from("register").update(patch).eq("event_id", input.eventId);
-  if (updateErr) throw updateErr;
+  const { error: markErr } = await supabase.rpc("set_attendance_mark", {
+    p_event_id: input.eventId,
+    p_student_id: input.studentId,
+    p_present: input.caughtUp,
+    p_actor: user.id,
+  });
+  if (markErr) throw new Error("Couldn't update attendance for this lesson. Please try again.");
 
-  await supabase.from("audit_log").insert({
+  // audit_log is admin-write-only by RLS — go through the admin client so
+  // a facilitator's toggle doesn't throw here even though the mark above
+  // already succeeded.
+  const admin = createAdminClient();
+  await admin.from("audit_log").insert({
     actor_id: user.id,
     entity: "register",
     entity_id: input.eventId,

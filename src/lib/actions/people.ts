@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SITE_URL } from "@/lib/supabase/env";
 import { requireRole } from "@/lib/auth";
 import { createNotification } from "@/lib/data/notifications";
 import { roleLabel } from "@/lib/roles";
@@ -29,6 +30,24 @@ export interface InvitePersonResult {
 
 const ALREADY_REGISTERED_CODES = new Set(["email_exists", "user_already_exists"]);
 
+/** `listUsers` pages at 200/request — past that many total logins
+ * org-wide, an older orphaned account could sit on a later page and never
+ * be found, surfacing as a confusing "already registered" dead end
+ * instead of the intended re-link flow below. */
+async function findAuthUserByEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string
+): Promise<{ id: string } | null> {
+  for (let page = 1; page <= 50; page++) {
+    const { data: list, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const found = list.users.find((u) => u.email?.toLowerCase() === email);
+    if (found) return found;
+    if (list.users.length < 200) return null;
+  }
+  return null;
+}
+
 /**
  * Admin-only. Sends a real Supabase Auth invite (magic link) rather than
  * setting a password on the person's behalf — matches the "Invited" state
@@ -45,8 +64,7 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
   if (!email.includes("@")) throw new Error("Enter a valid email.");
 
   const admin = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  const redirectTo = `${siteUrl}/auth/set-password`;
+  const redirectTo = `${SITE_URL()}/auth/set-password`;
 
   const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { name },
@@ -65,9 +83,7 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
     // previous invite that failed partway through) while the auth
     // account itself was left behind. Re-link the orphaned case instead
     // of leaving this email permanently stuck.
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ perPage: 200 });
-    if (listErr) throw listErr;
-    const existing = list.users.find((u) => u.email?.toLowerCase() === email);
+    const existing = await findAuthUserByEmail(admin, email);
     if (!existing) throw inviteErr;
 
     const { data: existingPerson } = await admin
