@@ -49,10 +49,14 @@ export interface CreateCohortResult {
  * checks. Also the one place the fixed curriculum reference data gets
  * provisioned, lazily and idempotently — there's no separate seed step.
  *
- * Not yet wrapped in a real Postgres transaction: a failure partway
- * through (e.g. the event batch) can leave a cohort with students but no
- * schedule. Acceptable for a first pass; harden with a single plpgsql
- * function if this becomes a real risk.
+ * The cohort + students + schedule themselves are written by a single
+ * `create_cohort_with_schedule` RPC call (0006_cohort_transaction.sql) —
+ * one Postgres function invocation is one implicit transaction, so a
+ * failure partway through (e.g. the event batch) rolls back the whole
+ * thing instead of leaving a cohort with students but no schedule.
+ * Curriculum provisioning and the lesson-id lookup stay outside it: that
+ * reference data is shared and idempotent, not part of *this* cohort's
+ * atomicity.
  */
 export async function createCohort(input: CreateCohortInput): Promise<CreateCohortResult> {
   const user = await requireRole("admin");
@@ -81,67 +85,56 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
   if (lessonErr) throw lessonErr;
   const lessonIdByIndex = new Map((lessonRows ?? []).map((l) => [l.global_index, l.id]));
 
-  const { data: cohortRow, error: cohortErr } = await admin
-    .from("cohort")
-    .insert({
-      name: input.name,
-      city: input.city,
-      start_date: input.startDate,
-      teaching_days: input.teachingDays,
-      lessons_per_session: input.lessonsPerSession,
-      status: "running",
-    })
-    .select("id")
-    .single();
-  if (cohortErr) throw cohortErr;
-  const cohortId = cohortRow.id as string;
+  const studentPayload = enrol.map((r) => ({
+    full_name: r.fullName,
+    full_name_raw: r.fullNameRaw,
+    email: r.email,
+    email_verified: r.emailVerified,
+    whatsapp: r.whatsapp,
+    country: r.country,
+    country_raw: r.countryRaw,
+    dob_day: r.dobDay,
+    dob_month: r.dobMonth,
+    registered_at: r.registeredAt,
+  }));
 
-  if (enrol.length) {
-    const { error: studentErr } = await admin.from("student").insert(
-      enrol.map((r) => ({
-        cohort_id: cohortId,
-        full_name: r.fullName,
-        full_name_raw: r.fullNameRaw,
-        email: r.email,
-        email_verified: r.emailVerified,
-        whatsapp: r.whatsapp,
-        country: r.country,
-        country_raw: r.countryRaw,
-        dob_day: r.dobDay,
-        dob_month: r.dobMonth,
-        registered_at: r.registeredAt,
-      }))
-    );
-    if (studentErr) throw studentErr;
-  }
-
-  const eventRows = events.map((e) =>
+  const eventPayload = events.map((e) =>
     e.kind === "lesson"
       ? {
-          cohort_id: cohortId,
-          kind: "lesson" as const,
+          kind: "lesson",
           event_date: e.date,
           lesson_id: lessonIdByIndex.get(e.globalIndex) ?? null,
+          after_class: null,
+          crusade_day: null,
         }
       : {
-          cohort_id: cohortId,
-          kind: "crusade" as const,
+          kind: "crusade",
           event_date: e.date,
+          lesson_id: null,
           after_class: e.afterClass,
           crusade_day: e.crusadeDay,
         }
   );
-  const { error: eventErr } = await admin.from("event").insert(eventRows);
-  if (eventErr) throw eventErr;
+
+  const { data: cohortId, error: rpcErr } = await admin.rpc("create_cohort_with_schedule", {
+    p_name: input.name,
+    p_city: input.city,
+    p_start_date: input.startDate,
+    p_teaching_days: input.teachingDays,
+    p_lessons_per_session: input.lessonsPerSession,
+    p_students: studentPayload,
+    p_events: eventPayload,
+  });
+  if (rpcErr) throw rpcErr;
 
   await admin.from("audit_log").insert({
     actor_id: user.id,
     entity: "cohort",
     entity_id: cohortId,
     action: "create",
-    after: { name: input.name, students: enrol.length, events: eventRows.length },
+    after: { name: input.name, students: enrol.length, events: eventPayload.length },
   });
 
   revalidatePath("/cohorts");
-  return { cohortId, studentsCount: enrol.length, eventsCount: eventRows.length };
+  return { cohortId, studentsCount: enrol.length, eventsCount: eventPayload.length };
 }
