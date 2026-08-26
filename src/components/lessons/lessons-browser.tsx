@@ -134,7 +134,7 @@ export function LessonsBrowser({
           return (
             <Card
               key={cls.n}
-              className={cn("overflow-hidden", isCurrentClass && "border-emerald-300")}
+              className={cn("overflow-hidden", isCurrentClass && "border-amber-300")}
             >
               <button
                 type="button"
@@ -151,9 +151,9 @@ export function LessonsBrowser({
                   className={cn(
                     "grid size-8 flex-none place-items-center rounded-full text-[13px] font-bold tabular",
                     isCurrentClass
-                      ? "bg-emerald-500 text-white"
+                      ? "bg-yellow text-white"
                       : isCompletedClass
-                        ? "bg-accent text-white"
+                        ? "bg-emerald-500 text-white"
                         : "bg-divider text-ink-secondary"
                   )}
                 >
@@ -162,8 +162,8 @@ export function LessonsBrowser({
                 <span className="flex flex-1 flex-col">
                   <span className="flex items-center gap-2 text-[15px] font-bold text-ink">
                     {cls.title}
-                    {isCurrentClass && <Pill tone="green">In progress</Pill>}
-                    {isCompletedClass && <Pill tone="cyan">Completed</Pill>}
+                    {isCurrentClass && <Pill tone="yellow">In progress</Pill>}
+                    {isCompletedClass && <Pill tone="green">Completed</Pill>}
                     {needsAttention && (
                       <span
                         aria-label={`${missingCount} missing register${missingCount === 1 ? "" : "s"} in this class`}
@@ -245,20 +245,19 @@ export function LessonsBrowser({
 }
 
 /** A quick "where am I" read down the left of each lesson row, using the
- * standard status palette: blue for a saved register (done), green for
- * whichever one is next up (on track — nothing's wrong yet), red for
- * backlog that's overdue (critical), grey for anything further out (not
- * started). */
+ * standard status palette: green for a saved register (done), yellow for
+ * whichever one is next up (in progress), red for backlog that's overdue
+ * (critical), grey for anything further out (not started). */
 function StatusDot({ status, isCurrent }: { status: LessonRowStatus; isCurrent: boolean }) {
   if (status === "recorded") {
     return (
-      <span className="grid size-5 flex-none place-items-center rounded-full bg-accent text-white">
+      <span className="grid size-5 flex-none place-items-center rounded-full bg-emerald-500 text-white">
         <Check size={11} weight="bold" />
       </span>
     );
   }
   if (isCurrent) {
-    return <span className="size-5 flex-none rounded-full border-2 border-emerald-500" />;
+    return <span className="size-5 flex-none rounded-full border-2 border-yellow" />;
   }
   if (status === "missing") {
     return <span className="size-5 flex-none rounded-full border-2 border-accent-2-400" />;
