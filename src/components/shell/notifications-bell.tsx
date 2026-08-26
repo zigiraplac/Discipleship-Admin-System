@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Cake, BookOpen, Megaphone, HandWaving } from "@phosphor-icons/react";
+import { Bell, Cake, BookOpen, Megaphone, HandWaving, WarningCircle } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { markNotificationRead, markAllNotificationsRead } from "@/lib/actions/notifications";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,7 @@ const ICON_BY_KIND: Record<string, typeof Bell> = {
   lesson_postponed: BookOpen,
   outcome_recorded: Megaphone,
   welcome: HandWaving,
+  attention_escalation: WarningCircle,
 };
 
 function timeAgo(iso: string): string {

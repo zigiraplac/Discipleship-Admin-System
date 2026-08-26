@@ -34,7 +34,7 @@ export function Greeting({ name, subtitle }: { name: string; subtitle: string })
       <div className="text-2xl font-bold tracking-tight text-ink">
         {greeting}, {firstName}
       </div>
-      <div className="mt-1 text-sm text-ink-muted">{subtitle}</div>
+      <div className="mt-1 text-sm font-medium text-ink-secondary">{subtitle}</div>
     </div>
   );
 }

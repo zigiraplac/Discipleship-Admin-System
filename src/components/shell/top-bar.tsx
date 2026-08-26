@@ -53,7 +53,7 @@ export function TopBar({
 
       <div className="min-w-0">
         <div className="truncate text-[17px] font-bold leading-tight text-ink">{title}</div>
-        {subtitle && <div className="mt-px truncate text-xs text-ink-muted">{subtitle}</div>}
+        {subtitle && <div className="mt-px truncate text-xs font-medium text-ink-secondary">{subtitle}</div>}
       </div>
       <span className="flex-1" />
 

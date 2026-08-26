@@ -15,7 +15,7 @@ export default async function LoginPage({
 
   return (
     <main className="flex min-h-screen flex-col lg:flex-row">
-      <div className="relative hidden min-h-screen flex-col items-center justify-between overflow-hidden bg-[#0a1226] p-16 text-white lg:flex lg:w-1/2">
+      <div className="relative hidden min-h-screen flex-col items-center justify-between overflow-hidden bg-[#0a0a0c] p-16 text-white lg:flex lg:w-1/2">
         <div className="absolute -left-24 -top-24 size-96 rounded-full bg-accent/30 blur-3xl" />
         <div className="absolute -bottom-24 -right-24 size-96 rounded-full bg-accent/20 blur-3xl" />
 
@@ -58,7 +58,28 @@ export default async function LoginPage({
         </p>
       </div>
 
-      <div className="flex min-h-screen w-full items-center justify-center bg-white p-8 sm:p-12 lg:w-1/2 lg:p-16">
+      {/* Pinned to its light values regardless of the visitor's theme —
+          same idea as the panel opposite always being dark. Without this,
+          a dark-OS visitor gets these token classes flipped to dark-mode
+          values while sitting on the hardcoded white background above,
+          which reads as near-invisible text on a white panel. */}
+      <div
+        className="flex min-h-screen w-full items-center justify-center bg-white p-8 sm:p-12 lg:w-1/2 lg:p-16"
+        style={
+          {
+            "--color-card": "#ffffff",
+            "--color-subtle": "#f8f9fa",
+            "--color-border": "#e4e7eb",
+            "--color-ink": "#1b1f24",
+            "--color-ink-secondary": "#4b5563",
+            "--color-ink-muted": "#7c848e",
+            "--color-ink-faint": "#9aa1a9",
+            "--color-accent-2-100": "#fdecec",
+            "--color-accent-2-200": "#fbd3d3",
+            "--color-accent-2-700": "#8f1d1d",
+          } as React.CSSProperties
+        }
+      >
         <div className="w-full max-w-md space-y-8">
           <div>
             <div className="font-serif text-3xl font-extrabold tracking-tight text-ink">Welcome back</div>

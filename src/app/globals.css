@@ -61,49 +61,145 @@
   --shadow-modal: 0 24px 60px rgba(20, 25, 32, 0.24);
 }
 
-/* Dark surfaces/borders/ink — a blue-tinted navy (the same family as the
-   login screen's dark panel), not neutral black/grey. Applies when the OS
-   is set to dark (unless the toggle below explicitly picked light), and
-   always when the toggle explicitly picked dark — the second block wins
-   over the first at equal specificity because it comes later. */
+/*
+  Dark palette values live here, exactly once — near-black neutral greys
+  (a hair of cool undertone, not a blue-navy tint). The two rules below
+  don't each carry their own copy of these hex values; they just flip
+  --color-* over to these --dark-* variables when their condition matches,
+  so "OS is dark" and "toggle picked dark" can never drift apart the way
+  two independent copies once did.
+*/
+:root {
+  --dark-page: #0a0a0c;
+  --dark-card: #131316;
+  --dark-subtle: #18181c;
+  --dark-cell: #141417;
+  --dark-hover: #1e1e23;
+  --dark-border: #2a2a30;
+  --dark-border-soft: #212126;
+  --dark-divider: #1d1d21;
+  --dark-dashed: #2e2e35;
+  --dark-neutral-border: #3a3a42;
+
+  --dark-ink: #f0f0f3;
+  --dark-ink-secondary: #c4c4cc;
+  --dark-ink-tertiary: #9a9aa6;
+  --dark-ink-muted: #82828e;
+  --dark-ink-faint: #63636d;
+
+  /* Every "pale tint + dark text" badge/chip pair (Pill, StatCard, Avatar,
+     calendar event chips, the notification bell, ...) needs the opposite
+     treatment in dark mode — a muted, low-key tint + bright text — or the
+     light-mode tint renders as a pale, glowing rectangle on a near-black
+     surface. Same one-source-of-truth indirection as the surface tokens
+     above: change a color here, both activation rules below pick it up. */
+  --dark-accent-tint: #16294a;
+  --dark-accent-text: #8fb6e8;
+  --dark-accent-2-tint: #3a1616;
+  --dark-accent-2-tint-strong: #4a1c1c;
+  --dark-accent-2-text: #f4a8a8;
+  --dark-yellow-tint: #3a2f0a;
+  --dark-yellow-text: #f0c94a;
+  --dark-violet-tint: #241a3d;
+  --dark-violet-text: #b9a3ea;
+  --dark-teal-tint: #0f2e2b;
+  --dark-teal-text: #6fd6c7;
+  --dark-sky-tint: #142a3d;
+  --dark-sky-text: #7fc4ea;
+  --dark-amber-tint: #3a2a0f;
+  --dark-amber-text: #e8b95c;
+  --dark-rose-tint: #3a1620;
+  --dark-rose-text: #ec9fb3;
+  --dark-emerald-tint: #10291f;
+  --dark-emerald-text: #6fd8a3;
+}
+
+/* Applies when the OS is set to dark (unless the toggle below explicitly
+   picked light), and always when the toggle explicitly picked dark — the
+   second rule wins over the first at equal specificity because it comes
+   later in the cascade. Both rules just point --color-* at the --dark-*
+   values above rather than each carrying their own hex codes, so editing
+   a color only ever means editing it once, in :root. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-page: #0a1226;
-    --color-card: #111a2e;
-    --color-subtle: #16213a;
-    --color-cell: #131c30;
-    --color-hover: #1c2843;
-    --color-border: #283454;
-    --color-border-soft: #212c48;
-    --color-divider: #1d2740;
-    --color-dashed: #2c3856;
-    --color-neutral-border: #384467;
+    --color-page: var(--dark-page);
+    --color-card: var(--dark-card);
+    --color-subtle: var(--dark-subtle);
+    --color-cell: var(--dark-cell);
+    --color-hover: var(--dark-hover);
+    --color-border: var(--dark-border);
+    --color-border-soft: var(--dark-border-soft);
+    --color-divider: var(--dark-divider);
+    --color-dashed: var(--dark-dashed);
+    --color-neutral-border: var(--dark-neutral-border);
 
-    --color-ink: #eef1f8;
-    --color-ink-secondary: #c3cadf;
-    --color-ink-tertiary: #99a2c0;
-    --color-ink-muted: #7e88a8;
-    --color-ink-faint: #5f6a8a;
+    --color-ink: var(--dark-ink);
+    --color-ink-secondary: var(--dark-ink-secondary);
+    --color-ink-tertiary: var(--dark-ink-tertiary);
+    --color-ink-muted: var(--dark-ink-muted);
+    --color-ink-faint: var(--dark-ink-faint);
+
+    --color-accent-100: var(--dark-accent-tint);
+    --color-accent-700: var(--dark-accent-text);
+    --color-accent-800: var(--dark-accent-text);
+    --color-accent-2-100: var(--dark-accent-2-tint);
+    --color-accent-2-200: var(--dark-accent-2-tint-strong);
+    --color-accent-2-700: var(--dark-accent-2-text);
+    --color-yellow-100: var(--dark-yellow-tint);
+    --color-yellow-ink: var(--dark-yellow-text);
+    --color-violet-100: var(--dark-violet-tint);
+    --color-violet-700: var(--dark-violet-text);
+    --color-teal-100: var(--dark-teal-tint);
+    --color-teal-700: var(--dark-teal-text);
+    --color-sky-100: var(--dark-sky-tint);
+    --color-sky-700: var(--dark-sky-text);
+    --color-amber-100: var(--dark-amber-tint);
+    --color-amber-800: var(--dark-amber-text);
+    --color-rose-100: var(--dark-rose-tint);
+    --color-rose-700: var(--dark-rose-text);
+    --color-emerald-100: var(--dark-emerald-tint);
+    --color-emerald-700: var(--dark-emerald-text);
   }
 }
 
 :root[data-theme="dark"] {
-  --color-page: #0a1226;
-  --color-card: #111a2e;
-  --color-subtle: #16213a;
-  --color-cell: #131c30;
-  --color-hover: #1c2843;
-  --color-border: #283454;
-  --color-border-soft: #212c48;
-  --color-divider: #1d2740;
-  --color-dashed: #2c3856;
-  --color-neutral-border: #384467;
+  --color-page: var(--dark-page);
+  --color-card: var(--dark-card);
+  --color-subtle: var(--dark-subtle);
+  --color-cell: var(--dark-cell);
+  --color-hover: var(--dark-hover);
+  --color-border: var(--dark-border);
+  --color-border-soft: var(--dark-border-soft);
+  --color-divider: var(--dark-divider);
+  --color-dashed: var(--dark-dashed);
+  --color-neutral-border: var(--dark-neutral-border);
 
-  --color-ink: #eef1f8;
-  --color-ink-secondary: #c3cadf;
-  --color-ink-tertiary: #99a2c0;
-  --color-ink-muted: #7e88a8;
-  --color-ink-faint: #5f6a8a;
+  --color-ink: var(--dark-ink);
+  --color-ink-secondary: var(--dark-ink-secondary);
+  --color-ink-tertiary: var(--dark-ink-tertiary);
+  --color-ink-muted: var(--dark-ink-muted);
+  --color-ink-faint: var(--dark-ink-faint);
+
+  --color-accent-100: var(--dark-accent-tint);
+  --color-accent-700: var(--dark-accent-text);
+  --color-accent-800: var(--dark-accent-text);
+  --color-accent-2-100: var(--dark-accent-2-tint);
+  --color-accent-2-200: var(--dark-accent-2-tint-strong);
+  --color-accent-2-700: var(--dark-accent-2-text);
+  --color-yellow-100: var(--dark-yellow-tint);
+  --color-yellow-ink: var(--dark-yellow-text);
+  --color-violet-100: var(--dark-violet-tint);
+  --color-violet-700: var(--dark-violet-text);
+  --color-teal-100: var(--dark-teal-tint);
+  --color-teal-700: var(--dark-teal-text);
+  --color-sky-100: var(--dark-sky-tint);
+  --color-sky-700: var(--dark-sky-text);
+  --color-amber-100: var(--dark-amber-tint);
+  --color-amber-800: var(--dark-amber-text);
+  --color-rose-100: var(--dark-rose-tint);
+  --color-rose-700: var(--dark-rose-text);
+  --color-emerald-100: var(--dark-emerald-tint);
+  --color-emerald-700: var(--dark-emerald-text);
 }
 
 body {
