@@ -66,6 +66,49 @@ export async function listNotifications(db: DB, userId: string, limit = 20): Pro
   }));
 }
 
+/** A stable 7-day bucket (not a calendar week) — just needs to change
+ * once a week so a dedupe key built from it fires again the next week if
+ * the situation is still unresolved, without needing real ISO week math. */
+function weekBucket(todayISO: string): number {
+  const [y, m, d] = todayISO.split("-").map(Number);
+  const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
+  return Math.floor(days / 7);
+}
+
+/**
+ * A student who's flagged (attendance below the band) and has *never* had
+ * an outcome recorded is the case most likely to fall through the cracks
+ * silently — nobody's actively working it, and nothing currently surfaces
+ * that beyond the Attention page itself. One summary notification per
+ * cohort (not one per student, to avoid a flood) goes to that cohort's own
+ * facilitators/teachers plus every admin/leadership user, re-firing at
+ * most once a week for as long as it stays unresolved.
+ */
+export async function ensureAttentionEscalation(
+  db: DB,
+  input: {
+    cohortId: string;
+    cohortName: string;
+    neverContactedCount: number;
+    recipientIds: string[];
+    todayISO: string;
+  }
+): Promise<void> {
+  if (input.neverContactedCount <= 0 || !input.recipientIds.length) return;
+  const bucket = weekBucket(input.todayISO);
+  await createNotifications(
+    db,
+    input.recipientIds.map((userId) => ({
+      userId,
+      kind: "attention_escalation",
+      title: `${input.neverContactedCount} student${input.neverContactedCount === 1 ? "" : "s"} in ${input.cohortName} still need a first follow-up`,
+      body: "Flagged for attendance, never contacted.",
+      href: `/c/${input.cohortId}/attention`,
+      dedupeKey: `escalate:${input.cohortId}:${bucket}`,
+    }))
+  );
+}
+
 /**
  * A birthday isn't a discrete event, so there's no natural moment to
  * insert its notification — instead, every time a page load happens to
