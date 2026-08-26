@@ -34,15 +34,27 @@ export async function updateOwnName(name: string): Promise<void> {
 }
 
 /**
- * Supabase Auth's own `updateUser` already scopes a password change to
- * whoever the current session belongs to — no separate permission check
- * needed here, and no re-entering the current password either, the same
- * as changing it while already signed in anywhere else.
+ * An active session alone isn't enough to prove you're the account owner
+ * (a left-open browser, a stolen session cookie) — so this re-verifies the
+ * *current* password before setting a new one. Supabase has no separate
+ * "check this password" endpoint; re-running `signInWithPassword` against
+ * the account's own email is the standard way to confirm it without
+ * actually changing which session is active (same user, so it just
+ * refreshes the existing session).
  */
-export async function changeOwnPassword(password: string): Promise<void> {
-  await requireUser();
-  if (password.length < 8) throw new Error("Password must be at least 8 characters.");
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  const user = await requireUser();
+  if (!currentPassword) throw new Error("Enter your current password.");
+  if (newPassword.length < 8) throw new Error("New password must be at least 8 characters.");
+  if (newPassword === currentPassword) throw new Error("New password must be different from the current one.");
+
   const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({ password });
+  const { error: verifyErr } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+  if (verifyErr) throw new Error("Current password is incorrect.");
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
 }

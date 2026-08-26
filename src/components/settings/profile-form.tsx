@@ -67,24 +67,30 @@ export function NameForm({ name, email, roleLabel }: { name: string; email: stri
 
 export function PasswordForm() {
   const { show } = useToast();
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   function handleSave() {
+    if (!currentPassword) {
+      setError("Enter your current password.");
+      return;
+    }
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError("New password must be at least 8 characters.");
       return;
     }
     if (password !== confirm) {
-      setError("Passwords don't match.");
+      setError("New passwords don't match.");
       return;
     }
     setError(null);
     startTransition(async () => {
       try {
-        await changeOwnPassword(password);
+        await changeOwnPassword(currentPassword, password);
+        setCurrentPassword("");
         setPassword("");
         setConfirm("");
         show("Password changed.");
@@ -99,15 +105,26 @@ export function PasswordForm() {
       <CardHeader>
         <div>
           <CardTitle>Change password</CardTitle>
-          <CardSubtitle>At least 8 characters.</CardSubtitle>
+          <CardSubtitle>Confirm your current password to set a new one.</CardSubtitle>
         </div>
       </CardHeader>
       <div className="flex flex-col gap-3.5 px-[18px] py-4">
+        <div>
+          <Label htmlFor="currentPassword">Current password</Label>
+          <Input
+            id="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+        </div>
         <div>
           <Label htmlFor="newPassword">New password</Label>
           <Input
             id="newPassword"
             type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -117,12 +134,18 @@ export function PasswordForm() {
           <Input
             id="confirmPassword"
             type="password"
+            autoComplete="new-password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
           />
         </div>
         {error && <div className="text-[12px] font-medium text-accent-2-700">{error}</div>}
-        <Button type="button" onClick={handleSave} disabled={pending || !password} className="w-fit">
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={pending || !currentPassword || !password}
+          className="w-fit"
+        >
           {pending && <Spinner />}
           {pending ? "Saving…" : "Change password"}
         </Button>
