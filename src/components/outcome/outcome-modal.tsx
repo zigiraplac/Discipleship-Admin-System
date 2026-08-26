@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import type { OutcomeKind } from "@/lib/domain/types";
 import { OUTCOME_NARRATIVE, outcomeShortLabel } from "./outcome-copy";
 
-const OPTIONS: OutcomeKind[] = ["catchup", "left"];
+const BASE_OPTIONS: OutcomeKind[] = ["catchup", "left"];
 
 export interface OutcomeModalProps {
   studentId: string;
@@ -53,6 +53,12 @@ export function OutcomeModal({
   const [error, setError] = useState<string | null>(null);
   const { show } = useToast();
   const router = useRouter();
+
+  // "Back on track" only makes sense to offer while there's an actual
+  // catch-up decision to close out — showing it for a student who's never
+  // had one recorded would just be a confusing no-op option.
+  const options: OutcomeKind[] =
+    currentOutcome === "catchup" ? ["catchup", "resolved", "left"] : BASE_OPTIONS;
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -90,7 +96,7 @@ export function OutcomeModal({
         </div>
 
         <div className="flex flex-col gap-2 px-5 py-4">
-          {OPTIONS.map((opt) => {
+          {options.map((opt) => {
             const narrative = OUTCOME_NARRATIVE[opt];
             const selected = kind === opt;
             return (

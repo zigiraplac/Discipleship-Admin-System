@@ -20,7 +20,7 @@ export default async function ReportsPage({
   if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, students, crusadeEvents] = await Promise.all([
+  const [cohort, bands, allStudents, crusadeEvents] = await Promise.all([
     getCohort(supabase, cohortId),
     getBands(supabase),
     getStudents(supabase, cohortId),
@@ -28,6 +28,11 @@ export default async function ReportsPage({
   ]);
   if (!cohort) notFound();
 
+  // Left students stop counting toward the cohort's own numbers, same as
+  // Dashboard/Attention — otherwise this report (and its CSV export)
+  // disagrees with those pages for a cohort with any departures.
+  const students = allStudents.filter((s) => !s.leftAt);
+  const activeIds = new Set(students.map((s) => s.id));
   const enrolled = students.length;
   let lessons: ReportLesson[];
 
@@ -49,7 +54,7 @@ export default async function ReportsPage({
   } else {
     const full = await getLessonEvents(supabase, cohortId);
     lessons = full.map((e) => {
-      const stats = lessonStats(e, enrolled);
+      const stats = lessonStats(e, activeIds);
       return {
         eventId: e.eventId,
         date: e.date,

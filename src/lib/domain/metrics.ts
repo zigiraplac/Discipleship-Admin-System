@@ -112,9 +112,18 @@ export interface LessonStats {
   rate: number;
 }
 
-export function lessonStats(ev: LessonEventView, enrolled: number): LessonStats | null {
+/** `activeIds` — student ids to actually count, not a raw enrolled number:
+ * a lesson's `attendance` blob keeps every id it was ever saved with,
+ * including students who've since left, so counting by raw JSON values
+ * would still fold their historical mark into "present" even after
+ * they've been excluded from the roster elsewhere. */
+export function lessonStats(ev: LessonEventView, activeIds: Set<string>): LessonStats | null {
   if (!isRecorded(ev)) return null;
-  const present = Object.values(ev.register.attendance).filter((v) => v === "present").length;
+  let present = 0;
+  for (const id of activeIds) {
+    if (ev.register.attendance[id] === "present") present++;
+  }
+  const enrolled = activeIds.size;
   return {
     present,
     absent: enrolled - present,
@@ -125,12 +134,13 @@ export function lessonStats(ev: LessonEventView, enrolled: number): LessonStats 
 export function classRate(
   lessonEvents: LessonEventView[],
   classIndex: number,
-  enrolled: number
+  activeIds: Set<string>
 ): number | null {
   const inClass = lessonEvents.filter((e) => e.classIndex === classIndex && isRecorded(e));
+  const enrolled = activeIds.size;
   if (!inClass.length || !enrolled) return null;
   let present = 0;
-  for (const ev of inClass) present += lessonStats(ev, enrolled)!.present;
+  for (const ev of inClass) present += lessonStats(ev, activeIds)!.present;
   return Math.round((present / (enrolled * inClass.length)) * 100);
 }
 
@@ -141,13 +151,14 @@ export interface MonthlyRate {
 
 export function monthlyRates(
   lessonEvents: LessonEventView[],
-  enrolled: number
+  activeIds: Set<string>
 ): MonthlyRate[] {
+  const enrolled = activeIds.size;
   const byMonth = new Map<string, { present: number; n: number }>();
   for (const ev of lessonEvents) {
     if (!isRecorded(ev) || !enrolled) continue;
     const key = ev.date.slice(0, 7);
-    const s = lessonStats(ev, enrolled)!;
+    const s = lessonStats(ev, activeIds)!;
     const acc = byMonth.get(key) ?? { present: 0, n: 0 };
     acc.present += s.present;
     acc.n += enrolled;
@@ -156,6 +167,41 @@ export function monthlyRates(
   return [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, { present, n }]) => ({ month, rate: n ? Math.round((present / n) * 100) : 0 }));
+}
+
+export interface StudentMonthlyRate {
+  month: string; // YYYY-MM
+  attended: number;
+  expected: number;
+  rate: number;
+}
+
+/**
+ * The cohort-wide `monthlyRates` shows a trend for the group; a student's
+ * own profile only ever showed a single cumulative lifetime average, which
+ * can take a long time to visibly move even once someone's genuinely back
+ * on track. Same idea as `monthlyRates`, scoped to one student instead of
+ * the whole roster, so "how are they doing lately" has a real per-month
+ * answer instead of just one slow-moving number.
+ */
+export function studentMonthlyRates(studentId: string, lessonEvents: LessonEventView[]): StudentMonthlyRate[] {
+  const byMonth = new Map<string, { attended: number; expected: number }>();
+  for (const ev of lessonEvents) {
+    if (!isRecorded(ev)) continue;
+    const key = ev.date.slice(0, 7);
+    const acc = byMonth.get(key) ?? { attended: 0, expected: 0 };
+    acc.expected++;
+    if (ev.register.attendance[studentId] === "present") acc.attended++;
+    byMonth.set(key, acc);
+  }
+  return [...byMonth.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, { attended, expected }]) => ({
+      month,
+      attended,
+      expected,
+      rate: expected ? Math.round((attended / expected) * 100) : 0,
+    }));
 }
 
 export type ClassMarkStatus = "present" | "absent" | "caught-up" | "not-taught";

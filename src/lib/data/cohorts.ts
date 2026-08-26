@@ -8,47 +8,76 @@ interface CohortRow {
   city: string | null;
   start_date: string;
   teaching_days: number[];
-  facilitator_id: string | null;
   status: "running" | "complete" | "archived";
   lessons_per_session: number;
   created_at: string;
-  facilitator: { name: string } | { name: string }[] | null;
 }
 
-function mapCohortRow(row: CohortRow): Cohort {
-  const facilitator = Array.isArray(row.facilitator) ? row.facilitator[0] : row.facilitator;
+const COHORT_SELECT =
+  "id, name, city, start_date, teaching_days, status, lessons_per_session, created_at";
+
+/**
+ * `cohort.facilitator_id` looks like the obvious source for this but is
+ * never actually written by any write path in the app — a facilitator is
+ * attached to a cohort through `cohort_member` (Settings → People → Add
+ * person), which is the only place that column would need updating too,
+ * and it never has been. Reading `facilitator_id` here always resolved to
+ * null, which is why "Facilitator" showed as unassigned even for cohorts
+ * that genuinely have one. `cohort_member` is the real source of truth.
+ */
+async function getFacilitatorNamesByCohort(db: DB, cohortIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (!cohortIds.length) return map;
+  const { data, error } = await db
+    .from("cohort_member")
+    .select("cohort_id, app_user:user_id(name)")
+    .eq("capacity", "facilitator")
+    .in("cohort_id", cohortIds);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    const user = Array.isArray(row.app_user) ? row.app_user[0] : row.app_user;
+    if (!user) continue;
+    const list = map.get(row.cohort_id) ?? [];
+    list.push(user.name);
+    map.set(row.cohort_id, list);
+  }
+  return map;
+}
+
+function mapCohortRow(row: CohortRow, facilitatorNames: string[]): Cohort {
   return {
     id: row.id,
     name: row.name,
     city: row.city,
     startDate: row.start_date,
     teachingDays: row.teaching_days,
-    facilitatorId: row.facilitator_id,
-    facilitatorName: facilitator?.name ?? null,
+    facilitatorName: facilitatorNames.length ? facilitatorNames.join(", ") : null,
     status: row.status,
     lessonsPerSession: row.lessons_per_session,
     createdAt: row.created_at,
   };
 }
 
-const COHORT_SELECT =
-  "id, name, city, start_date, teaching_days, facilitator_id, status, lessons_per_session, created_at, facilitator:app_user!cohort_facilitator_id_fkey(name)";
-
 /** RLS scopes this to whatever the signed-in user may see — no manual filtering needed. */
 export async function listCohorts(db: DB): Promise<Cohort[]> {
   const { data, error } = await db.from("cohort").select(COHORT_SELECT).order("created_at");
   if (error) throw error;
-  return (data ?? []).map((row) => mapCohortRow(row as unknown as CohortRow));
+  const rows = (data ?? []) as unknown as CohortRow[];
+  const facilitatorsByCohort = await getFacilitatorNamesByCohort(
+    db,
+    rows.map((r) => r.id)
+  );
+  return rows.map((row) => mapCohortRow(row, facilitatorsByCohort.get(row.id) ?? []));
 }
 
 export async function getCohort(db: DB, cohortId: string): Promise<Cohort | null> {
-  const { data, error } = await db
-    .from("cohort")
-    .select(COHORT_SELECT)
-    .eq("id", cohortId)
-    .maybeSingle();
+  const [{ data, error }, facilitatorsByCohort] = await Promise.all([
+    db.from("cohort").select(COHORT_SELECT).eq("id", cohortId).maybeSingle(),
+    getFacilitatorNamesByCohort(db, [cohortId]),
+  ]);
   if (error) throw error;
-  return data ? mapCohortRow(data as unknown as CohortRow) : null;
+  if (!data) return null;
+  return mapCohortRow(data as unknown as CohortRow, facilitatorsByCohort.get(cohortId) ?? []);
 }
 
 export async function getBands(db: DB): Promise<Bands> {

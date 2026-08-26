@@ -32,6 +32,24 @@ export function initials(name: string): string {
   return (first + last).toUpperCase();
 }
 
+// The server's clock is UTC regardless of where it's deployed, but the
+// ministry runs on East Africa Time (Rwanda/Burundi, UTC+2, no DST) — for
+// roughly the first two hours after local midnight, raw UTC still thinks
+// it's "yesterday," which was silently rejecting same-day register saves
+// ("this lesson hasn't been taught yet") and could shift the nightly
+// notification sweep onto the wrong calendar day.
+const MINISTRY_TIMEZONE = "Africa/Kigali";
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // formatToParts rather than trusting a locale's punctuation — some ICU
+  // builds render en-CA with a different separator than the "-" this
+  // relies on elsewhere as a plain sortable YYYY-MM-DD string.
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: MINISTRY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }

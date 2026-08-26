@@ -10,6 +10,14 @@ import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
 
+// The Dashboard page itself titles as "Overview" for leadership
+// (src/app/c/[cohortId]/page.tsx) — this keeps the sidebar label in sync
+// with that instead of always reading "Dashboard" regardless of role.
+function navLabel(item: NavItem, role: Role): string {
+  if (item.id === "dashboard" && role === "leadership") return "Overview";
+  return item.label;
+}
+
 function isActive(id: string, pathname: string, cohortId: string | null): boolean {
   if (id === "dashboard") return pathname === `/c/${cohortId}`;
   if (["lessons", "students", "attention", "calendar", "reports"].includes(id)) {
@@ -22,12 +30,14 @@ function isActive(id: string, pathname: string, cohortId: string | null): boolea
 
 function SidebarNavItem({
   item,
+  label,
   href,
   active,
   badge,
   onNavigate,
 }: {
   item: NavItem;
+  label: string;
   href: string;
   active: boolean;
   badge?: number;
@@ -44,7 +54,7 @@ function SidebarNavItem({
       )}
     >
       <Icon size={17} />
-      <span className="flex-1 text-left">{item.label}</span>
+      <span className="flex-1 text-left">{label}</span>
       {!!badge && (
         <span className="rounded-pill bg-accent-2-100 px-[7px] py-px text-[10px] font-bold text-accent-2-700 tabular">
           {badge}
@@ -114,7 +124,15 @@ export function Sidebar({
             const active = isActive(item.id, pathname, activeCohortId);
             const badge = item.id === "lessons" ? badges.lessons : item.id === "attention" ? badges.attention : undefined;
             return (
-              <SidebarNavItem key={item.id} item={item} href={href} active={active} badge={badge} onNavigate={onNavigate} />
+              <SidebarNavItem
+                key={item.id}
+                item={item}
+                label={navLabel(item, role)}
+                href={href}
+                active={active}
+                badge={badge}
+                onNavigate={onNavigate}
+              />
             );
           })}
         </div>
@@ -127,7 +145,16 @@ export function Sidebar({
             {manage.map((item) => {
               const href = item.href(activeCohortId);
               const active = isActive(item.id, pathname, activeCohortId);
-              return <SidebarNavItem key={item.id} item={item} href={href} active={active} onNavigate={onNavigate} />;
+              return (
+                <SidebarNavItem
+                  key={item.id}
+                  item={item}
+                  label={navLabel(item, role)}
+                  href={href}
+                  active={active}
+                  onNavigate={onNavigate}
+                />
+              );
             })}
           </div>
         )}

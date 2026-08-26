@@ -2,6 +2,7 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { OutcomeModal } from "@/components/outcome/outcome-modal";
+import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
 import { OUTCOME_NARRATIVE } from "@/components/outcome/outcome-copy";
 import type { AttendanceSince } from "@/lib/domain/metrics";
 import type { Bands, Outcome, StudentAggregate } from "@/lib/domain/types";
@@ -32,7 +33,11 @@ export function NextStepCard({
       : "Attendance is on track. No action needed right now.";
 
   const trackingCatchup = latestOutcome?.kind === "catchup" && sinceProgress != null;
-  const caughtUp = trackingCatchup && sinceProgress!.rate != null && sinceProgress!.rate >= bands.activeThreshold;
+  // Same trigger as the Students table and Attention card use — every
+  // lesson they were absent for has since been ticked caught up, not just
+  // "attendance has been fine lately" (a rolling rate can look good while
+  // real gaps are still open, or vice versa right after a decision).
+  const readyToUpdate = latestOutcome?.kind === "catchup" && student.missed === 0;
 
   return (
     <Card>
@@ -59,11 +64,20 @@ export function NextStepCard({
                 className="mt-2"
               />
             )}
-            {caughtUp && (
-              <div className="mt-2 text-[11px] font-semibold text-accent-700">
-                Back on track since this decision — worth updating their outcome.
-              </div>
-            )}
+          </div>
+        )}
+
+        {readyToUpdate && canRecord && (
+          <div className="flex items-center gap-2.5 rounded-control bg-yellow-100 px-3 py-2.5">
+            <span className="flex-1 text-xs font-semibold text-yellow-ink">
+              Every missed lesson is made up.
+            </span>
+            <MarkOnTrackButton
+              studentId={student.id}
+              cohortId={cohortId}
+              studentName={student.fullName}
+              size="row"
+            />
           </div>
         )}
 

@@ -16,7 +16,16 @@ function greetingForHour(hour: number): string {
  * there's no hydration mismatch), then swaps in the real time-of-day
  * greeting right after mount.
  */
-export function Greeting({ name, subtitle }: { name: string; subtitle: string }) {
+export function Greeting({
+  name,
+  right,
+}: {
+  name: string;
+  /** e.g. the cohort's HealthPill — rendered flush right, next to the
+   * greeting, so a cohort's overall standing is visible without opening
+   * the switcher list that's the only place it showed before. */
+  right?: React.ReactNode;
+}) {
   const [greeting, setGreeting] = useState("Welcome back");
 
   useEffect(() => {
@@ -30,11 +39,11 @@ export function Greeting({ name, subtitle }: { name: string; subtitle: string })
   const firstName = name.trim().split(/\s+/)[0] || name;
 
   return (
-    <div>
+    <div className="flex items-center justify-between gap-3">
       <div className="text-2xl font-bold tracking-tight text-ink">
         {greeting}, {firstName}
       </div>
-      <div className="mt-1 text-sm font-medium text-ink-secondary">{subtitle}</div>
+      {right}
     </div>
   );
 }

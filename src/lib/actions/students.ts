@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
+import { createNotifications } from "@/lib/data/notifications";
 
 export interface UpdateStudentInput {
   studentId: string;
@@ -24,7 +26,7 @@ export interface UpdateStudentInput {
  * to be narrower than what RLS alone permits.
  */
 export async function updateStudent(input: UpdateStudentInput): Promise<void> {
-  await requireRole("admin");
+  const actor = await requireRole("admin");
 
   const fullName = input.fullName.trim();
   if (!fullName) throw new Error("Enter a name.");
@@ -53,6 +55,30 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
     .eq("id", input.studentId)
     .eq("cohort_id", input.cohortId);
   if (error) throw error;
+
+  // The facilitator/teacher who actually works with this student day to
+  // day otherwise has no way to know their record changed underneath
+  // them — an admin edit here is exactly the kind of "something changed
+  // that I share access to" event worth surfacing, not a routine save.
+  const admin = createAdminClient();
+  const { data: members } = await admin
+    .from("cohort_member")
+    .select("user_id")
+    .eq("cohort_id", input.cohortId)
+    .neq("user_id", actor.id);
+  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
+  if (recipientIds.length) {
+    await createNotifications(
+      admin,
+      recipientIds.map((userId) => ({
+        userId,
+        kind: "student_updated",
+        title: `${fullName}'s details were updated`,
+        body: "An admin updated their profile.",
+        href: `/c/${input.cohortId}/students/${input.studentId}`,
+      }))
+    );
+  }
 
   const base = `/c/${input.cohortId}`;
   revalidatePath(`${base}/students`);

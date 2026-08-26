@@ -1,7 +1,16 @@
 import type { ReportLesson } from "./report-utils";
 
+// A cell starting with =, +, -, @, or a tab can be read as a formula by
+// Excel/Sheets when the CSV is opened — prefixing it with a single quote
+// neutralizes that without changing what the cell displays. Nothing fed
+// through this today is free-text/user-controlled, so it's not
+// exploitable yet, but this is the only CSV sanitizer in the app and the
+// guard costs nothing to have in place before it's reused somewhere that is.
+const FORMULA_TRIGGER = /^[=+\-@\t]/;
+
 function csvCell(value: string | number): string {
-  const s = String(value);
+  let s = String(value);
+  if (FORMULA_TRIGGER.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

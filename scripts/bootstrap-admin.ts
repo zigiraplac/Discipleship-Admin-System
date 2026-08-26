@@ -6,12 +6,13 @@
  * inside the app (Settings → People → Add person), not by a script.
  *
  * Reads SEED_ADMIN_NAME / SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD from
- * .env.local. Safe to re-run — and also doubles as a recovery tool: if
- * the email already has an auth account, this resets its password to
- * whatever is currently in SEED_ADMIN_PASSWORD (and makes sure its
- * `app_user` row exists with role "admin"). That reset is deliberate: if
- * this admin's password ever gets clobbered by something else, re-running
- * this script with a known password in .env.local is how you get back in.
+ * .env.local. Safe to re-run against a *new* account. Also doubles as a
+ * recovery tool for an existing one — if the email already has an auth
+ * account, this can reset its password to whatever is currently in
+ * SEED_ADMIN_PASSWORD (and makes sure its `app_user` row exists with role
+ * "admin") — but only when SEED_ADMIN_ALLOW_RESET=true is also set, so a
+ * stale .env.local can't silently clobber a live admin's password just by
+ * someone re-running this script.
  *
  * Run with: npm run bootstrap-admin
  */
@@ -44,11 +45,27 @@ async function main() {
     userId = created.user.id;
     console.log(`Created auth account for ${email}.`);
   } else {
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ perPage: 200 });
-    if (listErr) throw listErr;
-    const existing = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+    let existing: { id: string } | null = null;
+    for (let page = 1; page <= 50 && !existing; page++) {
+      const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+      if (listErr) throw listErr;
+      existing = list.users.find((u) => u.email?.toLowerCase() === email.toLowerCase()) ?? null;
+      if (list.users.length < 200) break;
+    }
     if (!existing) throw createErr ?? new Error(`Could not create or find an auth account for ${email}.`);
     userId = existing.id;
+
+    // A live admin's password resets to whatever's currently in
+    // .env.local every time this script runs — deliberate as a recovery
+    // path, but silently doing that on every re-run is exactly how a
+    // stale local file quietly clobbers a real production password.
+    // Require explicit intent to actually go through with it.
+    if (process.env.SEED_ADMIN_ALLOW_RESET !== "true") {
+      throw new Error(
+        `${email} already has an account. Refusing to reset its password without SEED_ADMIN_ALLOW_RESET=true ` +
+          `in .env.local — set that only when you actually intend to reset it.`
+      );
+    }
 
     const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
       password,

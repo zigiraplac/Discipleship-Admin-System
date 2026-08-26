@@ -38,6 +38,9 @@ export interface LessonRow {
   presentText: string; // "29/34" or "—"
   ratePct: number | null;
   tone: BarTone;
+  /** Ever postponed — always false for teacher (the public view doesn't
+   * carry it), a documented gap consistent with that role's lighter data. */
+  edited: boolean;
 }
 
 const FILTER_OPTIONS: SegmentedOption<"all" | LessonRowStatus>[] = [
@@ -47,7 +50,7 @@ const FILTER_OPTIONS: SegmentedOption<"all" | LessonRowStatus>[] = [
   { value: "upcoming", label: "Upcoming" },
 ];
 
-function findCurrentPositionId(rows: LessonRow[]): string | null {
+export function findCurrentPositionId(rows: LessonRow[]): string | null {
   const missing = rows
     .filter((r) => r.status === "missing")
     .sort((a, b) => a.globalIndex - b.globalIndex)[0];
@@ -134,7 +137,7 @@ export function LessonsBrowser({
           return (
             <Card
               key={cls.n}
-              className={cn("overflow-hidden", isCurrentClass && "border-amber-300")}
+              className={cn("overflow-hidden", isCurrentClass && "border-accent-300")}
             >
               <button
                 type="button"
@@ -151,7 +154,7 @@ export function LessonsBrowser({
                   className={cn(
                     "grid size-8 flex-none place-items-center rounded-full text-[13px] font-bold tabular",
                     isCurrentClass
-                      ? "bg-yellow text-white"
+                      ? "bg-accent text-white"
                       : isCompletedClass
                         ? "bg-emerald-500 text-white"
                         : "bg-divider text-ink-secondary"
@@ -162,7 +165,7 @@ export function LessonsBrowser({
                 <span className="flex flex-1 flex-col">
                   <span className="flex items-center gap-2 text-[15px] font-bold text-ink">
                     {cls.title}
-                    {isCurrentClass && <Pill tone="yellow">In progress</Pill>}
+                    {isCurrentClass && <Pill tone="cyan">In progress</Pill>}
                     {isCompletedClass && <Pill tone="green">Completed</Pill>}
                     {needsAttention && (
                       <span
@@ -187,7 +190,6 @@ export function LessonsBrowser({
                     <THead>
                       <TH>Lesson</TH>
                       <TH>Date</TH>
-                      <TH align="right">Present</TH>
                       <TH>Attendance</TH>
                       <TH align="right" />
                     </THead>
@@ -204,14 +206,12 @@ export function LessonsBrowser({
                             </span>
                           </TD>
                           <TD className="tabular">{formatShortDate(row.date)}</TD>
-                          <TD align="right" className="tabular">
-                            {row.presentText}
-                          </TD>
                           <TD>
                             <span className="flex items-center gap-2.5">
-                              <ProgressBar pct={row.ratePct} tone={row.tone} className="w-[62px]" />
+                              <ProgressBar pct={row.ratePct} tone={row.tone} className="w-[54px]" />
                               <span className="text-[12px] font-semibold tabular">
-                                {row.ratePct !== null ? `${row.ratePct}%` : "—"}
+                                {row.presentText}
+                                {row.ratePct !== null ? ` · ${row.ratePct}%` : ""}
                               </span>
                             </span>
                           </TD>
@@ -227,7 +227,7 @@ export function LessonsBrowser({
                       ))}
                       {filteredRows.length === 0 && (
                         <TR>
-                          <TD colSpan={5} className="py-6 text-center text-ink-faint">
+                          <TD colSpan={4} className="py-6 text-center text-ink-faint">
                             0 lessons match this filter.
                           </TD>
                         </TR>
@@ -245,9 +245,10 @@ export function LessonsBrowser({
 }
 
 /** A quick "where am I" read down the left of each lesson row, using the
- * standard status palette: green for a saved register (done), yellow for
- * whichever one is next up (in progress), red for backlog that's overdue
- * (critical), grey for anything further out (not started). */
+ * standard status palette: green for a saved register (done), this app's
+ * accent blue for whichever one is next up (in progress), red for
+ * backlog that's overdue (critical), grey for anything further out (not
+ * started). */
 function StatusDot({ status, isCurrent }: { status: LessonRowStatus; isCurrent: boolean }) {
   if (status === "recorded") {
     return (
@@ -257,7 +258,7 @@ function StatusDot({ status, isCurrent }: { status: LessonRowStatus; isCurrent: 
     );
   }
   if (isCurrent) {
-    return <span className="size-5 flex-none rounded-full border-2 border-yellow" />;
+    return <span className="size-5 flex-none rounded-full border-2 border-accent" />;
   }
   if (status === "missing") {
     return <span className="size-5 flex-none rounded-full border-2 border-accent-2-400" />;

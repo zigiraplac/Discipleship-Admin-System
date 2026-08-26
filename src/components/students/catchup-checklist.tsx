@@ -87,19 +87,24 @@ export function CatchupChecklist({
             type="button"
             disabled={busy}
             onClick={() => tick(ev.eventId)}
+            title="Mark this lesson caught up"
             className={cn(
-              "flex items-center gap-2.5 rounded-[10px] border border-border-soft bg-subtle px-3 py-2 text-left transition-colors",
+              "group flex items-center gap-2.5 rounded-[10px] border border-border-soft bg-subtle px-3 py-2 text-left transition-colors",
+              !busy && "hover:border-emerald-300 hover:bg-emerald-100/40",
               busy && "opacity-60"
             )}
           >
-            <span className="flex size-[18px] flex-none items-center justify-center rounded-[5px] border border-border bg-card">
-              {busy ? <Spinner /> : <Check size={12} weight="bold" className="text-ink-faint" />}
+            <span className="flex size-[18px] flex-none items-center justify-center rounded-[5px] border border-border bg-card group-hover:border-emerald-400">
+              {busy ? <Spinner /> : <Check size={12} weight="bold" className="text-ink-faint group-hover:text-emerald-700" />}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-[13px] font-medium text-ink">
                 {ev.lessonRef} · {ev.lessonTitle}
               </span>
               <span className="block text-[11px] text-ink-muted">{ev.date}</span>
+            </span>
+            <span className="flex-none rounded-pill bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+              {busy ? "Saving…" : "Mark done"}
             </span>
           </button>
         );

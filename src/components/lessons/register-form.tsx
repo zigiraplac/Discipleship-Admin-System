@@ -21,6 +21,15 @@ export interface RegisterRosterEntry {
   expected: number;
 }
 
+/** A student no longer in the cohort — shown as a disabled tile (not
+ * interactive, not counted in this lesson's stats) instead of just
+ * disappearing, so it's clear why they're not in the active list. */
+export interface LeftRosterEntry {
+  id: string;
+  fullName: string;
+  mark: "present" | "absent" | null;
+}
+
 export interface RegisterFormProps {
   cohortId: string;
   eventId: string;
@@ -28,7 +37,17 @@ export interface RegisterFormProps {
   lessonRef: string;
   dateLong: string;
   roster: RegisterRosterEntry[];
+  leftStudents: LeftRosterEntry[];
   initialAttendance: Record<string, "present" | "absent">;
+  /** Already-recorded marks for students no longer on the roster (they've
+   * left) — carried through on save unchanged, since the roster tiles
+   * below never include them and could otherwise silently drop their
+   * history from the register on the next save. */
+  frozenAttendance: Record<string, "present" | "absent">;
+  /** `updated_at ?? recorded_at ?? null` as of this page load — sent back
+   * on save so a concurrent save from someone else is detected instead of
+   * silently overwritten. */
+  expectedVersion: string | null;
   recorded: boolean;
   isFuture: boolean;
   /** True when the signed-in user may tap tiles, enter scores, and save. */
@@ -49,7 +68,10 @@ export function RegisterForm({
   lessonRef,
   dateLong,
   roster,
+  leftStudents,
   initialAttendance,
+  frozenAttendance,
+  expectedVersion,
   recorded,
   isFuture,
   editable,
@@ -87,6 +109,12 @@ export function RegisterForm({
     return roster.filter((r) => r.fullName.toLowerCase().includes(q));
   }, [roster, query]);
 
+  const filteredLeftStudents = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return leftStudents;
+    return leftStudents.filter((r) => r.fullName.toLowerCase().includes(q));
+  }, [leftStudents, query]);
+
   const presentCount = roster.filter((r) => isPresent(r.id)).length;
   const absentCount = enrolled - presentCount;
 
@@ -111,10 +139,10 @@ export function RegisterForm({
     if (buttonDisabled) return;
     setError(null);
     setIsSaving(true);
-    const fullAttendance: Record<string, "present" | "absent"> = {};
+    const fullAttendance: Record<string, "present" | "absent"> = { ...frozenAttendance };
     for (const r of roster) fullAttendance[r.id] = isPresent(r.id) ? "present" : "absent";
     try {
-      await saveRegister({ cohortId, eventId, attendance: fullAttendance });
+      await saveRegister({ cohortId, eventId, attendance: fullAttendance, expectedVersion });
       show(
         `${lessonRef} saved · ${presentCount} present, ${absentCount} absent. Cohort attendance is now ${
           projectedPct ?? 0
@@ -181,6 +209,19 @@ export function RegisterForm({
               </div>
             )}
           </div>
+
+          {filteredLeftStudents.length > 0 && (
+            <div className="mt-4 border-t border-divider pt-4">
+              <div className="mb-3 text-xs text-ink-muted">
+                No longer with the cohort — not counted here, can&rsquo;t be marked.
+              </div>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
+                {filteredLeftStudents.map((entry) => (
+                  <LeftStudentTile key={entry.id} entry={entry} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -283,6 +324,26 @@ function StudentTile({
         <span className="block truncate text-[13px] font-semibold text-ink">{entry.fullName}</span>
         <span className="block text-[11px] text-ink-muted">
           {present ? `${entry.rate}% · ${entry.attended}/${entry.expected}` : "Absent"}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Not clickable, not counted — shown so a left student doesn't just
+ * disappear from the class list with no explanation, but grayed out so
+ * it's unmistakably not an active option. */
+function LeftStudentTile({ entry }: { entry: LeftRosterEntry }) {
+  return (
+    <div
+      aria-disabled="true"
+      className="flex cursor-not-allowed items-center gap-2.5 rounded-[10px] border border-border-soft bg-subtle p-2.5 opacity-50 grayscale"
+    >
+      <span className="flex size-[18px] flex-none items-center justify-center rounded-[5px] border border-border bg-card" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold text-ink-secondary">{entry.fullName}</span>
+        <span className="block text-[11px] text-ink-faint">
+          {entry.mark === "present" ? "Present" : entry.mark === "absent" ? "Absent" : "Not tracked"} · left
         </span>
       </span>
     </div>

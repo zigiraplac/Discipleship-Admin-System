@@ -10,7 +10,7 @@ export type CohortStatus = "running" | "complete" | "archived";
 
 export type EventKind = "lesson" | "crusade";
 
-export type OutcomeKind = "catchup" | "left";
+export type OutcomeKind = "catchup" | "left" | "resolved";
 
 export type Status = "On track" | "Needs help" | "At risk";
 
@@ -30,7 +30,8 @@ export interface Cohort {
   city: string | null;
   startDate: string; // ISO date
   teachingDays: number[]; // 0=Sun..6=Sat
-  facilitatorId: string | null;
+  /** Joined, comma-separated names of this cohort's assigned facilitators
+   * (cohort_member, capacity "facilitator") — null when none yet. */
   facilitatorName: string | null;
   status: CohortStatus;
   /** Lessons covered per study session — the target pace. Defaults to 1;

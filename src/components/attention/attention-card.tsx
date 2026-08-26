@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { WhatsappLogo } from "@phosphor-icons/react/dist/ssr";
+import { WhatsappLogo, ArrowsClockwise } from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill } from "@/components/ui/pill";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { OutcomeModal } from "@/components/outcome/outcome-modal";
 import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
 import { CatchupChecklist } from "@/components/students/catchup-checklist";
+import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
 import { whatsappHref, catchupOutreachMessage } from "@/lib/domain/whatsapp";
 import { isRecorded, type AttendanceSince } from "@/lib/domain/metrics";
 import { cn, todayISO } from "@/lib/utils";
@@ -29,7 +30,7 @@ export function AttentionCard({
   sinceProgress,
   bands,
   lessonEvents,
-  canTickCatchup,
+  canRecord,
 }: {
   cohortId: string;
   student: StudentAggregate;
@@ -43,12 +44,16 @@ export function AttentionCard({
   /** True only for viewers who can record outcomes — lets a caught-up
    * lesson be ticked right here, instead of the card just describing a
    * catch-up plan with nothing on screen that acts on it. */
-  canTickCatchup: boolean;
+  canRecord: boolean;
 }) {
   const resolved = outcome != null;
   const overdue = !resolved && student.missed > 8;
-  const trackingCatchup = outcome?.kind === "catchup" && sinceProgress != null;
-  const showChecklist = canTickCatchup && outcome?.kind === "catchup";
+  // Every lesson resolved but the outcome still says "catchup" — the plan
+  // worked, but the record itself is stale until someone actually changes
+  // it. Surfaced as something to act on, not a quiet "all good" label.
+  const readyToUpdate = outcome?.kind === "catchup" && student.missed === 0;
+  const trackingCatchup = outcome?.kind === "catchup" && sinceProgress != null && !readyToUpdate;
+  const showChecklist = canRecord && outcome?.kind === "catchup" && !readyToUpdate;
 
   const missedLessons = lessonEvents
     .filter((e) => isRecorded(e) && e.register.attendance[student.id] !== "present")
@@ -70,7 +75,13 @@ export function AttentionCard({
   }
 
   return (
-    <Card className={cn("overflow-hidden", !resolved && "border-accent-2-200")}>
+    <Card
+      className={cn(
+        "overflow-hidden",
+        !resolved && "border-accent-2-200",
+        readyToUpdate && "border-yellow"
+      )}
+    >
       <div className="flex items-center gap-3 p-4">
         <Avatar name={student.fullName} size="lg" />
         <div className="min-w-0 flex-1">
@@ -84,7 +95,9 @@ export function AttentionCard({
             {student.rate}% · {student.attended}/{student.expected} lessons
           </div>
         </div>
-        {resolved ? (
+        {readyToUpdate ? (
+          <Pill tone="yellow">Ready to update</Pill>
+        ) : resolved ? (
           <Pill tone={outcomeTone(outcome.kind)}>{outcomeShortLabel(outcome.kind)}</Pill>
         ) : overdue ? (
           <Pill tone="magenta">Overdue</Pill>
@@ -94,6 +107,16 @@ export function AttentionCard({
       </div>
 
       <div className="mx-4 rounded-control bg-page px-3 py-2.5 text-xs text-ink-secondary">{statusLine}</div>
+
+      {readyToUpdate && canRecord && (
+        <div className="mx-4 mt-2.5 flex items-center gap-2.5 rounded-control bg-yellow-100 px-3 py-2.5">
+          <ArrowsClockwise size={16} weight="bold" className="flex-none text-yellow-ink" />
+          <span className="flex-1 text-xs font-semibold text-yellow-ink">
+            Every missed lesson is made up.
+          </span>
+          <MarkOnTrackButton studentId={student.id} cohortId={cohortId} studentName={student.fullName} size="row" />
+        </div>
+      )}
 
       {trackingCatchup && (
         <div className="mx-4 mt-2.5 rounded-control border border-border-soft px-3 py-2.5">
@@ -128,20 +151,26 @@ export function AttentionCard({
       )}
 
       <div className="flex gap-2 p-4 pt-3">
-        <OutcomeModal
-          studentId={student.id}
-          cohortId={cohortId}
-          studentName={student.fullName}
-          missedCount={student.missed}
-          currentOutcome={outcome?.kind ?? null}
-          triggerClassName={buttonVariants({
-            variant: resolved ? "outlineAccent" : "primary",
-            size: "sm",
-            className: "flex-1",
-          })}
-        >
-          {resolved ? "Change outcome" : "Record outcome"}
-        </OutcomeModal>
+        {canRecord ? (
+          <OutcomeModal
+            studentId={student.id}
+            cohortId={cohortId}
+            studentName={student.fullName}
+            missedCount={student.missed}
+            currentOutcome={outcome?.kind ?? null}
+            triggerClassName={buttonVariants({
+              variant: resolved ? "outlineAccent" : "primary",
+              size: "sm",
+              className: "flex-1",
+            })}
+          >
+            {resolved ? "Change outcome" : "Record outcome"}
+          </OutcomeModal>
+        ) : (
+          <Button variant="inert" size="sm" className="flex-1" disabled>
+            {resolved ? "Change outcome" : "Record outcome"}
+          </Button>
+        )}
         {!resolved && whatsappLink && (
           <a
             href={whatsappLink}

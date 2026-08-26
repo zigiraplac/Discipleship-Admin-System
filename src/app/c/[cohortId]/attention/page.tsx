@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { WarningCircle, ArrowUUpLeft } from "@phosphor-icons/react/dist/ssr";
+import { WarningCircle, ArrowUUpLeft, ArrowsClockwise } from "@phosphor-icons/react/dist/ssr";
 import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
@@ -42,23 +42,40 @@ export default async function AttentionPage({
   const students = allStudents.filter((s) => !s.leftAt);
   const agg = aggregateCohort(students, lessonEvents, bands, todayISO());
   const latest = latestByStudent(outcomes);
-  const canTickCatchup = user.role === "facilitator" || user.role === "admin";
+  const canRecord = user.role === "facilitator" || user.role === "admin";
 
   // `s.missed` is how many recorded lessons they weren't present for — a
-  // catch-up student stays visible here until every one of those is
-  // resolved, even if their rolling rate recovers above the band first.
-  // Otherwise correcting a single lesson could push the rate up just
-  // enough to drop them off this page while lessons are still open.
+  // catch-up student stays visible here for as long as their outcome says
+  // "catchup", even after every lesson is resolved and their rate has
+  // recovered. That's deliberate: once they hit 0 missed, they move into
+  // "Ready to update" instead of just disappearing — the outcome record
+  // itself is still stale until someone actually changes it to On track.
   const flagged = agg.roster
-    .filter((s) => s.status !== "On track" || (latest.get(s.id)?.kind === "catchup" && s.missed > 0))
+    .filter((s) => s.status !== "On track" || latest.get(s.id)?.kind === "catchup")
     .sort((a, b) => a.rate - b.rate);
 
-  const toContact = flagged.filter((s) => !latest.has(s.id)).length;
-  const onCatchup = flagged.filter((s) => latest.get(s.id)?.kind === "catchup").length;
+  // A "resolved" outcome that still leaves someone below the band (rare —
+  // only possible if the plan didn't actually fix things, or a manual
+  // override) falls back into "To contact" rather than vanishing from
+  // every group: the decision was closed, but they still need a fresh one.
+  const isToContact = (s: StudentAggregate) => !latest.has(s.id) || latest.get(s.id)?.kind === "resolved";
+
+  const toContact = flagged.filter(isToContact).length;
+  const onCatchup = flagged.filter((s) => latest.get(s.id)?.kind === "catchup" && s.missed > 0).length;
+  const readyToUpdate = flagged.filter((s) => latest.get(s.id)?.kind === "catchup" && s.missed === 0).length;
 
   const groups: { key: string; title: string; roster: StudentAggregate[] }[] = [
-    { key: "contact", title: "To contact", roster: flagged.filter((s) => !latest.has(s.id)) },
-    { key: "catchup", title: "On catch-up", roster: flagged.filter((s) => latest.get(s.id)?.kind === "catchup") },
+    { key: "contact", title: "To contact", roster: flagged.filter(isToContact) },
+    {
+      key: "catchup",
+      title: "On catch-up",
+      roster: flagged.filter((s) => latest.get(s.id)?.kind === "catchup" && s.missed > 0),
+    },
+    {
+      key: "ready",
+      title: "Ready to update",
+      roster: flagged.filter((s) => latest.get(s.id)?.kind === "catchup" && s.missed === 0),
+    },
   ];
 
   const cardGrid = (roster: StudentAggregate[]) => (
@@ -71,7 +88,7 @@ export default async function AttentionPage({
           lessonEvents={lessonEvents}
           latest={latest}
           bands={bands}
-          canTickCatchup={canTickCatchup}
+          canRecord={canRecord}
         />
       ))}
       {roster.length === 0 && (
@@ -119,6 +136,12 @@ export default async function AttentionPage({
           tone="yellow"
         />
         <StatCard label="On catch-up" value={onCatchup} icon={onCatchup > 0 ? ArrowUUpLeft : undefined} tone="cyan" />
+        <StatCard
+          label="Ready to update"
+          value={readyToUpdate}
+          icon={readyToUpdate > 0 ? ArrowsClockwise : undefined}
+          tone="yellow"
+        />
       </StatGrid>
 
       <AttentionTabs tabs={tabs} />
@@ -134,14 +157,14 @@ function StudentCard({
   lessonEvents,
   latest,
   bands,
-  canTickCatchup,
+  canRecord,
 }: {
   student: StudentAggregate;
   cohortId: string;
   lessonEvents: LessonEventView[];
   latest: Map<string, Outcome>;
   bands: Bands;
-  canTickCatchup: boolean;
+  canRecord: boolean;
 }) {
   const outcome = latest.get(student.id) ?? null;
   const sinceProgress = outcome?.kind === "catchup" ? attendanceSince(student.id, lessonEvents, outcome.recordedAt) : null;
@@ -154,7 +177,7 @@ function StudentCard({
       sinceProgress={sinceProgress}
       bands={bands}
       lessonEvents={lessonEvents}
-      canTickCatchup={canTickCatchup}
+      canRecord={canRecord}
     />
   );
 }

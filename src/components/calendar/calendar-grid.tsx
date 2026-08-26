@@ -1,4 +1,3 @@
-import { cn } from "@/lib/utils";
 import { CalendarChip } from "./calendar-chip";
 import type { BirthdayEntry, CalendarLessonEvent, ChipData, CrusadeEventView } from "./calendar-types";
 
@@ -135,20 +134,15 @@ export function CalendarGrid({
           }
 
           return (
-            <div
-              key={i}
-              className={cn(
-                "flex flex-col gap-1 border-b border-r border-divider p-1.5",
-                isToday && "bg-accent-100/50"
-              )}
-            >
-              <div
-                className={cn(
-                  "text-[11px]",
-                  isToday ? "font-bold text-accent-800" : "text-ink-tertiary"
+            <div key={i} className="flex flex-col gap-1 border-b border-r border-divider p-1.5">
+              <div className="text-[11px]">
+                {isToday ? (
+                  <span className="inline-flex size-6 items-center justify-center rounded-full bg-accent-2-500 font-bold text-white">
+                    {cell.dayNum}
+                  </span>
+                ) : (
+                  <span className="text-ink-tertiary">{cell.dayNum}</span>
                 )}
-              >
-                {cell.dayNum}
               </div>
               {chips.length > 0 && (
                 <div className="flex flex-col gap-1">

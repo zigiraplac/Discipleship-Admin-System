@@ -1,4 +1,5 @@
 import type { Icon } from "@phosphor-icons/react";
+import { TrendUp, TrendDown } from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -29,23 +30,25 @@ export function KpiCard({
 }) {
   return (
     <Card className="p-[15px] px-4">
-      <div className="flex items-center gap-2">
-        <span className="grid size-6 flex-none place-items-center rounded-[7px] bg-accent-100 text-accent-800">
-          <IconEl size={14} />
-        </span>
+      <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-ink-tertiary">{label}</span>
+        <span className="grid size-8 flex-none place-items-center rounded-full bg-accent-100 text-accent-800">
+          <IconEl size={15} />
+        </span>
       </div>
-      <div className="mt-2.5 flex items-end gap-2">
+      <div className="mt-2.5 flex items-center justify-between gap-2">
         <span className="text-[28px] font-bold leading-none text-ink tabular">{value}</span>
         {delta && (
           <span
             className={cn(
-              "pb-0.5 text-[11px] font-bold",
-              deltaTone === "ok" && "text-accent-700",
-              deltaTone === "warn" && "text-yellow-ink",
-              deltaTone === "bad" && "text-accent-2-700"
+              "inline-flex flex-none items-center gap-1 rounded-pill px-2 py-[3px] text-[11px] font-bold",
+              deltaTone === "ok" && "bg-emerald-100 text-emerald-700",
+              deltaTone === "warn" && "bg-yellow-100 text-yellow-ink",
+              deltaTone === "bad" && "bg-accent-2-100 text-accent-2-700"
             )}
           >
+            {deltaTone === "ok" && <TrendUp size={11} weight="bold" />}
+            {deltaTone === "bad" && <TrendDown size={11} weight="bold" />}
             {delta}
           </span>
         )}

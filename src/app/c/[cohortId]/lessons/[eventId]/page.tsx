@@ -9,7 +9,7 @@ import { getLessonEvents } from "@/lib/data/lessons";
 import { aggregateCohort, isRecorded, lessonStats } from "@/lib/domain/metrics";
 import { todayISO, formatLongDate } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
-import { RegisterForm, type RegisterRosterEntry } from "@/components/lessons/register-form";
+import { RegisterForm, type RegisterRosterEntry, type LeftRosterEntry } from "@/components/lessons/register-form";
 
 export default async function RegisterPage({
   params,
@@ -28,7 +28,7 @@ export default async function RegisterPage({
   const [cohort, bands] = await Promise.all([getCohort(supabase, cohortId), getBands(supabase)]);
   if (!cohort) notFound();
 
-  const [students, lessonEvents] = await Promise.all([
+  const [allStudents, lessonEvents] = await Promise.all([
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
   ]);
@@ -37,6 +37,22 @@ export default async function RegisterPage({
   if (!ev || ev.cohortId !== cohortId) notFound();
 
   const today = todayISO();
+  // A student who's left stops counting in the cohort's own numbers and
+  // can't be ticked here — but they still show up as a disabled tile
+  // (rather than silently vanishing from the class list) with whatever
+  // mark they already had, preserved as-is via frozenAttendance below.
+  const students = allStudents.filter((s) => !s.leftAt);
+  const leftStudentsRaw = allStudents.filter((s) => s.leftAt);
+  const leftIds = new Set(leftStudentsRaw.map((s) => s.id));
+  const frozenAttendance: Record<string, "present" | "absent"> = {};
+  for (const [sid, mark] of Object.entries(ev.register.attendance)) {
+    if (leftIds.has(sid)) frozenAttendance[sid] = mark;
+  }
+  const leftStudents: LeftRosterEntry[] = leftStudentsRaw.map((s) => ({
+    id: s.id,
+    fullName: s.fullName,
+    mark: frozenAttendance[s.id] ?? null,
+  }));
   const agg = aggregateCohort(students, lessonEvents, bands, today);
 
   const recorded = isRecorded(ev);
@@ -52,7 +68,8 @@ export default async function RegisterPage({
     expected: s.expected,
   }));
 
-  const thisLessonStats = recorded ? lessonStats(ev, agg.enrolled) : null;
+  const activeIds = new Set(students.map((s) => s.id));
+  const thisLessonStats = recorded ? lessonStats(ev, activeIds) : null;
   const recordedCountExcludingThis = agg.recordedCount - (recorded ? 1 : 0);
   const totalPresentExcludingThis = agg.totalPresent - (thisLessonStats?.present ?? 0);
 
@@ -78,7 +95,10 @@ export default async function RegisterPage({
         lessonRef={ev.lessonRef}
         dateLong={dateLong}
         roster={roster}
+        leftStudents={leftStudents}
         initialAttendance={recorded ? ev.register.attendance : {}}
+        frozenAttendance={frozenAttendance}
+        expectedVersion={ev.register.updatedAt ?? ev.register.recordedAt ?? null}
         recorded={recorded}
         isFuture={isFuture}
         editable={editable}

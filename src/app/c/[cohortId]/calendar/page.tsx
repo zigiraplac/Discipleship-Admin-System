@@ -34,12 +34,17 @@ export default async function CalendarPage({
   if (!NAV_BY_ROLE[user.role].includes("calendar")) notFound();
 
   const supabase = await createClient();
-  const [cohort, students, crusadeEvents] = await Promise.all([
+  const [cohort, allStudents, crusadeEvents] = await Promise.all([
     getCohort(supabase, cohortId),
     getStudents(supabase, cohortId),
     getCrusadeEvents(supabase, cohortId),
   ]);
   if (!cohort) notFound();
+
+  // Left students stop counting toward the cohort's own numbers, and stop
+  // showing up as upcoming birthday reminders — same policy as everywhere
+  // else the cohort's active roster is used.
+  const students = allStudents.filter((s) => !s.leftAt);
 
   let lessonEvents: CalendarLessonEvent[];
   if (user.role === "teacher") {
@@ -53,10 +58,10 @@ export default async function CalendarPage({
       rate: p.rate,
     }));
   } else {
-    const enrolled = students.length;
+    const activeIds = new Set(students.map((s) => s.id));
     const full = await getLessonEvents(supabase, cohortId);
     lessonEvents = full.map((e) => {
-      const stats = lessonStats(e, enrolled);
+      const stats = lessonStats(e, activeIds);
       return {
         eventId: e.eventId,
         date: e.date,

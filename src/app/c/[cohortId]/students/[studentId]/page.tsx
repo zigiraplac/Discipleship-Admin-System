@@ -13,6 +13,7 @@ import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { ProfileCard } from "@/components/students/profile-card";
 import { AttendanceByClassCard } from "@/components/students/attendance-by-class-card";
+import { AttendanceTrendCard } from "@/components/students/attendance-trend-card";
 import { CatchupChecklist } from "@/components/students/catchup-checklist";
 import { HistoryCard } from "@/components/students/history-card";
 import { NextStepCard } from "@/components/students/next-step-card";
@@ -69,6 +70,7 @@ export default async function StudentDetailPage({
           {canRecord && latestOutcome?.kind === "catchup" && (
             <CatchupChecklist cohortId={cohortId} studentId={studentId} lessonEvents={lessonEvents} />
           )}
+          <AttendanceTrendCard studentId={studentId} lessonEvents={lessonEvents} bands={bands} />
           <HistoryCard
             student={studentAgg}
             latestOutcome={latestOutcome}

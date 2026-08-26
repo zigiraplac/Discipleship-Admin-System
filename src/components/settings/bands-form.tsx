@@ -49,8 +49,12 @@ export function BandsForm({ bands }: { bands: Bands }) {
     }
     setError(null);
     startTransition(async () => {
-      await updateBands({ activeThreshold, helpThreshold });
-      show("Status bands updated.");
+      try {
+        await updateBands({ activeThreshold, helpThreshold });
+        show("Status bands updated.");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save. Try again.");
+      }
     });
   }
 

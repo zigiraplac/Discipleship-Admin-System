@@ -47,40 +47,58 @@ export async function GET(request: Request) {
 
   let cohortsSwept = 0;
   let escalationsSent = 0;
+  const failedCohortIds: string[] = [];
 
+  // Each cohort's own try/catch — one cohort throwing (a bad row, a
+  // transient query error) used to abort the whole loop, silently
+  // skipping every cohort after it in the list with no record of which
+  // ones were missed. Now a single failure is isolated and reported.
   for (const cohort of cohorts ?? []) {
-    const [{ data: members, error: membersErr }, students, lessonEvents, outcomes] = await Promise.all([
-      admin.from("cohort_member").select("user_id").eq("cohort_id", cohort.id),
-      getStudents(admin, cohort.id),
-      getLessonEvents(admin, cohort.id),
-      getOutcomesForCohort(admin, cohort.id),
-    ]);
-    if (membersErr) throw membersErr;
+    try {
+      const [{ data: members, error: membersErr }, students, lessonEvents, outcomes] = await Promise.all([
+        admin.from("cohort_member").select("user_id").eq("cohort_id", cohort.id),
+        getStudents(admin, cohort.id),
+        getLessonEvents(admin, cohort.id),
+        getOutcomesForCohort(admin, cohort.id),
+      ]);
+      if (membersErr) throw membersErr;
 
-    const recipientIds = [...new Set([...(members ?? []).map((m) => m.user_id), ...broadRecipientIds])];
-    if (!recipientIds.length) continue;
+      const recipientIds = [...new Set([...(members ?? []).map((m) => m.user_id), ...broadRecipientIds])];
+      if (!recipientIds.length) {
+        cohortsSwept++;
+        continue;
+      }
 
-    const activeStudents = students.filter((s) => !s.leftAt);
-    for (const userId of recipientIds) {
-      await ensureBirthdayNotifications(admin, userId, activeStudents, today);
+      const activeStudents = students.filter((s) => !s.leftAt);
+      for (const userId of recipientIds) {
+        await ensureBirthdayNotifications(admin, userId, activeStudents, today);
+      }
+
+      const agg = aggregateCohort(activeStudents, lessonEvents, bands, today);
+      const latest = latestByStudent(outcomes);
+      const neverContacted = agg.roster.filter((s) => s.status !== "On track" && !latest.has(s.id)).length;
+      if (neverContacted > 0) {
+        await ensureAttentionEscalation(admin, {
+          cohortId: cohort.id,
+          cohortName: cohort.name,
+          neverContactedCount: neverContacted,
+          recipientIds,
+          todayISO: today,
+        });
+        escalationsSent++;
+      }
+
+      cohortsSwept++;
+    } catch (e) {
+      console.error(`Cron sweep failed for cohort ${cohort.id}:`, e);
+      failedCohortIds.push(cohort.id);
     }
-
-    const agg = aggregateCohort(activeStudents, lessonEvents, bands, today);
-    const latest = latestByStudent(outcomes);
-    const neverContacted = agg.roster.filter((s) => s.status !== "On track" && !latest.has(s.id)).length;
-    if (neverContacted > 0) {
-      await ensureAttentionEscalation(admin, {
-        cohortId: cohort.id,
-        cohortName: cohort.name,
-        neverContactedCount: neverContacted,
-        recipientIds,
-        todayISO: today,
-      });
-      escalationsSent++;
-    }
-
-    cohortsSwept++;
   }
 
-  return NextResponse.json({ ok: true, cohortsSwept, escalationsSent });
+  return NextResponse.json({
+    ok: failedCohortIds.length === 0,
+    cohortsSwept,
+    escalationsSent,
+    failedCohortIds,
+  });
 }

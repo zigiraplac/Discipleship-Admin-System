@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Cake, BookOpen, Megaphone, HandWaving, WarningCircle } from "@phosphor-icons/react";
+import { Bell, Cake, BookOpen, Megaphone, HandWaving, WarningCircle, UserCircle, Sliders } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { markNotificationRead, markAllNotificationsRead } from "@/lib/actions/notifications";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import type { NotificationView } from "@/lib/data/notifications";
 
@@ -14,6 +15,8 @@ const ICON_BY_KIND: Record<string, typeof Bell> = {
   outcome_recorded: Megaphone,
   welcome: HandWaving,
   attention_escalation: WarningCircle,
+  student_updated: UserCircle,
+  bands_updated: Sliders,
 };
 
 function timeAgo(iso: string): string {
@@ -29,6 +32,7 @@ function timeAgo(iso: string): string {
 
 export function NotificationsBell({ notifications }: { notifications: NotificationView[] }) {
   const router = useRouter();
+  const { show } = useToast();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const unreadCount = notifications.filter((n) => !n.read).length;
@@ -36,8 +40,12 @@ export function NotificationsBell({ notifications }: { notifications: Notificati
   function handleOpen(item: NotificationView) {
     if (!item.read) {
       startTransition(async () => {
-        await markNotificationRead(item.id);
-        router.refresh();
+        try {
+          await markNotificationRead(item.id);
+          router.refresh();
+        } catch {
+          show("Couldn't mark that as read — try again.");
+        }
       });
     }
     setOpen(false);
@@ -46,8 +54,12 @@ export function NotificationsBell({ notifications }: { notifications: Notificati
 
   function handleMarkAllRead() {
     startTransition(async () => {
-      await markAllNotificationsRead();
-      router.refresh();
+      try {
+        await markAllNotificationsRead();
+        router.refresh();
+      } catch {
+        show("Couldn't mark all as read — try again.");
+      }
     });
   }
 

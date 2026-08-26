@@ -8,12 +8,17 @@ import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
+import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
 import { buttonVariants } from "@/components/ui/button";
-import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
+import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
+import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
 import { cn } from "@/lib/utils";
-import type { Bands, OutcomeKind, StudentAggregate } from "@/lib/domain/types";
+import type { Bands, OutcomeKind, Status, StudentAggregate } from "@/lib/domain/types";
 
 type Filter = "all" | "On track" | "Needs help" | "At risk";
+type SortKey = "name" | "attended" | "attendance" | "status";
+
+const STATUS_RANK: Record<Status, number> = { "On track": 0, "Needs help": 1, "At risk": 2 };
 
 const FILTER_OPTIONS: SegmentedOption<Filter>[] = [
   { value: "all", label: "All" },
@@ -35,15 +40,34 @@ export function StudentsTable({
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return roster.filter((s) => {
-      if (filter !== "all" && s.status !== filter) return false;
+    const filtered = roster.filter((s) => {
+      // A left student always displays "No longer with us" regardless of
+      // their frozen status — matching them into a specific On track /
+      // Needs help / At risk filter would surface someone whose visible
+      // label contradicts the filter that found them.
+      const left = s.leftAt != null || outcomesByStudent[s.id] === "left";
+      if (filter !== "all" && (left || s.status !== filter)) return false;
       if (q && !s.fullName.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [roster, filter, query]);
+    if (!sort) return filtered;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sort.key === "name") return dir * a.fullName.localeCompare(b.fullName);
+      if (sort.key === "attended") return dir * (a.attended - b.attended);
+      if (sort.key === "attendance") return dir * (a.rate - b.rate);
+      // status: left always ranks last regardless of direction — it's not
+      // part of the On track/Needs help/At risk severity scale being sorted.
+      const aLeft = a.leftAt != null || outcomesByStudent[a.id] === "left";
+      const bLeft = b.leftAt != null || outcomesByStudent[b.id] === "left";
+      if (aLeft !== bLeft) return aLeft ? 1 : -1;
+      return dir * (STATUS_RANK[a.status] - STATUS_RANK[b.status]);
+    });
+  }, [roster, filter, query, outcomesByStudent, sort]);
 
   return (
     <>
@@ -59,18 +83,17 @@ export function StudentsTable({
       </div>
       <Table>
         <THead>
-          <TH>Student</TH>
-          <TH>Attended</TH>
-          <TH>Attendance</TH>
-          <TH>Status</TH>
-          <TH>Last outcome</TH>
+          <SortableTH label="Student" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <SortableTH label="Attended" sortKey="attended" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <SortableTH label="Attendance" sortKey="attendance" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <SortableTH label="Status" sortKey="status" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <TH align="right" />
         </THead>
         <tbody>
           {rows.map((s) => {
             const outcome = outcomesByStudent[s.id];
             const pct = s.expected === 0 ? null : s.rate;
-            const left = s.leftAt != null;
+            const left = s.leftAt != null || outcome === "left";
             return (
               <TR key={s.id} className={cn(left && "opacity-60")}>
                 <TD>
@@ -98,8 +121,20 @@ export function StudentsTable({
                     <span className="text-[12px] font-semibold tabular">{pct === null ? "—" : `${pct}%`}</span>
                   </span>
                 </TD>
-                <TD>{left ? <Pill tone="grey">No longer with us</Pill> : <StatusPill status={s.status} />}</TD>
-                <TD className="text-[13px] text-ink-secondary">{outcome ? outcomeShortLabel(outcome) : "—"}</TD>
+                <TD>
+                  {left ? (
+                    <Pill tone="grey">No longer with us</Pill>
+                  ) : outcome ? (
+                    <span className="flex flex-col items-start gap-1">
+                      <Pill tone={outcomeTone(outcome)}>{outcomeShortLabel(outcome)}</Pill>
+                      {outcome === "catchup" && s.missed === 0 && (
+                        <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
+                      )}
+                    </span>
+                  ) : (
+                    <StatusPill status={s.status} />
+                  )}
+                </TD>
                 <TD align="right">
                   <Link
                     href={`/c/${cohortId}/students/${s.id}`}
@@ -113,7 +148,7 @@ export function StudentsTable({
           })}
           {rows.length === 0 && (
             <TR>
-              <TD colSpan={6} className="py-6 text-center text-ink-faint">
+              <TD colSpan={5} className="py-6 text-center text-ink-faint">
                 No students match.
               </TD>
             </TR>

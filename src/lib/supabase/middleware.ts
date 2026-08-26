@@ -10,6 +10,15 @@ import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./env";
 const PUBLIC_PATHS = ["/login", "/auth/set-password"];
 
 export async function updateSession(request: NextRequest) {
+  // API routes authenticate themselves (e.g. the cron sweep's CRON_SECRET
+  // bearer check) — a scheduled job has no browser session cookie to
+  // present, so gating this on one would just bounce it to /login before
+  // its own auth check ever runs, silently turning the request into a
+  // no-op every time.
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(SUPABASE_URL(), SUPABASE_ANON_KEY(), {

@@ -127,11 +127,12 @@ export async function postponeLesson(input: {
     updates.push({ id: row.id, event_date: replaced[i].date });
   }
 
-  for (const u of updates) {
-    const { error } = await admin
-      .from("event")
-      .update({ event_date: u.event_date, edited: true })
-      .eq("id", u.id);
+  // One atomic call (0009_atomic_writes.sql) instead of a sequential loop
+  // of individually-awaited updates — a failure partway through used to
+  // be able to leave some lessons shifted and others not, with no
+  // rollback.
+  if (updates.length) {
+    const { error } = await admin.rpc("apply_event_date_updates", { p_updates: updates });
     if (error) throw error;
   }
 

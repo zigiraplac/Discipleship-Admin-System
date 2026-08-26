@@ -1,8 +1,12 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/card";
-import { Table, THead, TH, TR, TD } from "@/components/ui/table";
+import { Table, THead, TR, TD } from "@/components/ui/table";
+import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill, type PillTone } from "@/components/ui/pill";
-import { roleLabel } from "@/lib/auth";
+import { roleLabel } from "@/lib/roles";
 import { describeScope } from "@/lib/data/people";
 import type { AppUser, Role } from "@/lib/domain/types";
 
@@ -15,6 +19,10 @@ const ROLE_TONE: Record<Role, PillTone> = {
   leadership: "amber",
 };
 
+const ROLE_RANK: Record<Role, number> = { admin: 0, leadership: 1, facilitator: 2, teacher: 3 };
+
+type SortKey = "name" | "role" | "state";
+
 export function PeopleTable({
   people,
   scopesByUser,
@@ -24,6 +32,18 @@ export function PeopleTable({
   scopesByUser: Map<string, { cohortName: string; capacity: string }[]>;
   headerAction?: React.ReactNode;
 }) {
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+
+  const rows = useMemo(() => {
+    if (!sort) return people;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...people].sort((a, b) => {
+      if (sort.key === "name") return dir * a.name.localeCompare(b.name);
+      if (sort.key === "role") return dir * (ROLE_RANK[a.role] - ROLE_RANK[b.role]);
+      return dir * a.state.localeCompare(b.state);
+    });
+  }, [people, sort]);
+
   return (
     <Card className="overflow-hidden">
       <CardHeader>
@@ -35,13 +55,13 @@ export function PeopleTable({
       </CardHeader>
       <Table>
         <THead>
-          <TH>Person</TH>
-          <TH>Role</TH>
-          <TH>Cohorts</TH>
-          <TH>State</TH>
+          <SortableTH label="Person" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <SortableTH label="Role" sortKey="role" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <StaticTH>Cohorts</StaticTH>
+          <SortableTH label="State" sortKey="state" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
         </THead>
         <tbody>
-          {people.map((person) => (
+          {rows.map((person) => (
             <TR key={person.id}>
               <TD>
                 <span className="flex items-center gap-2.5">
@@ -75,5 +95,16 @@ export function PeopleTable({
         </tbody>
       </Table>
     </Card>
+  );
+}
+
+// "Cohorts" isn't sortable (it's a free-text scope summary, not a single
+// comparable value) — a plain header cell, styled to match SortableTH's
+// padding so the row stays visually aligned.
+function StaticTH({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="whitespace-nowrap px-3.5 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+      {children}
+    </th>
   );
 }

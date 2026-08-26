@@ -16,7 +16,10 @@ export function NeedsAttentionTable({
   cohortId: string;
   rows: StudentAggregate[];
   bands: { activeThreshold: number; helpThreshold: number };
-  attentionHref: string;
+  /** null for a role that can't open the Attention page (e.g. leadership)
+   * — omits the link entirely rather than pointing at a page that would
+   * just 404 for them. */
+  attentionHref: string | null;
 }) {
   return (
     <Card className="overflow-hidden">
@@ -25,9 +28,11 @@ export function NeedsAttentionTable({
           <div className="text-[15px] font-bold text-ink">Needs attention</div>
           <div className="mt-0.5 text-xs text-ink-muted">Lowest attendance first</div>
         </div>
-        <Link href={attentionHref} className="text-[13px] font-semibold text-accent-700 hover:underline">
-          View all
-        </Link>
+        {attentionHref && (
+          <Link href={attentionHref} className="text-[13px] font-semibold text-accent-700 hover:underline">
+            View all
+          </Link>
+        )}
       </div>
       <Table>
         <THead>

@@ -5,13 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic, getCrusadeEvents } from "@/lib/data/lessons";
-import { isRecorded, lessonStats } from "@/lib/domain/metrics";
-import { toneForRate } from "@/components/ui/progress-bar";
 import { TOTAL_LESSONS, CURRICULUM } from "@/lib/domain/curriculum";
 import { todayISO, formatShortDate } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { LessonsBrowser, type LessonRow } from "@/components/lessons/lessons-browser";
+import { buildLessonRows, buildLessonRowsPublic } from "@/components/lessons/lesson-rows";
 
 export default async function LessonsPage({
   params,
@@ -31,62 +30,23 @@ export default async function LessonsPage({
 
   const today = todayISO();
   let rows: LessonRow[] = [];
-  let recordedCount = 0;
 
   if (user.role === "teacher") {
     const pub = await getLessonEventsPublic(supabase, cohortId);
-    recordedCount = pub.filter((p) => p.recorded).length;
-    rows = pub.map((p) => {
-      const status: LessonRow["status"] = p.recorded
-        ? "recorded"
-        : p.date <= today
-          ? "missing"
-          : "upcoming";
-      const ratePct = p.recorded ? p.rate : null;
-      return {
-        eventId: p.eventId,
-        date: p.date,
-        globalIndex: p.globalIndex,
-        classNumber: p.classNumber,
-        lessonRef: p.lessonRef,
-        lessonTitle: p.lessonTitle,
-        status,
-        presentText: p.recorded ? `${p.present}/${p.enrolled}` : "—",
-        ratePct,
-        tone: ratePct !== null ? toneForRate(ratePct, bands.activeThreshold, bands.helpThreshold) : "grey",
-      };
-    });
+    rows = buildLessonRowsPublic(pub, bands, today);
   } else {
-    const [students, lessonEvents] = await Promise.all([
+    const [allStudents, lessonEvents] = await Promise.all([
       getStudents(supabase, cohortId),
       getLessonEvents(supabase, cohortId),
     ]);
-    const enrolled = students.length;
-    recordedCount = lessonEvents.filter(isRecorded).length;
-    rows = lessonEvents.map((ev) => {
-      const recorded = isRecorded(ev);
-      const status: LessonRow["status"] = recorded
-        ? "recorded"
-        : ev.date <= today
-          ? "missing"
-          : "upcoming";
-      const stats = lessonStats(ev, enrolled);
-      const ratePct = stats ? stats.rate : null;
-      return {
-        eventId: ev.eventId,
-        date: ev.date,
-        globalIndex: ev.globalIndex,
-        classNumber: ev.classNumber,
-        lessonRef: ev.lessonRef,
-        lessonTitle: ev.lessonTitle,
-        status,
-        presentText: stats ? `${stats.present}/${enrolled}` : "—",
-        ratePct,
-        tone: ratePct !== null ? toneForRate(ratePct, bands.activeThreshold, bands.helpThreshold) : "grey",
-      };
-    });
+    // Left students stop counting toward the cohort's own numbers, same
+    // as everywhere else — otherwise this page's rates disagree with
+    // Dashboard/Attention for a cohort with any departures.
+    const activeIds = new Set(allStudents.filter((s) => !s.leftAt).map((s) => s.id));
+    rows = buildLessonRows(lessonEvents, activeIds, bands, today);
   }
 
+  const recordedCount = rows.filter((r) => r.status === "recorded").length;
   const missingRows = rows
     .filter((r) => r.status === "missing")
     .sort((a, b) => a.globalIndex - b.globalIndex);

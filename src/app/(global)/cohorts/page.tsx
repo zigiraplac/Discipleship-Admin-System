@@ -33,8 +33,9 @@ export default async function CohortsPage() {
         getLessonEvents(supabase, cohort.id),
       ]);
       const students = allStudents.filter((s) => !s.leftAt);
+      const activeIds = new Set(students.map((s) => s.id));
       const agg = aggregateCohort(students, lessonEvents, bands, today);
-      const monthly = monthlyRates(lessonEvents, agg.enrolled);
+      const monthly = monthlyRates(lessonEvents, activeIds);
       const pace = computePace(cohort, agg.recordedCount, today);
       return { cohort, agg, monthly, pace };
     })

@@ -37,7 +37,7 @@ export function DetailsCard({
         <Row label="Country" value={student.country ?? "—"} />
         <Row label="Birthday" value={formatDayMonth(student.dobDay, student.dobMonth)} />
         <Row label="Cohort" value={cohortName} />
-        <Row label="Facilitator" value={facilitatorName ?? "—"} />
+        <Row label="Facilitator" value={facilitatorName ?? "Unassigned"} />
       </div>
     </Card>
   );
