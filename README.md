@@ -27,8 +27,13 @@ screen-by-screen spec, design tokens, RBAC rules).
    URLs, add `{NEXT_PUBLIC_SITE_URL}/auth/set-password` (e.g.
    `http://localhost:3000/auth/set-password`). Without this, invite emails will fail to sign
    people in.
-5. **Install dependencies**: `npm install`.
-6. **Create your admin account**: `npm run bootstrap-admin`. This is the *only* seeding this
+5. **Brand the invite/reset emails (optional)** — in the Supabase dashboard, Auth → Emails →
+   Templates, paste `supabase/email-templates/invite.html` into the **Invite user** template
+   and `supabase/email-templates/reset-password.html` into the **Reset Password** template
+   (source/HTML mode). Both need the app deployed and reachable at `NEXT_PUBLIC_SITE_URL` for
+   the logo image to load — it'll 404 while testing against `localhost`.
+6. **Install dependencies**: `npm install`.
+7. **Create your admin account**: `npm run bootstrap-admin`. This is the *only* seeding this
    project does — no demo data, no demo cohorts. Everything else happens from inside the app:
    sign in as that admin, use Settings → People → **Add person** to invite facilitators,
    teachers, and leadership (they get a real Supabase Auth email invite that lands on
@@ -36,7 +41,7 @@ screen-by-screen spec, design tokens, RBAC rules).
    cohort from your own registration CSV, uploaded through the wizard. The curriculum
    reference data (7 classes / 80 lessons) provisions itself automatically the first time you
    create a cohort — there's no separate step for it.
-7. **Run it**: `npm run dev`, then sign in at `/login` with the admin account from step 6.
+8. **Run it**: `npm run dev`, then sign in at `/login` with the admin account from step 7.
 
 > Person invites use `supabase.auth.admin.inviteUserByEmail`, which requires an email
 > provider configured in your Supabase project (Auth → Providers → Email is on by default on
