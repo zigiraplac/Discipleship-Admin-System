@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "bootstrap-admin": "tsx --env-file=.env.local scripts/bootstrap-admin.ts"
+    "bootstrap-admin": "tsx --env-file=.env.local scripts/bootstrap-admin.ts",
+    "fix-crusade-schedule": "tsx --env-file=.env.local scripts/fix-crusade-schedule.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
