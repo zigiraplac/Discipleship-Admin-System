@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: "BCC Discipleship",
   description:
     "A role-based discipleship operations platform for running Bible-study cohorts.",
+  icons: { icon: "/logo.jpg" },
 };
 
 // Runs before hydration so the very first paint already has the right
