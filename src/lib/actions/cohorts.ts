@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireUser } from "@/lib/auth";
 import {
   parseRegistrationsCsv,
   dedupeRegistrations,
@@ -10,6 +11,31 @@ import {
 } from "@/lib/domain/registrations";
 import { buildEvents } from "@/lib/domain/generator";
 import { ensureCurriculumSeeded } from "@/lib/data/curriculum-admin";
+import { getBands } from "@/lib/data/cohorts";
+import { getQuickStats, type QuickStats } from "@/lib/data/quick-stats";
+import { todayISO } from "@/lib/utils";
+
+/**
+ * Powers the cohort switcher's per-cohort "34 students · 82%" line — on
+ * demand, the first time someone actually opens the dropdown, rather than
+ * eagerly for every cohort on every single page load (which is what Shell
+ * used to do; each cohort's number here is the same heavy full-register
+ * read getLessonEvents does, so doing it for cohorts nobody's looking at
+ * was pure waste). RLS scopes each cohort's own query regardless of which
+ * ids are requested, so no extra access check is needed beyond being
+ * signed in.
+ */
+export async function getCohortQuickStats(cohortIds: string[]): Promise<Record<string, QuickStats>> {
+  const user = await requireUser();
+  const supabase = await createClient();
+  const bands = await getBands(supabase);
+  const today = todayISO();
+
+  const entries = await Promise.all(
+    cohortIds.map(async (id) => [id, await getQuickStats(supabase, id, bands, today, user.role)] as const)
+  );
+  return Object.fromEntries(entries);
+}
 
 /**
  * Wizard step 2: the admin uploads their own registration CSV in the

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { DB } from "./types";
 import type { Bands, Cohort } from "@/lib/domain/types";
 import { DEFAULT_BANDS } from "@/lib/domain/types";
@@ -58,8 +59,13 @@ function mapCohortRow(row: CohortRow, facilitatorNames: string[]): Cohort {
   };
 }
 
-/** RLS scopes this to whatever the signed-in user may see — no manual filtering needed. */
-export async function listCohorts(db: DB): Promise<Cohort[]> {
+/**
+ * RLS scopes this to whatever the signed-in user may see — no manual
+ * filtering needed. Cached per request: Shell calls this for the cohort
+ * switcher, and cohort-listing pages (Cohorts, Settings) call it again
+ * for the same render — without this they'd each pay for it separately.
+ */
+export const listCohorts = cache(async function listCohorts(db: DB): Promise<Cohort[]> {
   const { data, error } = await db.from("cohort").select(COHORT_SELECT).order("created_at");
   if (error) throw error;
   const rows = (data ?? []) as unknown as CohortRow[];
@@ -68,9 +74,11 @@ export async function listCohorts(db: DB): Promise<Cohort[]> {
     rows.map((r) => r.id)
   );
   return rows.map((row) => mapCohortRow(row, facilitatorsByCohort.get(row.id) ?? []));
-}
+});
 
-export async function getCohort(db: DB, cohortId: string): Promise<Cohort | null> {
+/** Cached per request — every cohort-scoped page calls this for the
+ * active cohort, same as Shell does for its own header/nav needs. */
+export const getCohort = cache(async function getCohort(db: DB, cohortId: string): Promise<Cohort | null> {
   const [{ data, error }, facilitatorsByCohort] = await Promise.all([
     db.from("cohort").select(COHORT_SELECT).eq("id", cohortId).maybeSingle(),
     getFacilitatorNamesByCohort(db, [cohortId]),
@@ -78,9 +86,11 @@ export async function getCohort(db: DB, cohortId: string): Promise<Cohort | null
   if (error) throw error;
   if (!data) return null;
   return mapCohortRow(data as unknown as CohortRow, facilitatorsByCohort.get(cohortId) ?? []);
-}
+});
 
-export async function getBands(db: DB): Promise<Bands> {
+/** Cached per request — nearly every page fetches the org's band
+ * thresholds, and so does Shell. */
+export const getBands = cache(async function getBands(db: DB): Promise<Bands> {
   const { data, error } = await db
     .from("org_setting")
     .select("key, value")
@@ -91,7 +101,7 @@ export async function getBands(db: DB): Promise<Bands> {
     activeThreshold: map.get("band_active_threshold") ?? DEFAULT_BANDS.activeThreshold,
     helpThreshold: map.get("band_help_threshold") ?? DEFAULT_BANDS.helpThreshold,
   };
-}
+});
 
 export async function setBands(db: DB, bands: Bands): Promise<void> {
   const { error } = await db.from("org_setting").upsert([

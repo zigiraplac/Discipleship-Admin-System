@@ -5,7 +5,6 @@ import { listCohorts, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
-import { getQuickStats } from "@/lib/data/quick-stats";
 import { listNotifications, ensureBirthdayNotifications } from "@/lib/data/notifications";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
@@ -55,15 +54,13 @@ export async function Shell({
     }[user.role]
   );
 
-  const quickStats = await Promise.all(
-    cohorts.map((c) => getQuickStats(supabase, c.id, bands, today, user.role))
-  );
-  const switcherItems: CohortSwitcherItem[] = cohorts.map((c, i) => ({
-    id: c.id,
-    name: c.name,
-    meta: `${quickStats[i].enrolled} students · ${quickStats[i].rate}%`,
-    health: quickStats[i].health,
-  }));
+  // The switcher's per-cohort "34 students · 82%" line used to be
+  // computed here for every cohort on every page load — the same heavy
+  // full-register read the active cohort's own page already does, just
+  // repeated for cohorts nobody's currently looking at. It's now fetched
+  // client-side, on demand, the first time the dropdown is actually
+  // opened (getCohortQuickStats, lib/actions/cohorts.ts).
+  const switcherItems: CohortSwitcherItem[] = cohorts.map((c) => ({ id: c.id, name: c.name }));
 
   let badges: { lessons?: number; attention?: number } = {};
   const searchIndex = {

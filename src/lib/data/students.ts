@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { DB } from "./types";
 import type { Student } from "@/lib/domain/types";
 
@@ -38,7 +39,10 @@ function mapStudentRow(row: StudentRow): Student {
   };
 }
 
-export async function getStudents(db: DB, cohortId: string): Promise<Student[]> {
+/** Cached per request — Shell fetches the active cohort's roster for its
+ * own quick-stats/badges, and the page being rendered fetches it again
+ * for the same cohort; without this they're two separate round trips. */
+export const getStudents = cache(async function getStudents(db: DB, cohortId: string): Promise<Student[]> {
   const { data, error } = await db
     .from("student")
     .select(STUDENT_SELECT)
@@ -46,9 +50,9 @@ export async function getStudents(db: DB, cohortId: string): Promise<Student[]> 
     .order("full_name");
   if (error) throw error;
   return (data ?? []).map(mapStudentRow);
-}
+});
 
-export async function getStudent(db: DB, studentId: string): Promise<Student | null> {
+export const getStudent = cache(async function getStudent(db: DB, studentId: string): Promise<Student | null> {
   const { data, error } = await db
     .from("student")
     .select(STUDENT_SELECT)
@@ -56,4 +60,4 @@ export async function getStudent(db: DB, studentId: string): Promise<Student | n
     .maybeSingle();
   if (error) throw error;
   return data ? mapStudentRow(data) : null;
-}
+});

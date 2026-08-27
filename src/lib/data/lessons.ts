@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { DB } from "./types";
 import type { CrusadeEventView, LessonEventView } from "@/lib/domain/types";
 import { lessonAt } from "@/lib/domain/curriculum";
@@ -31,8 +32,15 @@ const EMPTY_REGISTER = {
  * database too; a teacher's client would simply get `register: null` back
  * per row, which is why teacher-facing screens use
  * `getLessonEventsPublic` instead.
+ *
+ * This is the single heaviest query in the app — every lesson event
+ * joined with its full attendance register — and, before this was
+ * cached, it ran up to three times per page load for the active cohort
+ * alone (Shell's own quick-stats loop, Shell's badge/search-index
+ * section, and the page itself). Cached per request so all of those
+ * share one round trip.
  */
-export async function getLessonEvents(db: DB, cohortId: string): Promise<LessonEventView[]> {
+export const getLessonEvents = cache(async function getLessonEvents(db: DB, cohortId: string): Promise<LessonEventView[]> {
   const { data, error } = await db
     .from("event")
     .select(
@@ -73,7 +81,7 @@ export async function getLessonEvents(db: DB, cohortId: string): Promise<LessonE
     })
     .filter((v): v is LessonEventView => v !== null)
     .sort((a, b) => a.globalIndex - b.globalIndex);
-}
+});
 
 export interface LessonPublicView {
   eventId: string;
@@ -92,8 +100,9 @@ export interface LessonPublicView {
 }
 
 /** Teacher-safe: aggregate counts only, via the `cohort_lesson_public_stats`
- * SECURITY DEFINER function — never the per-student attendance map. */
-export async function getLessonEventsPublic(db: DB, cohortId: string): Promise<LessonPublicView[]> {
+ * SECURITY DEFINER function — never the per-student attendance map.
+ * Cached per request for the same reason as getLessonEvents above. */
+export const getLessonEventsPublic = cache(async function getLessonEventsPublic(db: DB, cohortId: string): Promise<LessonPublicView[]> {
   const [{ data: eventRows, error: eventErr }, { data: statRows, error: statErr }] = await Promise.all([
     db
       .from("event")
@@ -134,9 +143,9 @@ export async function getLessonEventsPublic(db: DB, cohortId: string): Promise<L
     })
     .filter((v): v is LessonPublicView => v !== null)
     .sort((a, b) => a.globalIndex - b.globalIndex);
-}
+});
 
-export async function getCrusadeEvents(db: DB, cohortId: string): Promise<CrusadeEventView[]> {
+export const getCrusadeEvents = cache(async function getCrusadeEvents(db: DB, cohortId: string): Promise<CrusadeEventView[]> {
   const { data, error } = await db
     .from("event")
     .select("id, event_date, after_class, crusade_day")
@@ -151,4 +160,4 @@ export async function getCrusadeEvents(db: DB, cohortId: string): Promise<Crusad
     afterClass: row.after_class ?? 0,
     crusadeDay: row.crusade_day ?? 0,
   }));
-}
+});

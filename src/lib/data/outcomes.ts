@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { DB } from "./types";
 import type { Outcome } from "@/lib/domain/types";
 
@@ -29,8 +30,10 @@ function mapOutcomeRow(row: OutcomeRow): Outcome {
 const OUTCOME_SELECT =
   "id, student_id, cohort_id, kind, note, recorded_by, recorded_at, recorder:app_user!outcome_recorded_by_fkey(name)";
 
-/** Append-only history, newest first, for every student in a cohort. */
-export async function getOutcomesForCohort(db: DB, cohortId: string): Promise<Outcome[]> {
+/** Append-only history, newest first, for every student in a cohort.
+ * Cached per request — Shell fetches this for the active cohort's
+ * badges, and Students/Attention fetch it again for the same cohort. */
+export const getOutcomesForCohort = cache(async function getOutcomesForCohort(db: DB, cohortId: string): Promise<Outcome[]> {
   const { data, error } = await db
     .from("outcome")
     .select(OUTCOME_SELECT)
@@ -38,9 +41,9 @@ export async function getOutcomesForCohort(db: DB, cohortId: string): Promise<Ou
     .order("recorded_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row) => mapOutcomeRow(row as unknown as OutcomeRow));
-}
+});
 
-export async function getOutcomesForStudent(db: DB, studentId: string): Promise<Outcome[]> {
+export const getOutcomesForStudent = cache(async function getOutcomesForStudent(db: DB, studentId: string): Promise<Outcome[]> {
   const { data, error } = await db
     .from("outcome")
     .select(OUTCOME_SELECT)
@@ -48,7 +51,7 @@ export async function getOutcomesForStudent(db: DB, studentId: string): Promise<
     .order("recorded_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map((row) => mapOutcomeRow(row as unknown as OutcomeRow));
-}
+});
 
 /** Latest outcome per student — the stage a card/row shows at a glance. */
 export function latestByStudent(outcomes: Outcome[]): Map<string, Outcome> {
