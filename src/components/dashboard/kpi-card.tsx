@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Icon } from "@phosphor-icons/react";
 import { TrendUp, TrendDown } from "@phosphor-icons/react/dist/ssr";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -25,7 +24,7 @@ const FLASH_CLASSES: Record<Flash, string> = {
 };
 
 export function KpiCard({
-  icon: IconEl,
+  icon,
   label,
   value,
   delta,
@@ -34,7 +33,14 @@ export function KpiCard({
   trackValue,
   flashDirection = "neutral",
 }: {
-  icon: Icon;
+  /**
+   * A pre-rendered icon element (e.g. `<CheckCircle size={15} />`), not a
+   * bare component reference — this is a Client Component (for the flash
+   * effect below), and a raw component function passed as a prop from a
+   * Server Component isn't serializable across that boundary. Passing an
+   * already-rendered element sidesteps that entirely.
+   */
+  icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
   delta?: string;
@@ -81,7 +87,7 @@ export function KpiCard({
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-ink-tertiary">{label}</span>
         <span className="grid size-8 flex-none place-items-center rounded-full bg-accent-100 text-accent-800">
-          <IconEl size={15} />
+          {icon}
         </span>
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">

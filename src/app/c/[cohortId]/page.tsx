@@ -256,7 +256,7 @@ export default async function DashboardPage({
 
       <KpiRow>
         <KpiCard
-          icon={CheckCircle}
+          icon={<CheckCircle size={15} />}
           label="Attendance"
           value={`${rate}%`}
           delta={attendanceDelta}
@@ -267,7 +267,7 @@ export default async function DashboardPage({
         />
         {attentionRows !== null && (
           <KpiCard
-            icon={WarningCircle}
+            icon={<WarningCircle size={15} />}
             label="Needs attention"
             value={atRiskCount}
             sub={`of ${enrolled} students`}
@@ -276,7 +276,7 @@ export default async function DashboardPage({
           />
         )}
         <KpiCard
-          icon={BookOpen}
+          icon={<BookOpen size={15} />}
           label="Lessons recorded"
           value={`${recordedCount}/80`}
           sub={`Class ${classIndex + 1} · ${currentClass.title}`}
@@ -284,7 +284,7 @@ export default async function DashboardPage({
           flashDirection="up-good"
         />
         <KpiCard
-          icon={Gauge}
+          icon={<Gauge size={15} />}
           label="Pace"
           value={onPace ? "On pace" : `${pace.gap} behind`}
           delta={onPace ? "On target" : "Catch up"}
@@ -300,7 +300,7 @@ export default async function DashboardPage({
           flashDirection="up-bad"
         />
         <KpiCard
-          icon={SignOut}
+          icon={<SignOut size={15} />}
           label="Left the program"
           value={leftCount}
           sub="No longer tracked in these numbers"
