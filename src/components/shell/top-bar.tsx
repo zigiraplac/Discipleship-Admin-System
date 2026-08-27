@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CaretDown } from "@phosphor-icons/react";
+import { CaretDown, SignOut as SignOutIcon } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { HealthPill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -130,8 +130,9 @@ export function TopBar({
           <form action={signOutAction}>
             <button
               type="submit"
-              className="block w-full border-t border-divider px-3.5 py-[11px] text-left text-[13px] text-ink-muted hover:bg-hover"
+              className="flex w-full items-center gap-2 border-t border-divider px-3.5 py-[11px] text-left text-[13px] font-semibold text-accent-2-700 hover:bg-accent-2-100"
             >
+              <SignOutIcon size={14} />
               Sign out
             </button>
           </form>
