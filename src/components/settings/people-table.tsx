@@ -6,6 +6,7 @@ import { Table, THead, TR, TD } from "@/components/ui/table";
 import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill, type PillTone } from "@/components/ui/pill";
+import { EditPersonDialog } from "./edit-person-dialog";
 import { roleLabel } from "@/lib/roles";
 import { describeScope } from "@/lib/data/people";
 import type { AppUser, Role } from "@/lib/domain/types";
@@ -21,15 +22,30 @@ const ROLE_TONE: Record<Role, PillTone> = {
 
 const ROLE_RANK: Record<Role, number> = { admin: 0, leadership: 1, facilitator: 2, teacher: 3 };
 
+const STATE_TONE: Record<AppUser["state"], PillTone> = {
+  active: "green",
+  invited: "grey",
+  deactivated: "magenta",
+};
+const STATE_LABEL: Record<AppUser["state"], string> = {
+  active: "Active",
+  invited: "Invited",
+  deactivated: "Deactivated",
+};
+
 type SortKey = "name" | "role" | "state";
 
 export function PeopleTable({
   people,
   scopesByUser,
+  cohorts,
+  currentUserId,
   headerAction,
 }: {
   people: AppUser[];
-  scopesByUser: Map<string, { cohortName: string; capacity: string }[]>;
+  scopesByUser: Map<string, { cohortId: string; cohortName: string; capacity: string }[]>;
+  cohorts: { id: string; name: string }[];
+  currentUserId: string;
   headerAction?: React.ReactNode;
 }) {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
@@ -59,6 +75,9 @@ export function PeopleTable({
           <SortableTH label="Role" sortKey="role" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <StaticTH>Cohorts</StaticTH>
           <SortableTH label="State" sortKey="state" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <StaticTH>
+            <span className="sr-only">Edit</span>
+          </StaticTH>
         </THead>
         <tbody>
           {rows.map((person) => (
@@ -79,15 +98,21 @@ export function PeopleTable({
                 {describeScope(person.role, scopesByUser.get(person.id))}
               </TD>
               <TD>
-                <Pill tone={person.state === "active" ? "green" : "grey"}>
-                  {person.state === "active" ? "Active" : "Invited"}
-                </Pill>
+                <Pill tone={STATE_TONE[person.state]}>{STATE_LABEL[person.state]}</Pill>
+              </TD>
+              <TD>
+                <EditPersonDialog
+                  person={person}
+                  cohorts={cohorts}
+                  currentCohortIds={(scopesByUser.get(person.id) ?? []).map((s) => s.cohortId)}
+                  isSelf={person.id === currentUserId}
+                />
               </TD>
             </TR>
           ))}
           {people.length === 0 && (
             <TR>
-              <TD colSpan={4} className="py-6 text-center text-ink-faint">
+              <TD colSpan={5} className="py-6 text-center text-ink-faint">
                 No people yet.
               </TD>
             </TR>

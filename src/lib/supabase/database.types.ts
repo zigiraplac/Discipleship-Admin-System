@@ -40,7 +40,7 @@ export interface Database {
           name: string;
           email: string;
           role: "facilitator" | "admin" | "teacher" | "leadership";
-          state: "active" | "invited";
+          state: "active" | "invited" | "deactivated";
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["app_user"]["Row"]> & {

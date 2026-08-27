@@ -103,7 +103,7 @@ export interface AppUser {
   name: string;
   email: string;
   role: Role;
-  state: "active" | "invited";
+  state: "active" | "invited" | "deactivated";
 }
 
 export interface CohortMember {

@@ -149,3 +149,125 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
   revalidatePath("/settings");
   return { resendLink };
 }
+
+export interface UpdatePersonInput {
+  id: string;
+  name: string;
+  role: Role;
+  /** Full replacement of this person's cohort assignment — same shape as
+   * invitePerson's, so "move Cohort B from Facilitator B to Facilitator
+   * A" is just editing A's list to include it (and, separately, editing
+   * or deactivating B). */
+  cohortIds: string[];
+}
+
+/** Admin-only. Renames, re-roles, and/or reassigns which cohorts someone
+ * has access to — everything invitePerson sets up front, editable after
+ * the fact. Doesn't touch email or state; use deactivatePerson/
+ * reactivatePerson for access, and re-inviting for email changes (a
+ * person's email is their Supabase Auth identity, not just a label). */
+export async function updatePerson(input: UpdatePersonInput): Promise<void> {
+  const actor = await requireRole("admin");
+  const name = input.name.trim();
+  if (!name) throw new Error("Enter a name.");
+
+  const admin = createAdminClient();
+
+  const { error: userErr } = await admin
+    .from("app_user")
+    .update({ name, role: input.role })
+    .eq("id", input.id);
+  if (userErr) throw new Error("Couldn't update this person. Please try again.");
+
+  // Full replace rather than a diff — simpler and just as correct, since
+  // the dialog always submits the complete intended set.
+  const { error: deleteErr } = await admin.from("cohort_member").delete().eq("user_id", input.id);
+  if (deleteErr) throw new Error("Couldn't update this person's cohorts. Please try again.");
+
+  const capacity = input.role === "teacher" ? "teacher" : "facilitator";
+  if ((input.role === "facilitator" || input.role === "teacher") && input.cohortIds.length) {
+    const { error: memberErr } = await admin.from("cohort_member").insert(
+      input.cohortIds.map((cohortId) => ({ cohort_id: cohortId, user_id: input.id, capacity }))
+    );
+    if (memberErr) throw new Error("Couldn't update this person's cohorts. Please try again.");
+  }
+
+  await admin.from("audit_log").insert({
+    actor_id: actor.id,
+    entity: "app_user",
+    entity_id: input.id,
+    action: "update",
+    after: { name, role: input.role, cohortIds: input.cohortIds },
+  });
+
+  revalidatePath("/settings");
+}
+
+/** Admin-only, and not on yourself — the safe alternative to deleting
+ * someone from the Supabase dashboard directly, which fails outright the
+ * moment they've ever recorded a register, an outcome, or any audited
+ * action (those foreign keys point at app_user without cascade, on
+ * purpose). Deactivating just flips a flag: every row they ever touched,
+ * and their cohort assignments, stay exactly as they were — they simply
+ * can't sign in until reactivated. */
+export async function deactivatePerson(id: string): Promise<void> {
+  const actor = await requireRole("admin");
+  if (actor.id === id) {
+    throw new Error("You can't deactivate your own account.");
+  }
+
+  const admin = createAdminClient();
+
+  const { data: target, error: targetErr } = await admin
+    .from("app_user")
+    .select("role, name")
+    .eq("id", id)
+    .maybeSingle();
+  if (targetErr) throw new Error("Couldn't load this person. Please try again.");
+  if (!target) throw new Error("This person no longer exists.");
+
+  if (target.role === "admin") {
+    const { count, error: countErr } = await admin
+      .from("app_user")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .eq("state", "active");
+    if (countErr) throw new Error("Couldn't verify admin count. Please try again.");
+    if ((count ?? 0) <= 1) {
+      throw new Error("Can't deactivate the last active admin — promote someone else first.");
+    }
+  }
+
+  const { error } = await admin.from("app_user").update({ state: "deactivated" }).eq("id", id);
+  if (error) throw new Error("Couldn't deactivate this person. Please try again.");
+
+  await admin.from("audit_log").insert({
+    actor_id: actor.id,
+    entity: "app_user",
+    entity_id: id,
+    action: "deactivate",
+    after: { name: target.name },
+  });
+
+  revalidatePath("/settings");
+}
+
+/** Admin-only. Always restores to "active" — state has never gated
+ * anything but a display label and the activate_self() privilege guard,
+ * so there's no meaningful "invited" to restore back to. */
+export async function reactivatePerson(id: string): Promise<void> {
+  const actor = await requireRole("admin");
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("app_user").update({ state: "active" }).eq("id", id);
+  if (error) throw new Error("Couldn't reactivate this person. Please try again.");
+
+  await admin.from("audit_log").insert({
+    actor_id: actor.id,
+    entity: "app_user",
+    entity_id: id,
+    action: "reactivate",
+  });
+
+  revalidatePath("/settings");
+}

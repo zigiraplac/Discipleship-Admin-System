@@ -30,6 +30,8 @@ export default async function SettingsPage() {
         <PeopleTable
           people={people}
           scopesByUser={scopesByUser}
+          cohorts={cohorts.map((c) => ({ id: c.id, name: c.name }))}
+          currentUserId={user.id}
           headerAction={<AddPersonDialog cohorts={cohorts.map((c) => ({ id: c.id, name: c.name }))} />}
         />
         <BandsForm bands={bands} />
