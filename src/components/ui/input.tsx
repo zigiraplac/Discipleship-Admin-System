@@ -12,6 +12,18 @@ export function Input({ className, ...props }: React.ComponentProps<"input">) {
   );
 }
 
+export function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
+  return (
+    <textarea
+      className={cn(
+        "w-full resize-none rounded-control border border-border bg-subtle px-3 py-2.5 text-sm text-ink placeholder:text-ink-faint focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2",
+        className
+      )}
+      {...props}
+    />
+  );
+}
+
 export function Label({ className, ...props }: React.ComponentProps<"label">) {
   return <label className={cn("mb-1.5 block text-xs font-semibold text-ink", className)} {...props} />;
 }

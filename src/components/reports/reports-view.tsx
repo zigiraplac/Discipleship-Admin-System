@@ -6,6 +6,7 @@ import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import type { Bands, CrusadeEventView } from "@/lib/domain/types";
+import type { CrusadeReport } from "@/lib/data/crusades";
 import { ByClassCard } from "./by-class-card";
 import { MonthChartCard } from "./month-chart-card";
 import { HighlightCards } from "./highlight-cards";
@@ -24,7 +25,7 @@ export function ReportsView({
   cohortName,
   lessons,
   crusadeEvents,
-  completedAfterClasses,
+  reportsByAfterClass,
   canRecordCrusades,
   enrolled,
   bands,
@@ -35,7 +36,7 @@ export function ReportsView({
   cohortName: string;
   lessons: ReportLesson[];
   crusadeEvents: CrusadeEventView[];
-  completedAfterClasses: Set<number>;
+  reportsByAfterClass: Map<number, CrusadeReport>;
   canRecordCrusades: boolean;
   enrolled: number;
   bands: Bands;
@@ -105,7 +106,7 @@ export function ReportsView({
       <CrusadesTable
         cohortId={cohortId}
         crusadeEvents={crusadeEvents}
-        completedAfterClasses={completedAfterClasses}
+        reportsByAfterClass={reportsByAfterClass}
         canRecord={canRecordCrusades}
         today={today}
       />

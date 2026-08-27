@@ -1,22 +1,29 @@
--- A crusade weekend is 3 auto-generated calendar events (Fri/Sat/Sun,
--- sharing the same after_class) with no way to mark that the outreach
--- actually happened — unlike a lesson, there's no register to save. This
--- is the crusade equivalent: one row per weekend (keyed by cohort +
--- after_class, not a single event_id, since the weekend spans 3 of
--- them), marked manually by a facilitator/admin.
-create table crusade_completion (
-  cohort_id    uuid not null references cohort on delete cascade,
-  after_class  smallint not null,
-  completed_at timestamptz not null default now(),
-  completed_by uuid not null references app_user,
-  primary key (cohort_id, after_class)
-);
+-- `crusade_report` has existed since 0001_init.sql but nothing has ever
+-- written to it — no real crusade-outcome data model existed, so Reports'
+-- "Weekend outreach" table just rendered "—" for every cell. This turns
+-- it into the real thing: theme, preacher, notes, and highlights, one row
+-- per weekend (keyed by cohort + after_class — a weekend spans 2 calendar
+-- events, Friday and Saturday, not one). Recording a report *is* how a
+-- weekend gets marked as having happened; there's no separate boolean.
+--
+-- souls_reached/conversions/followups never had any real data either and
+-- aren't part of what's being tracked now — dropped rather than left
+-- sitting unused alongside the fields that matter.
+--
+-- No unique constraint existed on (cohort_id, after_class) before, so in
+-- principle more than one row could exist per weekend — adding it now
+-- makes "the report for this weekend" an actual 1:1 relationship the app
+-- can upsert against, same as recordOutcome's cohort_id + after_class
+-- equivalent for a lesson's register.
+alter table crusade_report
+  add column theme text,
+  add column preacher text,
+  add column highlights text,
+  add column recorded_by uuid references app_user,
+  add column recorded_at timestamptz;
 
-alter table crusade_completion enable row level security;
+alter table crusade_report drop column souls_reached;
+alter table crusade_report drop column conversions;
+alter table crusade_report drop column followups;
 
--- Same visibility as the crusade calendar chips themselves (everyone with
--- cohort access, including teacher); same write gate as a register
--- correction (facilitator/admin only, leadership stays read-only).
-create policy crusade_completion_read on crusade_completion for select using (has_cohort_access(cohort_id));
-create policy crusade_completion_write on crusade_completion for all
-  using (can_write_pastoral(cohort_id)) with check (can_write_pastoral(cohort_id));
+alter table crusade_report add constraint crusade_report_cohort_after_class_key unique (cohort_id, after_class);

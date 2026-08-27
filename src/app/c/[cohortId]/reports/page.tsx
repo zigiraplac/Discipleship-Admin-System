@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBands, getCohort } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getCrusadeEvents, getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
-import { getCrusadeCompletions } from "@/lib/data/crusades";
+import { getCrusadeReports } from "@/lib/data/crusades";
 import { computePace, lessonStats } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
@@ -21,12 +21,12 @@ export default async function ReportsPage({
   if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, allStudents, crusadeEvents, completedAfterClasses] = await Promise.all([
+  const [cohort, bands, allStudents, crusadeEvents, reportsByAfterClass] = await Promise.all([
     getCohort(supabase, cohortId),
     getBands(supabase),
     getStudents(supabase, cohortId),
     getCrusadeEvents(supabase, cohortId),
-    getCrusadeCompletions(supabase, cohortId),
+    getCrusadeReports(supabase, cohortId),
   ]);
   if (!cohort) notFound();
 
@@ -85,7 +85,7 @@ export default async function ReportsPage({
         cohortName={cohort.name}
         lessons={lessons}
         crusadeEvents={crusadeEvents}
-        completedAfterClasses={completedAfterClasses}
+        reportsByAfterClass={reportsByAfterClass}
         canRecordCrusades={user.role === "facilitator" || user.role === "admin"}
         enrolled={enrolled}
         bands={bands}

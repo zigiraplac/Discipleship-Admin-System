@@ -219,31 +219,18 @@ export interface Database {
           id: string;
           cohort_id: string;
           after_class: number;
-          souls_reached: number | null;
-          conversions: number | null;
-          followups: number | null;
+          theme: string | null;
+          preacher: string | null;
           notes: string | null;
+          highlights: string | null;
+          recorded_by: string | null;
+          recorded_at: string | null;
         };
         Insert: Partial<Database["public"]["Tables"]["crusade_report"]["Row"]> & {
           cohort_id: string;
           after_class: number;
         };
         Update: Partial<Database["public"]["Tables"]["crusade_report"]["Row"]>;
-        Relationships: [];
-      };
-      crusade_completion: {
-        Row: {
-          cohort_id: string;
-          after_class: number;
-          completed_at: string;
-          completed_by: string;
-        };
-        Insert: Partial<Database["public"]["Tables"]["crusade_completion"]["Row"]> & {
-          cohort_id: string;
-          after_class: number;
-          completed_by: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["crusade_completion"]["Row"]>;
         Relationships: [];
       };
       org_setting: {
