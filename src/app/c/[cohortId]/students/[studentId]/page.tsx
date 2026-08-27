@@ -29,17 +29,23 @@ export default async function StudentDetailPage({
   if (!NAV_BY_ROLE[user.role].includes("students")) notFound();
 
   const supabase = await createClient();
-  const cohort = await getCohort(supabase, routeParam);
+  // Only getStudents/getLessonEvents below actually need the resolved
+  // cohort id — everything else here depends on studentId (already known
+  // from params) or nothing at all, so it all runs alongside resolving
+  // the cohort instead of waiting behind it.
+  const [cohort, bands, student, outcomes, caughtUpEventIds] = await Promise.all([
+    getCohort(supabase, routeParam),
+    getBands(supabase),
+    getStudent(supabase, studentId),
+    getOutcomesForStudent(supabase, studentId),
+    getCatchupEventIds(supabase, studentId),
+  ]);
   if (!cohort) notFound();
   const cohortId = cohort.id;
 
-  const [bands, student, students, lessonEvents, outcomes, caughtUpEventIds] = await Promise.all([
-    getBands(supabase),
-    getStudent(supabase, studentId),
+  const [students, lessonEvents] = await Promise.all([
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
-    getOutcomesForStudent(supabase, studentId),
-    getCatchupEventIds(supabase, studentId),
   ]);
 
   if (!student || student.cohortId !== cohortId) notFound();

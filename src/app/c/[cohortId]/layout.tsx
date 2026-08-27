@@ -1,6 +1,3 @@
-import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getCohort } from "@/lib/data/cohorts";
 import { Shell } from "@/components/shell/shell";
 
 export default async function CohortLayout({
@@ -10,14 +7,12 @@ export default async function CohortLayout({
   children: React.ReactNode;
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId: slugOrId } = await params;
-  const supabase = await createClient();
-  // The url segment is a slug now (or, for an old link/notification still
-  // pointing at a raw uuid, that) — resolved once here so Shell and every
-  // page below it keep working with the real cohort id they've always
-  // used. getCohort is cache()-wrapped, so pages that resolve it again
-  // for the same value don't pay for a second round trip.
-  const cohort = await getCohort(supabase, slugOrId);
-  if (!cohort) notFound();
-  return <Shell activeCohortId={cohort.id}>{children}</Shell>;
+  const { cohortId: cohortParam } = await params;
+  // Resolved inside Shell, against the cohort list it already fetches for
+  // the switcher — not here. A separate getCohort() call in this layout
+  // would block Shell (and everything else on the page) behind one extra,
+  // fully sequential database round trip on every single navigation,
+  // since nothing below this component can start until an async layout's
+  // own await resolves.
+  return <Shell cohortParam={cohortParam}>{children}</Shell>;
 }

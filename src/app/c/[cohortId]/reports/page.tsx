@@ -21,12 +21,13 @@ export default async function ReportsPage({
   if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
 
   const supabase = await createClient();
-  const cohort = await getCohort(supabase, routeParam);
+  // getBands doesn't depend on the cohort at all, so it runs alongside
+  // resolving it rather than waiting behind it.
+  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
   if (!cohort) notFound();
   const cohortId = cohort.id;
 
-  const [bands, allStudents, crusadeEvents, reportsByAfterClass] = await Promise.all([
-    getBands(supabase),
+  const [allStudents, crusadeEvents, reportsByAfterClass] = await Promise.all([
     getStudents(supabase, cohortId),
     getCrusadeEvents(supabase, cohortId),
     getCrusadeReports(supabase, cohortId),

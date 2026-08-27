@@ -21,14 +21,13 @@ export default async function LessonsPage({
   const user = await requireUser();
   const supabase = await createClient();
 
-  const cohort = await getCohort(supabase, routeParam);
+  // getBands doesn't depend on the cohort at all, so it runs alongside
+  // resolving it rather than waiting behind it.
+  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
   if (!cohort) notFound();
   const cohortId = cohort.id;
 
-  const [bands, crusadeEvents] = await Promise.all([
-    getBands(supabase),
-    getCrusadeEvents(supabase, cohortId),
-  ]);
+  const crusadeEvents = await getCrusadeEvents(supabase, cohortId);
 
   const today = todayISO();
   let rows: LessonRow[] = [];

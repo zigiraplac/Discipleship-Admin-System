@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, roleLabel } from "@/lib/auth";
@@ -27,10 +28,13 @@ const PAGE_LABELS: Record<string, string> = {
 };
 
 export async function Shell({
-  activeCohortId,
+  cohortParam,
   children,
 }: {
-  activeCohortId: string | null;
+  /** Whatever's in the url for a cohort-scoped page — a slug, or an old
+   * link/notification still pointing at a raw uuid — or null on a global
+   * page (Cohorts, Settings). */
+  cohortParam: string | null;
   children: React.ReactNode;
 }) {
   const user = await requireUser();
@@ -38,12 +42,16 @@ export async function Shell({
   const [cohorts, bands] = await Promise.all([listCohorts(supabase), getBands(supabase)]);
   const today = todayISO();
 
-  // On a global page (Cohorts, Settings) there's no cohort in the URL, so
-  // `activeCohortId` is null — but cohort-scoped nav items (Dashboard,
-  // Lessons, ...) still need *somewhere* to point. Fall back to the
-  // first cohort the user can see; if there are none at all yet, those
-  // items have nowhere to go and get hidden instead (see Sidebar).
-  const activeCohort = activeCohortId ? (cohorts.find((c) => c.id === activeCohortId) ?? null) : null;
+  // Resolved against the list just fetched above, not a separate
+  // getCohort() query — listCohorts() already carries every cohort's own
+  // id and slug, so matching in memory here costs nothing extra and,
+  // more importantly, doesn't add a blocking round trip in front of
+  // Shell (see layout.tsx for why that mattered).
+  const activeCohort = cohortParam
+    ? (cohorts.find((c) => c.slug === cohortParam || c.id === cohortParam) ?? null)
+    : null;
+  if (cohortParam && !activeCohort) notFound();
+  const activeCohortId = activeCohort?.id ?? null;
   // Every link this component builds (nav, search index, switcher) uses
   // the slug — activeCohortId stays a real id purely for the data-fetching
   // below, which needs the actual cohort_id foreign key.
