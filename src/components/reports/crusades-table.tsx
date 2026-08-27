@@ -26,7 +26,11 @@ export function CrusadesTable({
   canRecord: boolean;
   today: string;
 }) {
-  const weekends = crusadeWeekends(crusadeEvents).filter((w) => w.friday <= today);
+  // Every weekend shows here, not just ones that have already happened —
+  // hiding future weekends entirely used to mean this table looked
+  // completely empty for any cohort that hadn't reached its first one
+  // yet, with no visible sign the feature existed at all.
+  const weekends = crusadeWeekends(crusadeEvents);
 
   return (
     <Card className="overflow-hidden">
@@ -45,6 +49,7 @@ export function CrusadesTable({
         <tbody>
           {weekends.map((w) => {
             const report = reportsByAfterClass.get(w.afterClass) ?? null;
+            const upcoming = !report && w.friday > today;
             return (
               <TR key={w.afterClass}>
                 <TD>Class {w.afterClass}</TD>
@@ -63,7 +68,9 @@ export function CrusadesTable({
                       report={report}
                     />
                   ) : (
-                    <Pill tone={report ? "green" : "grey"}>{report ? "Done" : "Not done"}</Pill>
+                    <Pill tone={report ? "green" : upcoming ? "grey" : "magenta"}>
+                      {report ? "Done" : upcoming ? "Upcoming" : "Not done"}
+                    </Pill>
                   )}
                 </TD>
               </TR>
@@ -72,7 +79,7 @@ export function CrusadesTable({
           {weekends.length === 0 && (
             <TR>
               <TD colSpan={5} className="py-6 text-center text-ink-faint">
-                No crusade weekends yet.
+                No crusade weekends in this cohort&rsquo;s schedule.
               </TD>
             </TR>
           )}
