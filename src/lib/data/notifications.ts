@@ -88,7 +88,11 @@ function weekBucket(todayISO: string): number {
 export async function ensureAttentionEscalation(
   db: DB,
   input: {
+    /** The cohort's real id, not its slug — used only for the dedupe key,
+     * which should stay stable even in the (currently impossible, but
+     * cheap to guard against) event a slug ever changed. */
     cohortId: string;
+    cohortSlug: string;
     cohortName: string;
     neverContactedCount: number;
     recipientIds: string[];
@@ -104,7 +108,7 @@ export async function ensureAttentionEscalation(
       kind: "attention_escalation",
       title: `${input.neverContactedCount} student${input.neverContactedCount === 1 ? "" : "s"} in ${input.cohortName} still need a first follow-up`,
       body: "Flagged for attendance, never contacted.",
-      href: `/c/${input.cohortId}/attention`,
+      href: `/c/${input.cohortSlug}/attention`,
       dedupeKey: `escalate:${input.cohortId}:${bucket}`,
     }))
   );
@@ -123,7 +127,9 @@ export async function ensureAttentionEscalation(
 export async function ensureCrusadeReminders(
   db: DB,
   input: {
+    /** The cohort's real id, not its slug — used only for the dedupe key. */
     cohortId: string;
+    cohortSlug: string;
     crusadeEvents: { afterClass: number; date: string }[];
     recipientIds: string[];
     todayISO: string;
@@ -147,7 +153,7 @@ export async function ensureCrusadeReminders(
         kind: "crusade_upcoming",
         title: `Crusade weekend after Class ${afterClass} is coming up`,
         body: daysUntil === 0 ? "Starts today" : daysUntil === 1 ? "Starts tomorrow" : `In ${daysUntil} days`,
-        href: `/c/${input.cohortId}/reports`,
+        href: `/c/${input.cohortSlug}/reports`,
         dedupeKey: `crusade:${input.cohortId}:${afterClass}`,
       }))
     );

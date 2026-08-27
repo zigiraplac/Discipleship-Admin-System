@@ -68,12 +68,14 @@ export default async function DashboardPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [cohort, bands] = await Promise.all([getCohort(supabase, cohortId), getBands(supabase)]);
+  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
   if (!cohort) notFound();
+  const cohortId = cohort.id;
+  const cohortSlug = cohort.slug;
   const today = todayISO();
   const spans = classSpans();
 
@@ -94,7 +96,7 @@ export default async function DashboardPage({
   let heatmapRows: LessonRow[] = [];
 
   const canOpenStudent = NAV_BY_ROLE[user.role].includes("students");
-  const studentHref = canOpenStudent ? (id: string) => `/c/${cohortId}/students/${id}` : null;
+  const studentHref = canOpenStudent ? (id: string) => `/c/${cohortSlug}/students/${id}` : null;
 
   if (user.role === "teacher") {
     const [pub, students] = await Promise.all([
@@ -140,7 +142,7 @@ export default async function DashboardPage({
           title: p.lessonTitle,
           meta: outstandingFlag ? `${p.lessonRef} · no register` : p.lessonRef,
           dateLabel: formatShortDate(p.date),
-          href: `/c/${cohortId}/lessons`,
+          href: `/c/${cohortSlug}/lessons`,
         },
       };
     });
@@ -189,7 +191,7 @@ export default async function DashboardPage({
           title: e.lessonTitle,
           meta: outstandingFlag ? `${e.lessonRef} · no register` : e.lessonRef,
           dateLabel: formatShortDate(e.date),
-          href: `/c/${cohortId}/lessons/${e.eventId}`,
+          href: `/c/${cohortSlug}/lessons/${e.eventId}`,
         },
       };
     });
@@ -241,7 +243,7 @@ export default async function DashboardPage({
     .slice(0, 6)
     .map((i) => i.row);
 
-  const attentionHref = NAV_BY_ROLE[user.role].includes("attention") ? `/c/${cohortId}/attention` : null;
+  const attentionHref = NAV_BY_ROLE[user.role].includes("attention") ? `/c/${cohortSlug}/attention` : null;
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -253,15 +255,33 @@ export default async function DashboardPage({
       <Greeting name={user.name} right={<HealthPill health={health} />} />
 
       <KpiRow>
-        <KpiCard icon={CheckCircle} label="Attendance" value={`${rate}%`} delta={attendanceDelta} deltaTone={attendanceTone} sub={`Target ${bands.activeThreshold}%`} />
+        <KpiCard
+          icon={CheckCircle}
+          label="Attendance"
+          value={`${rate}%`}
+          delta={attendanceDelta}
+          deltaTone={attendanceTone}
+          sub={`Target ${bands.activeThreshold}%`}
+          trackValue={rate}
+          flashDirection="up-good"
+        />
         {attentionRows !== null && (
-          <KpiCard icon={WarningCircle} label="Needs attention" value={atRiskCount} sub={`of ${enrolled} students`} />
+          <KpiCard
+            icon={WarningCircle}
+            label="Needs attention"
+            value={atRiskCount}
+            sub={`of ${enrolled} students`}
+            trackValue={atRiskCount}
+            flashDirection="up-bad"
+          />
         )}
         <KpiCard
           icon={BookOpen}
           label="Lessons recorded"
           value={`${recordedCount}/80`}
           sub={`Class ${classIndex + 1} · ${currentClass.title}`}
+          trackValue={recordedCount}
+          flashDirection="up-good"
         />
         <KpiCard
           icon={Gauge}
@@ -276,15 +296,24 @@ export default async function DashboardPage({
                 ? `Ends ${formatShortDate(finishDate)}`
                 : "vs. this cohort's own ideal plan"
           }
+          trackValue={pace.gap}
+          flashDirection="up-bad"
         />
-        <KpiCard icon={SignOut} label="Left the program" value={leftCount} sub="No longer tracked in these numbers" />
+        <KpiCard
+          icon={SignOut}
+          label="Left the program"
+          value={leftCount}
+          sub="No longer tracked in these numbers"
+          trackValue={leftCount}
+          flashDirection="up-bad"
+        />
       </KpiRow>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <AttendanceChart lessonBars={lessonBars} classBars={classBars} />
           <LessonsHeatmap
-            cohortId={cohortId}
+            cohortSlug={cohortSlug}
             rows={heatmapRows}
             canOpenRegister={user.role === "facilitator" || user.role === "admin"}
           />
@@ -294,7 +323,7 @@ export default async function DashboardPage({
 
       {attentionRows !== null && (
         <NeedsAttentionTable
-          cohortId={cohortId}
+          cohortSlug={cohortSlug}
           rows={attentionRows}
           bands={bands}
           attentionHref={attentionHref}

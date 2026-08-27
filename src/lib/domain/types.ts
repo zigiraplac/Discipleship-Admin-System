@@ -26,6 +26,9 @@ export interface ClassRef {
 
 export interface Cohort {
   id: string;
+  /** Used in every URL from here on (/c/{slug}/...) instead of `id` — a
+   * cohort's own name, kebab-cased, generated once at creation. */
+  slug: string;
   name: string;
   city: string | null;
   startDate: string; // ISO date

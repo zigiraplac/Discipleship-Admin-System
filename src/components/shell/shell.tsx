@@ -43,7 +43,11 @@ export async function Shell({
   // Lessons, ...) still need *somewhere* to point. Fall back to the
   // first cohort the user can see; if there are none at all yet, those
   // items have nowhere to go and get hidden instead (see Sidebar).
-  const linkCohortId = activeCohortId ?? cohorts[0]?.id ?? null;
+  const activeCohort = activeCohortId ? (cohorts.find((c) => c.id === activeCohortId) ?? null) : null;
+  // Every link this component builds (nav, search index, switcher) uses
+  // the slug — activeCohortId stays a real id purely for the data-fetching
+  // below, which needs the actual cohort_id foreign key.
+  const linkCohortSlug = activeCohort?.slug ?? cohorts[0]?.slug ?? null;
 
   const allowedNav = new Set(
     {
@@ -60,14 +64,14 @@ export async function Shell({
   // repeated for cohorts nobody's currently looking at. It's now fetched
   // client-side, on demand, the first time the dropdown is actually
   // opened (getCohortQuickStats, lib/actions/cohorts.ts).
-  const switcherItems: CohortSwitcherItem[] = cohorts.map((c) => ({ id: c.id, name: c.name }));
+  const switcherItems: CohortSwitcherItem[] = cohorts.map((c) => ({ id: c.id, slug: c.slug, name: c.name }));
 
   let badges: { lessons?: number; attention?: number } = {};
   const searchIndex = {
-    pages: NAV_ITEMS.filter((n) => allowedNav.has(n.id) && (!n.cohortScoped || linkCohortId)).map((n) => ({
+    pages: NAV_ITEMS.filter((n) => allowedNav.has(n.id) && (!n.cohortScoped || linkCohortSlug)).map((n) => ({
       kind: "PAGE" as const,
       label: PAGE_LABELS[n.id],
-      href: n.href(linkCohortId),
+      href: n.href(linkCohortSlug),
     })),
     students: [] as SearchResultItem[],
     lessons: [] as SearchResultItem[],
@@ -81,7 +85,7 @@ export async function Shell({
       searchIndex.lessons = pub.map((p) => ({
         kind: "LESSON",
         label: p.lessonTitle,
-        href: `/c/${activeCohortId}/lessons`,
+        href: `/c/${linkCohortSlug}/lessons`,
         meta: p.lessonRef,
       }));
     } else {
@@ -114,7 +118,7 @@ export async function Shell({
         searchIndex.students = agg.roster.map((s) => ({
           kind: "STUDENT",
           label: s.fullName,
-          href: `/c/${activeCohortId}/students/${s.id}`,
+          href: `/c/${linkCohortSlug}/students/${s.id}`,
           meta: `${s.rate}%`,
         }));
       }
@@ -122,7 +126,7 @@ export async function Shell({
         searchIndex.lessons = lessonEvents.map((e) => ({
           kind: "LESSON",
           label: e.lessonTitle,
-          href: `/c/${activeCohortId}/lessons/${e.eventId}`,
+          href: `/c/${linkCohortSlug}/lessons/${e.eventId}`,
           meta: e.lessonRef,
         }));
       }
@@ -136,13 +140,13 @@ export async function Shell({
       <PageHeadProvider>
         <ToastProvider>
           <div className="flex min-h-screen bg-page">
-            <Sidebar role={user.role} activeCohortId={linkCohortId} badges={badges} className="hidden lg:flex" />
+            <Sidebar role={user.role} activeCohortSlug={linkCohortSlug} badges={badges} className="hidden lg:flex" />
             <div className="flex min-w-0 flex-1 flex-col">
               <TopBar
                 role={user.role}
                 cohorts={switcherItems}
                 activeCohortId={activeCohortId}
-                navCohortId={linkCohortId}
+                navCohortSlug={linkCohortSlug}
                 userName={user.name}
                 roleLabel={roleLabel(user.role)}
                 notifications={notifications}

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 import { createNotifications } from "@/lib/data/notifications";
+import { getCohort } from "@/lib/data/cohorts";
 
 export interface UpdateStudentInput {
   studentId: string;
@@ -61,6 +62,8 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
   // them — an admin edit here is exactly the kind of "something changed
   // that I share access to" event worth surfacing, not a routine save.
   const admin = createAdminClient();
+  const cohort = await getCohort(supabase, input.cohortId);
+  const cohortSlug = cohort?.slug ?? input.cohortId;
   const { data: members } = await admin
     .from("cohort_member")
     .select("user_id")
@@ -75,12 +78,12 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
         kind: "student_updated",
         title: `${fullName}'s details were updated`,
         body: "An admin updated their profile.",
-        href: `/c/${input.cohortId}/students/${input.studentId}`,
+        href: `/c/${cohortSlug}/students/${input.studentId}`,
       }))
     );
   }
 
-  const base = `/c/${input.cohortId}`;
+  const base = `/c/${cohortSlug}`;
   revalidatePath(`${base}/students`);
   revalidatePath(`${base}/students/${input.studentId}`);
   revalidatePath(`${base}/attention`);

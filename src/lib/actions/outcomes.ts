@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
 import { createNotifications } from "@/lib/data/notifications";
+import { getCohort } from "@/lib/data/cohorts";
 import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
 import type { Json } from "@/lib/supabase/database.types";
 import type { OutcomeKind } from "@/lib/domain/types";
@@ -65,6 +66,9 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
     after: { kind: input.kind, cohortId: input.cohortId } as unknown as Json,
   });
 
+  const cohort = await getCohort(supabase, input.cohortId);
+  const cohortSlug = cohort?.slug ?? input.cohortId;
+
   const [{ data: members }] = await Promise.all([
     admin.from("cohort_member").select("user_id").eq("cohort_id", input.cohortId).neq("user_id", user.id),
   ]);
@@ -77,12 +81,12 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
         kind: "outcome_recorded",
         title: `${student.full_name}: ${outcomeShortLabel(input.kind)}`,
         body: "An outcome was just recorded for them.",
-        href: `/c/${input.cohortId}/students/${input.studentId}`,
+        href: `/c/${cohortSlug}/students/${input.studentId}`,
       }))
     );
   }
 
-  const base = `/c/${input.cohortId}`;
+  const base = `/c/${cohortSlug}`;
   revalidatePath(base);
   revalidatePath(`${base}/attention`);
   revalidatePath(`${base}/students`);

@@ -25,6 +25,7 @@ function daysAgo(iso: string): number {
 
 export function AttentionCard({
   cohortId,
+  cohortSlug,
   student,
   outcome,
   sinceProgress,
@@ -33,6 +34,7 @@ export function AttentionCard({
   canRecord,
 }: {
   cohortId: string;
+  cohortSlug: string;
   student: StudentAggregate;
   outcome: Outcome | null;
   /** Only meaningful when `outcome.kind === "catchup"` — lets every
@@ -86,7 +88,7 @@ export function AttentionCard({
         <Avatar name={student.fullName} size="lg" />
         <div className="min-w-0 flex-1">
           <Link
-            href={`/c/${cohortId}/students/${student.id}`}
+            href={`/c/${cohortSlug}/students/${student.id}`}
             className="block truncate text-[14px] font-bold text-ink hover:underline"
           >
             {student.fullName}
@@ -144,7 +146,7 @@ export function AttentionCard({
             lessonEvents={lessonEvents}
             variant="compact"
             maxVisible={2}
-            viewAllHref={`/c/${cohortId}/students/${student.id}#catchup-checklist`}
+            viewAllHref={`/c/${cohortSlug}/students/${student.id}#catchup-checklist`}
             label="Tick a lesson once it's made up"
           />
         </div>
@@ -183,7 +185,7 @@ export function AttentionCard({
           </a>
         )}
         <Link
-          href={`/c/${cohortId}/students/${student.id}`}
+          href={`/c/${cohortSlug}/students/${student.id}`}
           className={buttonVariants({ variant: "secondary", size: "sm", className: "flex-1" })}
         >
           View record

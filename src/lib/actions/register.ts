@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
+import { getCohort } from "@/lib/data/cohorts";
 import { todayISO } from "@/lib/utils";
 import type { Database, Json } from "@/lib/supabase/database.types";
 
@@ -99,7 +100,8 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
     });
   }
 
-  const base = `/c/${input.cohortId}`;
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(base);
   revalidatePath(`${base}/lessons`);
   revalidatePath(`${base}/lessons/${input.eventId}`);

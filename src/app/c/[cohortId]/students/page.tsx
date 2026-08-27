@@ -17,19 +17,21 @@ export default async function StudentsPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   if (!NAV_BY_ROLE[user.role].includes("students")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, students, lessonEvents, outcomes] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+
+  const [bands, students, lessonEvents, outcomes] = await Promise.all([
     getBands(supabase),
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
     getOutcomesForCohort(supabase, cohortId),
   ]);
-  if (!cohort) notFound();
 
   const agg = aggregateCohort(students, lessonEvents, bands, todayISO());
   const latest = latestByStudent(outcomes);
@@ -41,7 +43,7 @@ export default async function StudentsPage({
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Students" subtitle={`${cohort.name} · ${activeCount} enrolled`} />
       <Card className="overflow-hidden">
-        <StudentsTable cohortId={cohortId} roster={agg.roster} outcomesByStudent={outcomesByStudent} bands={bands} />
+        <StudentsTable cohortId={cohortId} cohortSlug={cohort.slug} roster={agg.roster} outcomesByStudent={outcomesByStudent} bands={bands} />
       </Card>
     </div>
   );

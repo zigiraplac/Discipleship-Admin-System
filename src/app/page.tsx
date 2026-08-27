@@ -7,5 +7,5 @@ export default async function RootPage() {
   await requireUser();
   const supabase = await createClient();
   const cohorts = await listCohorts(supabase);
-  redirect(cohorts.length ? `/c/${cohorts[0].id}` : "/cohorts");
+  redirect(cohorts.length ? `/c/${cohorts[0].slug}` : "/cohorts");
 }

@@ -21,19 +21,21 @@ export default async function AttentionPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   if (!NAV_BY_ROLE[user.role].includes("attention")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, allStudents, lessonEvents, outcomes] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+
+  const [bands, allStudents, lessonEvents, outcomes] = await Promise.all([
     getBands(supabase),
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
     getOutcomesForCohort(supabase, cohortId),
   ]);
-  if (!cohort) notFound();
 
   // A student marked "left" is done being tracked here — Attention exists
   // to flag an open problem, and once someone's gone there's nothing left
@@ -85,6 +87,7 @@ export default async function AttentionPage({
           key={student.id}
           student={student}
           cohortId={cohortId}
+          cohortSlug={cohort.slug}
           lessonEvents={lessonEvents}
           latest={latest}
           bands={bands}
@@ -154,6 +157,7 @@ export default async function AttentionPage({
 function StudentCard({
   student,
   cohortId,
+  cohortSlug,
   lessonEvents,
   latest,
   bands,
@@ -161,6 +165,7 @@ function StudentCard({
 }: {
   student: StudentAggregate;
   cohortId: string;
+  cohortSlug: string;
   lessonEvents: LessonEventView[];
   latest: Map<string, Outcome>;
   bands: Bands;
@@ -172,6 +177,7 @@ function StudentCard({
   return (
     <AttentionCard
       cohortId={cohortId}
+      cohortSlug={cohortSlug}
       student={student}
       outcome={outcome}
       sinceProgress={sinceProgress}

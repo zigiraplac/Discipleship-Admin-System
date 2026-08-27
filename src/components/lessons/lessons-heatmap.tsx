@@ -36,12 +36,12 @@ interface HeatCell {
  * Lessons table instead.
  */
 export function LessonsHeatmap({
-  cohortId,
+  cohortSlug,
   rows,
   canOpenRegister,
   compact = false,
 }: {
-  cohortId: string;
+  cohortSlug: string;
   rows: LessonRow[];
   canOpenRegister: boolean;
   /** Drops the legend and shortens the header for the narrow dashboard
@@ -164,7 +164,7 @@ export function LessonsHeatmap({
                 return (
                   <Link
                     key={i}
-                    href={`/c/${cohortId}/lessons/${row.eventId}`}
+                    href={`/c/${cohortSlug}/lessons/${row.eventId}`}
                     title={title}
                     style={style}
                     className={className}

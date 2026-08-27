@@ -74,10 +74,12 @@ function summaryText(classRows: LessonRow[], filter: "all" | LessonRowStatus): s
 
 export function LessonsBrowser({
   cohortId,
+  cohortSlug,
   role,
   rows,
 }: {
   cohortId: string;
+  cohortSlug: string;
   role: Role;
   rows: LessonRow[];
 }) {
@@ -220,7 +222,7 @@ export function LessonsBrowser({
                               {row.status === "missing" && canOpenRegister && (
                                 <PostponeButton cohortId={cohortId} eventId={row.eventId} lessonRef={row.lessonRef} />
                               )}
-                              <RowAction cohortId={cohortId} row={row} canOpenRegister={canOpenRegister} />
+                              <RowAction cohortSlug={cohortSlug} row={row} canOpenRegister={canOpenRegister} />
                             </span>
                           </TD>
                         </TR>
@@ -267,18 +269,18 @@ function StatusDot({ status, isCurrent }: { status: LessonRowStatus; isCurrent: 
 }
 
 function RowAction({
-  cohortId,
+  cohortSlug,
   row,
   canOpenRegister,
 }: {
-  cohortId: string;
+  cohortSlug: string;
   row: LessonRow;
   canOpenRegister: boolean;
 }) {
   const label =
     row.status === "missing" ? "Take register" : row.status === "recorded" ? "View" : "Open";
   const variant = row.status === "missing" ? "primary" : "outlineAccent";
-  const href = `/c/${cohortId}/lessons/${row.eventId}`;
+  const href = `/c/${cohortSlug}/lessons/${row.eventId}`;
 
   if (!canOpenRegister) {
     return (

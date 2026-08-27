@@ -40,7 +40,7 @@ export async function GET(request: Request) {
   const today = todayISO();
 
   const [{ data: cohorts, error: cohortErr }, { data: broadUsers, error: userErr }, bands] = await Promise.all([
-    admin.from("cohort").select("id, name").eq("status", "running"),
+    admin.from("cohort").select("id, slug, name").eq("status", "running"),
     admin.from("app_user").select("id").in("role", ["admin", "leadership"]),
     getBands(admin),
   ]);
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
       if (neverContacted > 0) {
         await ensureAttentionEscalation(admin, {
           cohortId: cohort.id,
+          cohortSlug: cohort.slug,
           cohortName: cohort.name,
           neverContactedCount: neverContacted,
           recipientIds,
@@ -95,6 +96,7 @@ export async function GET(request: Request) {
 
       await ensureCrusadeReminders(admin, {
         cohortId: cohort.id,
+        cohortSlug: cohort.slug,
         crusadeEvents: crusadeEvents.map((e) => ({ afterClass: e.afterClass, date: e.date })),
         recipientIds,
         todayISO: today,

@@ -16,17 +16,20 @@ export default async function RegisterPage({
 }: {
   params: Promise<{ cohortId: string; eventId: string }>;
 }) {
-  const { cohortId, eventId } = await params;
+  const { cohortId: routeParam, eventId } = await params;
   const user = await requireUser();
 
   // Teacher's Lessons is read-only — no register access, no drilling in.
+  // routeParam is already whatever's in the url (slug or uuid), safe to
+  // redirect back to as-is without resolving the cohort first.
   if (user.role === "teacher") {
-    redirect(`/c/${cohortId}/lessons`);
+    redirect(`/c/${routeParam}/lessons`);
   }
 
   const supabase = await createClient();
-  const [cohort, bands] = await Promise.all([getCohort(supabase, cohortId), getBands(supabase)]);
+  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
   if (!cohort) notFound();
+  const cohortId = cohort.id;
 
   const [allStudents, lessonEvents] = await Promise.all([
     getStudents(supabase, cohortId),
@@ -74,7 +77,7 @@ export default async function RegisterPage({
   const totalPresentExcludingThis = agg.totalPresent - (thisLessonStats?.present ?? 0);
 
   const dateLong = formatLongDate(ev.date);
-  const backHref = `/c/${cohortId}/lessons`;
+  const backHref = `/c/${cohort.slug}/lessons`;
 
   return (
     <div className="flex flex-col gap-4">
@@ -90,6 +93,7 @@ export default async function RegisterPage({
 
       <RegisterForm
         cohortId={cohortId}
+        cohortSlug={cohort.slug}
         eventId={ev.eventId}
         lessonTitle={ev.lessonTitle}
         lessonRef={ev.lessonRef}

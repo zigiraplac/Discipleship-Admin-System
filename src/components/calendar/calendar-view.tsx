@@ -24,7 +24,7 @@ const FILTER_OPTIONS: SegmentedOption<CalendarFilter>[] = [
 ];
 
 export function CalendarView({
-  cohortId,
+  cohortSlug,
   lessonEvents,
   crusadeEvents,
   birthdays,
@@ -34,7 +34,7 @@ export function CalendarView({
   canOpenStudent,
   today,
 }: {
-  cohortId: string;
+  cohortSlug: string;
   lessonEvents: CalendarLessonEvent[];
   crusadeEvents: CrusadeEventView[];
   birthdays: BirthdayEntry[];
@@ -98,7 +98,7 @@ export function CalendarView({
         </div>
 
         <CalendarGrid
-          cohortId={cohortId}
+          cohortSlug={cohortSlug}
           year={viewYear}
           month={viewMonth}
           today={today}

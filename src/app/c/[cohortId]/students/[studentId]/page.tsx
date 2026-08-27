@@ -24,13 +24,16 @@ export default async function StudentDetailPage({
 }: {
   params: Promise<{ cohortId: string; studentId: string }>;
 }) {
-  const { cohortId, studentId } = await params;
+  const { cohortId: routeParam, studentId } = await params;
   const user = await requireUser();
   if (!NAV_BY_ROLE[user.role].includes("students")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, student, students, lessonEvents, outcomes, caughtUpEventIds] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+
+  const [bands, student, students, lessonEvents, outcomes, caughtUpEventIds] = await Promise.all([
     getBands(supabase),
     getStudent(supabase, studentId),
     getStudents(supabase, cohortId),
@@ -39,7 +42,7 @@ export default async function StudentDetailPage({
     getCatchupEventIds(supabase, studentId),
   ]);
 
-  if (!cohort || !student || student.cohortId !== cohortId) notFound();
+  if (!student || student.cohortId !== cohortId) notFound();
 
   const agg = aggregateCohort(students, lessonEvents, bands, todayISO());
   const studentAgg = agg.roster.find((s) => s.id === studentId);
@@ -53,7 +56,7 @@ export default async function StudentDetailPage({
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title={student.fullName} subtitle={cohort.name} />
-      <Link href={`/c/${cohortId}/students`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent-700 hover:underline">
+      <Link href={`/c/${cohort.slug}/students`} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent-700 hover:underline">
         <ArrowLeft size={14} /> All students
       </Link>
 

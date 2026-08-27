@@ -20,6 +20,7 @@ import type { NotificationView } from "@/lib/data/notifications";
 
 export interface CohortSwitcherItem {
   id: string;
+  slug: string;
   name: string;
 }
 
@@ -27,7 +28,7 @@ export function TopBar({
   role,
   cohorts,
   activeCohortId,
-  navCohortId,
+  navCohortSlug,
   userName,
   roleLabel,
   notifications,
@@ -36,10 +37,10 @@ export function TopBar({
   role: Role;
   cohorts: CohortSwitcherItem[];
   activeCohortId: string | null;
-  /** Falls back to the first visible cohort when `activeCohortId` is null
+  /** Falls back to the first visible cohort when there's no active one
    * (a global page) — same resolution Shell already does for the desktop
    * sidebar, so the mobile drawer's nav behaves identically. */
-  navCohortId: string | null;
+  navCohortSlug: string | null;
   userName: string;
   roleLabel: string;
   notifications: NotificationView[];
@@ -64,7 +65,7 @@ export function TopBar({
 
   return (
     <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-4 py-3.5 sm:gap-4 sm:px-[26px]">
-      <MobileNav role={role} activeCohortId={navCohortId} badges={badges} />
+      <MobileNav role={role} activeCohortSlug={navCohortSlug} badges={badges} />
 
       <div className="min-w-0">
         <div className="truncate text-[17px] font-bold leading-tight text-ink">{title}</div>
@@ -86,7 +87,7 @@ export function TopBar({
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => router.push(`/c/${c.id}`)}
+                  onClick={() => router.push(`/c/${c.slug}`)}
                   className="flex w-full items-center gap-2.5 px-3.5 py-[11px] text-left hover:bg-hover"
                   style={{
                     background: c.id === activeCohortId ? "var(--color-hover)" : undefined,

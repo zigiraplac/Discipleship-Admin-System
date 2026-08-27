@@ -13,7 +13,7 @@ import type { Icon } from "@phosphor-icons/react";
 export interface NavItem {
   id: string;
   label: string;
-  href: (cohortId: string | null) => string;
+  href: (cohortSlug: string | null) => string;
   icon: Icon;
   cohortScoped: boolean;
 }

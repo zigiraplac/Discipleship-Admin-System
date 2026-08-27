@@ -29,11 +29,13 @@ const FILTER_OPTIONS: SegmentedOption<Filter>[] = [
 
 export function StudentsTable({
   cohortId,
+  cohortSlug,
   roster,
   outcomesByStudent,
   bands,
 }: {
   cohortId: string;
+  cohortSlug: string;
   roster: StudentAggregate[];
   outcomesByStudent: Record<string, OutcomeKind>;
   bands: Bands;
@@ -137,7 +139,7 @@ export function StudentsTable({
                 </TD>
                 <TD align="right">
                   <Link
-                    href={`/c/${cohortId}/students/${s.id}`}
+                    href={`/c/${cohortSlug}/students/${s.id}`}
                     className={buttonVariants({ variant: "secondary", size: "row" })}
                   >
                     Open

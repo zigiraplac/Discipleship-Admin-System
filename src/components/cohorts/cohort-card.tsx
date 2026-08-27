@@ -70,7 +70,7 @@ export function CohortCard({
         </div>
       </div>
 
-      <Link href={`/c/${cohort.id}`} className={cn(buttonVariants({ variant: "outlineAccent" }), "w-full")}>
+      <Link href={`/c/${cohort.slug}`} className={cn(buttonVariants({ variant: "outlineAccent" }), "w-full")}>
         Open cohort
       </Link>
     </Card>

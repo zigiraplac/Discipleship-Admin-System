@@ -32,6 +32,7 @@ export interface LeftRosterEntry {
 
 export interface RegisterFormProps {
   cohortId: string;
+  cohortSlug: string;
   eventId: string;
   lessonTitle: string;
   lessonRef: string;
@@ -63,6 +64,7 @@ export interface RegisterFormProps {
 
 export function RegisterForm({
   cohortId,
+  cohortSlug,
   eventId,
   lessonTitle,
   lessonRef,
@@ -148,7 +150,7 @@ export function RegisterForm({
           projectedPct ?? 0
         }%.`
       );
-      router.push(`/c/${cohortId}/lessons`);
+      router.push(`/c/${cohortSlug}/lessons`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the register.");
       setIsSaving(false);

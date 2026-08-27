@@ -8,12 +8,12 @@ import { buttonVariants } from "@/components/ui/button";
 import type { StudentAggregate } from "@/lib/domain/types";
 
 export function NeedsAttentionTable({
-  cohortId,
+  cohortSlug,
   rows,
   bands,
   attentionHref,
 }: {
-  cohortId: string;
+  cohortSlug: string;
   rows: StudentAggregate[];
   bands: { activeThreshold: number; helpThreshold: number };
   /** null for a role that can't open the Attention page (e.g. leadership)
@@ -69,7 +69,7 @@ export function NeedsAttentionTable({
                 <StatusPill status={s.status} />
               </TD>
               <TD align="right">
-                <Link href={`/c/${cohortId}/students/${s.id}`} className={buttonVariants({ variant: "secondary", size: "row" })}>
+                <Link href={`/c/${cohortSlug}/students/${s.id}`} className={buttonVariants({ variant: "secondary", size: "row" })}>
                   Open
                 </Link>
               </TD>

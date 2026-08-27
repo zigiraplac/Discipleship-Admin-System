@@ -17,16 +17,18 @@ export default async function LessonsPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   const supabase = await createClient();
 
-  const [cohort, bands, crusadeEvents] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+
+  const [bands, crusadeEvents] = await Promise.all([
     getBands(supabase),
     getCrusadeEvents(supabase, cohortId),
   ]);
-  if (!cohort) notFound();
 
   const today = todayISO();
   let rows: LessonRow[] = [];
@@ -85,7 +87,7 @@ export default async function LessonsPage({
         />
       </StatGrid>
 
-      <LessonsBrowser cohortId={cohortId} role={user.role} rows={rows} />
+      <LessonsBrowser cohortId={cohortId} cohortSlug={cohort.slug} role={user.role} rows={rows} />
     </div>
   );
 }

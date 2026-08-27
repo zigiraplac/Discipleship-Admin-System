@@ -93,7 +93,7 @@ function CohortRow({
   return (
     <div className="flex items-center gap-4 border-t border-divider px-[18px] py-3 first:border-t-0">
       <div className="min-w-0 flex-[1.4]">
-        <Link href={`/c/${cohort.id}`} className="truncate text-[13px] font-semibold text-ink hover:underline">
+        <Link href={`/c/${cohort.slug}`} className="truncate text-[13px] font-semibold text-ink hover:underline">
           {cohort.name}
         </Link>
         <div className="truncate text-[11px] text-ink-muted">{cohort.city ?? "—"}</div>

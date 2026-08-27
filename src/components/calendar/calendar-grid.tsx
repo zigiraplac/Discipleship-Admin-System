@@ -14,7 +14,7 @@ function daysInMonth(y: number, m: number): number {
 }
 
 export function CalendarGrid({
-  cohortId,
+  cohortSlug,
   year,
   month,
   today,
@@ -26,7 +26,7 @@ export function CalendarGrid({
   hasLessonsNav,
   canOpenStudent,
 }: {
-  cohortId: string;
+  cohortSlug: string;
   year: number;
   month: number; // 1-based
   today: string;
@@ -44,8 +44,8 @@ export function CalendarGrid({
   const cellCount = Math.ceil((firstWeekday + total) / 7) * 7;
 
   function lessonHref(eventId: string): string | null {
-    if (canOpenLesson) return `/c/${cohortId}/lessons/${eventId}`;
-    if (hasLessonsNav) return `/c/${cohortId}/lessons`;
+    if (canOpenLesson) return `/c/${cohortSlug}/lessons/${eventId}`;
+    if (hasLessonsNav) return `/c/${cohortSlug}/lessons`;
     return null;
   }
 
@@ -129,7 +129,7 @@ export function CalendarGrid({
               tone: "yellow",
               title: b.fullName,
               detail: "Birthday",
-              href: canOpenStudent ? `/c/${cohortId}/students/${b.id}` : null,
+              href: canOpenStudent ? `/c/${cohortSlug}/students/${b.id}` : null,
             });
           }
 

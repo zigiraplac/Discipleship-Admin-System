@@ -5,6 +5,7 @@ import { DEFAULT_BANDS } from "@/lib/domain/types";
 
 interface CohortRow {
   id: string;
+  slug: string;
   name: string;
   city: string | null;
   start_date: string;
@@ -15,7 +16,9 @@ interface CohortRow {
 }
 
 const COHORT_SELECT =
-  "id, name, city, start_date, teaching_days, status, lessons_per_session, created_at";
+  "id, slug, name, city, start_date, teaching_days, status, lessons_per_session, created_at";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * `cohort.facilitator_id` looks like the obvious source for this but is
@@ -48,6 +51,7 @@ async function getFacilitatorNamesByCohort(db: DB, cohortIds: string[]): Promise
 function mapCohortRow(row: CohortRow, facilitatorNames: string[]): Cohort {
   return {
     id: row.id,
+    slug: row.slug,
     name: row.name,
     city: row.city,
     startDate: row.start_date,
@@ -76,16 +80,39 @@ export const listCohorts = cache(async function listCohorts(db: DB): Promise<Coh
   return rows.map((row) => mapCohortRow(row, facilitatorsByCohort.get(row.id) ?? []));
 });
 
-/** Cached per request — every cohort-scoped page calls this for the
- * active cohort, same as Shell does for its own header/nav needs. */
-export const getCohort = cache(async function getCohort(db: DB, cohortId: string): Promise<Cohort | null> {
-  const [{ data, error }, facilitatorsByCohort] = await Promise.all([
-    db.from("cohort").select(COHORT_SELECT).eq("id", cohortId).maybeSingle(),
-    getFacilitatorNamesByCohort(db, [cohortId]),
-  ]);
-  if (error) throw error;
-  if (!data) return null;
-  return mapCohortRow(data as unknown as CohortRow, facilitatorsByCohort.get(cohortId) ?? []);
+/**
+ * Cached per request — every cohort-scoped page calls this for the active
+ * cohort, same as Shell does for its own header/nav needs.
+ *
+ * `slugOrId` is whatever's in the URL. Every link the app generates now
+ * uses the slug, but a raw uuid still resolves too — notification rows
+ * already sitting in people's inboxes have a uuid baked into their stored
+ * href, and old bookmarks shouldn't 404 just because this shipped. Tries
+ * the slug first (the common case going forward); falls back to an id
+ * lookup only when the value is actually shaped like a uuid.
+ */
+export const getCohort = cache(async function getCohort(db: DB, slugOrId: string): Promise<Cohort | null> {
+  const { data: bySlug, error: slugErr } = await db
+    .from("cohort")
+    .select(COHORT_SELECT)
+    .eq("slug", slugOrId)
+    .maybeSingle();
+  if (slugErr) throw slugErr;
+
+  let row = bySlug;
+  if (!row && UUID_RE.test(slugOrId)) {
+    const { data: byId, error: idErr } = await db
+      .from("cohort")
+      .select(COHORT_SELECT)
+      .eq("id", slugOrId)
+      .maybeSingle();
+    if (idErr) throw idErr;
+    row = byId;
+  }
+  if (!row) return null;
+
+  const facilitatorsByCohort = await getFacilitatorNamesByCohort(db, [row.id]);
+  return mapCohortRow(row as unknown as CohortRow, facilitatorsByCohort.get(row.id) ?? []);
 });
 
 /** Cached per request — nearly every page fetches the org's band

@@ -29,17 +29,20 @@ export default async function CalendarPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   if (!NAV_BY_ROLE[user.role].includes("calendar")) notFound();
 
   const supabase = await createClient();
-  const [cohort, allStudents, crusadeEvents] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+  const cohortSlug = cohort.slug;
+
+  const [allStudents, crusadeEvents] = await Promise.all([
     getStudents(supabase, cohortId),
     getCrusadeEvents(supabase, cohortId),
   ]);
-  if (!cohort) notFound();
 
   // Left students stop counting toward the cohort's own numbers, and stop
   // showing up as upcoming birthday reminders — same policy as everywhere
@@ -87,8 +90,8 @@ export default async function CalendarPage({
     }));
 
   function lessonHref(eventId: string): string | null {
-    if (canOpenLesson) return `/c/${cohortId}/lessons/${eventId}`;
-    if (hasLessonsNav) return `/c/${cohortId}/lessons`;
+    if (canOpenLesson) return `/c/${cohortSlug}/lessons/${eventId}`;
+    if (hasLessonsNav) return `/c/${cohortSlug}/lessons`;
     return null;
   }
 
@@ -172,7 +175,7 @@ export default async function CalendarPage({
         title: b.name,
         meta: "Birthday",
         dateLabel: dayLabel(b.daysUntil, formatBirthdayDate(b.day, b.month)),
-        href: canOpenStudent ? `/c/${cohortId}/students/${b.studentId}` : null,
+        href: canOpenStudent ? `/c/${cohortSlug}/students/${b.studentId}` : null,
       },
     });
   }
@@ -183,7 +186,7 @@ export default async function CalendarPage({
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Calendar" subtitle={cohort.name} />
       <CalendarView
-        cohortId={cohortId}
+        cohortSlug={cohortSlug}
         lessonEvents={lessonEvents}
         crusadeEvents={crusadeEvents}
         birthdays={birthdays}

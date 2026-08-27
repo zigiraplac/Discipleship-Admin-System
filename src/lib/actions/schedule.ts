@@ -7,6 +7,7 @@ import { requireRole } from "@/lib/auth";
 import { curriculumScheduleItems, placeSchedule, dayAfter, type ScheduleItem } from "@/lib/domain/generator";
 import { lessonAt } from "@/lib/domain/curriculum";
 import { createNotifications } from "@/lib/data/notifications";
+import { getCohort } from "@/lib/data/cohorts";
 
 export interface PostponeLessonResult {
   shiftedCount: number;
@@ -145,6 +146,9 @@ export async function postponeLesson(input: {
     after: { anchor, shiftedCount: updates.length },
   });
 
+  const cohortForLinks = await getCohort(admin, input.cohortId);
+  const cohortSlug = cohortForLinks?.slug ?? input.cohortId;
+
   const { data: members } = await admin
     .from("cohort_member")
     .select("user_id")
@@ -164,12 +168,12 @@ export async function postponeLesson(input: {
           updates.length > 1
             ? `${updates.length} lessons and crusade days shifted forward.`
             : "It was shifted to the next study day.",
-        href: `/c/${input.cohortId}/lessons`,
+        href: `/c/${cohortSlug}/lessons`,
       }))
     );
   }
 
-  const base = `/c/${input.cohortId}`;
+  const base = `/c/${cohortSlug}`;
   revalidatePath(base);
   revalidatePath(`${base}/lessons`);
   revalidatePath(`${base}/calendar`);

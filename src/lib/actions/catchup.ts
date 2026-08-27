@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
+import { getCohort } from "@/lib/data/cohorts";
 import type { Json } from "@/lib/supabase/database.types";
 
 export interface ToggleLessonCatchupInput {
@@ -113,7 +114,11 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
     after: { student_id: input.studentId } as unknown as Json,
   });
 
-  const base = `/c/${input.cohortId}`;
+  // revalidatePath needs the actual url the app now serves (the slug),
+  // not the id this action itself operates on — otherwise it'd silently
+  // invalidate a path nobody's browser is on.
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(base);
   revalidatePath(`${base}/lessons`);
   revalidatePath(`${base}/lessons/${input.eventId}`);

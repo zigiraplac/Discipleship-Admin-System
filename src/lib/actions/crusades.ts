@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
+import { getCohort } from "@/lib/data/cohorts";
 
 export interface SaveCrusadeReportInput {
   cohortId: string;
@@ -39,7 +40,8 @@ export async function saveCrusadeReport(input: SaveCrusadeReportInput): Promise<
   );
   if (error) throw new Error("Couldn't save this report. Please try again.");
 
-  const base = `/c/${input.cohortId}`;
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(`${base}/reports`);
   revalidatePath(`${base}/calendar`);
 }
@@ -56,7 +58,8 @@ export async function clearCrusadeReport(input: { cohortId: string; afterClass: 
     .eq("after_class", input.afterClass);
   if (error) throw new Error("Couldn't clear this report. Please try again.");
 
-  const base = `/c/${input.cohortId}`;
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(`${base}/reports`);
   revalidatePath(`${base}/calendar`);
 }

@@ -55,6 +55,7 @@ export interface Database {
       cohort: {
         Row: {
           id: string;
+          slug: string;
           name: string;
           city: string | null;
           start_date: string;

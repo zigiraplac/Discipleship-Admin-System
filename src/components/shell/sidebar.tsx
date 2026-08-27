@@ -18,10 +18,10 @@ function navLabel(item: NavItem, role: Role): string {
   return item.label;
 }
 
-function isActive(id: string, pathname: string, cohortId: string | null): boolean {
-  if (id === "dashboard") return pathname === `/c/${cohortId}`;
+function isActive(id: string, pathname: string, cohortSlug: string | null): boolean {
+  if (id === "dashboard") return pathname === `/c/${cohortSlug}`;
   if (["lessons", "students", "attention", "calendar", "reports"].includes(id)) {
-    return pathname.startsWith(`/c/${cohortId}/${id}`);
+    return pathname.startsWith(`/c/${cohortSlug}/${id}`);
   }
   if (id === "cohorts") return pathname.startsWith("/cohorts");
   if (id === "settings") return pathname.startsWith("/settings");
@@ -66,13 +66,13 @@ function SidebarNavItem({
 
 export function Sidebar({
   role,
-  activeCohortId,
+  activeCohortSlug,
   badges,
   className,
   onNavigate,
 }: {
   role: Role;
-  activeCohortId: string | null;
+  activeCohortSlug: string | null;
   badges: { lessons?: number; attention?: number };
   /** Lets the desktop instance stay hidden below `lg` while the mobile
    * drawer's copy (always visible once opened) uses the default. */
@@ -84,12 +84,12 @@ export function Sidebar({
   const pathname = usePathname();
   const allowed = new Set(NAV_BY_ROLE[role]);
 
-  // Cohort-scoped items need a cohort id to link to. `activeCohortId`
+  // Cohort-scoped items need a cohort to link to. `activeCohortSlug`
   // already falls back to the user's first visible cohort when they're on
   // a global page (Shell resolves that) — it's only still null when
   // there genuinely isn't one yet, in which case those items would point
   // nowhere (`/c/null`) and are hidden instead of shown broken.
-  const primary = NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortId);
+  const primary = NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
   const manage = NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id));
   const canCreateCohort = role === "admin";
 
@@ -120,8 +120,8 @@ export function Sidebar({
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3">
         <div className="flex flex-col gap-0.5">
           {primary.map((item) => {
-            const href = item.href(activeCohortId);
-            const active = isActive(item.id, pathname, activeCohortId);
+            const href = item.href(activeCohortSlug);
+            const active = isActive(item.id, pathname, activeCohortSlug);
             const badge = item.id === "lessons" ? badges.lessons : item.id === "attention" ? badges.attention : undefined;
             return (
               <SidebarNavItem
@@ -143,8 +143,8 @@ export function Sidebar({
               Manage
             </div>
             {manage.map((item) => {
-              const href = item.href(activeCohortId);
-              const active = isActive(item.id, pathname, activeCohortId);
+              const href = item.href(activeCohortSlug);
+              const active = isActive(item.id, pathname, activeCohortSlug);
               return (
                 <SidebarNavItem
                   key={item.id}

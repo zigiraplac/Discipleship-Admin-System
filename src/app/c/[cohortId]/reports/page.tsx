@@ -16,19 +16,21 @@ export default async function ReportsPage({
 }: {
   params: Promise<{ cohortId: string }>;
 }) {
-  const { cohortId } = await params;
+  const { cohortId: routeParam } = await params;
   const user = await requireUser();
   if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
 
   const supabase = await createClient();
-  const [cohort, bands, allStudents, crusadeEvents, reportsByAfterClass] = await Promise.all([
-    getCohort(supabase, cohortId),
+  const cohort = await getCohort(supabase, routeParam);
+  if (!cohort) notFound();
+  const cohortId = cohort.id;
+
+  const [bands, allStudents, crusadeEvents, reportsByAfterClass] = await Promise.all([
     getBands(supabase),
     getStudents(supabase, cohortId),
     getCrusadeEvents(supabase, cohortId),
     getCrusadeReports(supabase, cohortId),
   ]);
-  if (!cohort) notFound();
 
   // Left students stop counting toward the cohort's own numbers, same as
   // Dashboard/Attention — otherwise this report (and its CSV export)

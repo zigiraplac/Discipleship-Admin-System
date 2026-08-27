@@ -12,11 +12,11 @@ import type { Role } from "@/lib/domain/types";
  * two can never drift out of sync. */
 export function MobileNav({
   role,
-  activeCohortId,
+  activeCohortSlug,
   badges,
 }: {
   role: Role;
-  activeCohortId: string | null;
+  activeCohortSlug: string | null;
   badges: { lessons?: number; attention?: number };
 }) {
   const [open, setOpen] = useState(false);
@@ -34,7 +34,7 @@ export function MobileNav({
         <BaseDialog.Popup className="fixed inset-y-0 left-0 z-[81] outline-none transition-transform duration-200 data-[ending-style]:-translate-x-full data-[starting-style]:-translate-x-full">
           <Sidebar
             role={role}
-            activeCohortId={activeCohortId}
+            activeCohortSlug={activeCohortSlug}
             badges={badges}
             className="w-72"
             onNavigate={() => setOpen(false)}
