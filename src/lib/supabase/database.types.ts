@@ -231,6 +231,21 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["crusade_report"]["Row"]>;
         Relationships: [];
       };
+      crusade_completion: {
+        Row: {
+          cohort_id: string;
+          after_class: number;
+          completed_at: string;
+          completed_by: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["crusade_completion"]["Row"]> & {
+          cohort_id: string;
+          after_class: number;
+          completed_by: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["crusade_completion"]["Row"]>;
+        Relationships: [];
+      };
       org_setting: {
         Row: { key: string; value: Json };
         Insert: Database["public"]["Tables"]["org_setting"]["Row"];

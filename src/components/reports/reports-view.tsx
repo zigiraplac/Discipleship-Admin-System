@@ -20,17 +20,23 @@ const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
 ];
 
 export function ReportsView({
+  cohortId,
   cohortName,
   lessons,
   crusadeEvents,
+  completedAfterClasses,
+  canRecordCrusades,
   enrolled,
   bands,
   today,
   paceGap,
 }: {
+  cohortId: string;
   cohortName: string;
   lessons: ReportLesson[];
   crusadeEvents: CrusadeEventView[];
+  completedAfterClasses: Set<number>;
+  canRecordCrusades: boolean;
   enrolled: number;
   bands: Bands;
   today: string;
@@ -96,7 +102,13 @@ export function ReportsView({
         </div>
       </div>
 
-      <CrusadesTable crusadeEvents={crusadeEvents} today={today} />
+      <CrusadesTable
+        cohortId={cohortId}
+        crusadeEvents={crusadeEvents}
+        completedAfterClasses={completedAfterClasses}
+        canRecord={canRecordCrusades}
+        today={today}
+      />
     </div>
   );
 }

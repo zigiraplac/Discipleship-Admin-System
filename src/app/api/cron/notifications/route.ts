@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
-import { getLessonEvents } from "@/lib/data/lessons";
+import { getLessonEvents, getCrusadeEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
-import { ensureBirthdayNotifications, ensureAttentionEscalation } from "@/lib/data/notifications";
+import { ensureBirthdayNotifications, ensureAttentionEscalation, ensureCrusadeReminders } from "@/lib/data/notifications";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 
@@ -21,6 +21,10 @@ import { todayISO } from "@/lib/utils";
  *     who've *never* had an outcome recorded gets one summary
  *     notification (not one per student) to that cohort's own members
  *     plus every admin/leadership user, re-firing weekly if unresolved.
+ *   - crusade reminders: a cohort's next crusade weekend, once it's
+ *     within 7 days, gets one notification to that cohort's own members
+ *     plus every admin/leadership user — the only way this fires reliably
+ *     regardless of whether anyone happens to load that cohort's pages.
  *
  * `CRON_SECRET` is the standard Vercel Cron pattern: set it as an env var
  * and Vercel automatically sends it as a bearer token on the scheduled
@@ -55,11 +59,12 @@ export async function GET(request: Request) {
   // ones were missed. Now a single failure is isolated and reported.
   for (const cohort of cohorts ?? []) {
     try {
-      const [{ data: members, error: membersErr }, students, lessonEvents, outcomes] = await Promise.all([
+      const [{ data: members, error: membersErr }, students, lessonEvents, outcomes, crusadeEvents] = await Promise.all([
         admin.from("cohort_member").select("user_id").eq("cohort_id", cohort.id),
         getStudents(admin, cohort.id),
         getLessonEvents(admin, cohort.id),
         getOutcomesForCohort(admin, cohort.id),
+        getCrusadeEvents(admin, cohort.id),
       ]);
       if (membersErr) throw membersErr;
 
@@ -87,6 +92,13 @@ export async function GET(request: Request) {
         });
         escalationsSent++;
       }
+
+      await ensureCrusadeReminders(admin, {
+        cohortId: cohort.id,
+        crusadeEvents: crusadeEvents.map((e) => ({ afterClass: e.afterClass, date: e.date })),
+        recipientIds,
+        todayISO: today,
+      });
 
       cohortsSwept++;
     } catch (e) {

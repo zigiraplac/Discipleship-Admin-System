@@ -1,5 +1,6 @@
 import type { DB } from "./types";
 import { upcomingBirthdays, type BirthdaySource } from "@/lib/domain/birthdays";
+import { daysBetween } from "@/lib/utils";
 
 /**
  * Plain data-layer functions, not server actions — deliberately not
@@ -107,6 +108,50 @@ export async function ensureAttentionEscalation(
       dedupeKey: `escalate:${input.cohortId}:${bucket}`,
     }))
   );
+}
+
+/**
+ * A crusade weekend (3 day-events sharing the same after_class) has no
+ * natural "the plan changed, tell people" moment the way postponing a
+ * lesson does — this instead reminds everyone once the weekend is within
+ * the next 7 days, so it can actually be communicated ahead of time
+ * rather than showing up unannounced. One notification per weekend to
+ * every recipient, same batched shape as ensureAttentionEscalation. The
+ * dedupe key has no year in it (unlike birthdays) — a given cohort only
+ * ever has this weekend once, so it only ever needs to fire once.
+ */
+export async function ensureCrusadeReminders(
+  db: DB,
+  input: {
+    cohortId: string;
+    crusadeEvents: { afterClass: number; date: string }[];
+    recipientIds: string[];
+    todayISO: string;
+  }
+): Promise<void> {
+  if (!input.recipientIds.length || !input.crusadeEvents.length) return;
+
+  const fridayByClass = new Map<number, string>();
+  for (const ev of input.crusadeEvents) {
+    const current = fridayByClass.get(ev.afterClass);
+    if (!current || ev.date < current) fridayByClass.set(ev.afterClass, ev.date);
+  }
+
+  for (const [afterClass, friday] of fridayByClass) {
+    const daysUntil = daysBetween(input.todayISO, friday);
+    if (daysUntil < 0 || daysUntil > 7) continue;
+    await createNotifications(
+      db,
+      input.recipientIds.map((userId) => ({
+        userId,
+        kind: "crusade_upcoming",
+        title: `Crusade weekend after Class ${afterClass} is coming up`,
+        body: daysUntil === 0 ? "Starts today" : daysUntil === 1 ? "Starts tomorrow" : `In ${daysUntil} days`,
+        href: `/c/${input.cohortId}/reports`,
+        dedupeKey: `crusade:${input.cohortId}:${afterClass}`,
+      }))
+    );
+  }
 }
 
 /**
