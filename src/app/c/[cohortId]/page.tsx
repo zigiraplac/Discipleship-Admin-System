@@ -7,7 +7,7 @@ import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { aggregateCohort, isRecorded, lessonStats, computePace, classRate } from "@/lib/domain/metrics";
 import { cohortHealth } from "@/lib/domain/bands";
-import { CURRICULUM, classSpans } from "@/lib/domain/curriculum";
+import { CURRICULUM, classSpans, lessonAt } from "@/lib/domain/curriculum";
 import { upcomingBirthdays, formatBirthdayDate } from "@/lib/domain/birthdays";
 import { todayISO, formatShortDate } from "@/lib/utils";
 import { NAV_BY_ROLE } from "@/lib/roles";
@@ -269,7 +269,13 @@ export default async function DashboardPage({
           value={onPace ? "On pace" : `${pace.gap} behind`}
           delta={onPace ? "On target" : "Catch up"}
           deltaTone={onPace ? "ok" : "bad"}
-          sub={finishDate ? `Ends ${formatShortDate(finishDate)}` : "vs. this cohort's own ideal plan"}
+          sub={
+            recordedCount < 80
+              ? `Now at ${lessonAt(recordedCount).ref}${finishDate ? ` · Ends ${formatShortDate(finishDate)}` : ""}`
+              : finishDate
+                ? `Ends ${formatShortDate(finishDate)}`
+                : "vs. this cohort's own ideal plan"
+          }
         />
         <KpiCard icon={SignOut} label="Left the program" value={leftCount} sub="No longer tracked in these numbers" />
       </KpiRow>
