@@ -70,7 +70,7 @@ export interface CreateCohortResult {
 /**
  * The one transaction that matters (08-backend-notes.md). Uses the
  * service-role client because this genuinely needs to write a cohort plus
- * students plus 101+ events in one shot — RLS already grants an admin
+ * students plus 94+ events in one shot — RLS already grants an admin
  * every one of these individually, this just skips the round-trip policy
  * checks. Also the one place the fixed curriculum reference data gets
  * provisioned, lazily and idempotently — there's no separate seed step.

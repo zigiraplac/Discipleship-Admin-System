@@ -30,7 +30,7 @@ export interface MonthlyRate {
 export interface CrusadeWeekend {
   afterClass: number;
   friday: string;
-  sunday: string;
+  saturday: string;
 }
 
 const MONTH_SHORT = [
@@ -134,9 +134,9 @@ export function classRateFrom(
   return Math.round((present / (enrolled * inClass.length)) * 100);
 }
 
-/** Groups crusade day-events (0/1/2) into weekends by `afterClass`. There is
+/** Groups crusade day-events (0/1) into weekends by `afterClass`. There is
  * no stored "weekend" record — each day is its own event row on a
- * consecutive Fri/Sat/Sun date, so the weekend's span is just the min/max
+ * consecutive Fri/Sat date, so the weekend's span is just the min/max
  * date within the group. */
 export function crusadeWeekends(events: CrusadeEventView[]): CrusadeWeekend[] {
   const byAfterClass = new Map<number, CrusadeEventView[]>();
@@ -149,8 +149,8 @@ export function crusadeWeekends(events: CrusadeEventView[]): CrusadeWeekend[] {
   for (const [afterClass, evs] of byAfterClass) {
     const sorted = [...evs].sort((a, b) => a.date.localeCompare(b.date));
     const friday = sorted[0]?.date;
-    const sunday = sorted[sorted.length - 1]?.date;
-    if (friday && sunday) weekends.push({ afterClass, friday, sunday });
+    const saturday = sorted[sorted.length - 1]?.date;
+    if (friday && saturday) weekends.push({ afterClass, friday, saturday });
   }
   return weekends.sort((a, b) => a.afterClass - b.afterClass);
 }

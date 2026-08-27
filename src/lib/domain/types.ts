@@ -64,7 +64,7 @@ export interface CohortEvent {
   date: string; // ISO date
   lessonId: number | null;
   afterClass: number | null; // crusade
-  crusadeDay: number | null; // crusade, 0..2
+  crusadeDay: number | null; // crusade, 0 = Friday, 1 = Saturday
   edited: boolean;
 }
 
@@ -140,7 +140,7 @@ export interface CrusadeEventView {
   cohortId: string;
   date: string;
   afterClass: number;
-  crusadeDay: number; // 0..2
+  crusadeDay: number; // 0 = Friday, 1 = Saturday
 }
 
 export interface StudentAggregate extends Student {

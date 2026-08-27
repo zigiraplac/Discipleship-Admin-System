@@ -11,12 +11,12 @@ import { CURRICULUM } from "./curriculum";
  *       emit up to `lessonsPerSession` lesson events on that date
  *       advance the cursor by one day
  *     advance the cursor to the next Friday
- *     emit three crusade events: that Friday, Saturday, Sunday
- *     advance the cursor past the Sunday
+ *     emit two crusade events: that Friday, Saturday
+ *     advance the cursor past the Saturday
  *
- * Crusades are always a contiguous Friday→Saturday→Sunday, never three
- * arbitrary teaching days — scattering them across teaching slots was a
- * real bug in an earlier version. Dates are calendar dates only (no
+ * Crusades are always a contiguous Friday→Saturday, never arbitrary
+ * teaching days — scattering them across teaching slots was a real bug in
+ * an earlier version. Dates are calendar dates only (no
  * timezone); computed at UTC noon internally to sidestep DST arithmetic,
  * then serialized as plain `YYYY-MM-DD`.
  *
@@ -40,7 +40,7 @@ export interface GeneratedCrusadeEvent {
   kind: "crusade";
   date: string; // YYYY-MM-DD
   afterClass: number;
-  crusadeDay: number; // 0..2
+  crusadeDay: number; // 0 = Friday, 1 = Saturday
 }
 
 export type GeneratedEvent = GeneratedLessonEvent | GeneratedCrusadeEvent;
@@ -59,7 +59,7 @@ export function curriculumScheduleItems(): ScheduleItem[] {
       items.push({ kind: "lesson", globalIndex, classNumber: cls.n });
       globalIndex++;
     }
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < 2; k++) {
       items.push({ kind: "crusade", afterClass: cls.n, crusadeDay: k });
     }
   }
@@ -90,8 +90,8 @@ const MAX_GUARD = 500;
 /**
  * Walks `items` in order, assigning each a date: `lessonsPerSession`
  * lesson items share one teaching day before the cursor advances; a
- * crusade run (always 3 consecutive items) always starts on the next
- * Friday. Used both for a fresh cohort (the full 101-item list, from the
+ * crusade run (always 2 consecutive items) always starts on the next
+ * Friday. Used both for a fresh cohort (the full item list, from the
  * start date) and for a reflow (just the not-yet-taught suffix, from the
  * day after whatever got postponed).
  */
