@@ -70,14 +70,14 @@
   two independent copies once did.
 */
 :root {
-  --dark-page: #0a0a0c;
+  --dark-page: #171717;
   --dark-card: #131316;
   --dark-subtle: #18181c;
   --dark-cell: #141417;
   --dark-hover: #1e1e23;
-  --dark-border: #2a2a30;
+  --dark-border: #242424;
   --dark-border-soft: #212126;
-  --dark-divider: #1d1d21;
+  --dark-divider: #242424;
   --dark-dashed: #2e2e35;
   --dark-neutral-border: #3a3a42;
 
