@@ -262,8 +262,6 @@ export default async function DashboardPage({
           delta={attendanceDelta}
           deltaTone={attendanceTone}
           sub={`Target ${bands.activeThreshold}%`}
-          trackValue={rate}
-          flashDirection="up-good"
         />
         {attentionRows !== null && (
           <KpiCard
@@ -271,8 +269,6 @@ export default async function DashboardPage({
             label="Needs attention"
             value={atRiskCount}
             sub={`of ${enrolled} students`}
-            trackValue={atRiskCount}
-            flashDirection="up-bad"
           />
         )}
         <KpiCard
@@ -280,8 +276,6 @@ export default async function DashboardPage({
           label="Lessons recorded"
           value={`${recordedCount}/80`}
           sub={`Class ${classIndex + 1} · ${currentClass.title}`}
-          trackValue={recordedCount}
-          flashDirection="up-good"
         />
         <KpiCard
           icon={<Gauge size={15} />}
@@ -296,16 +290,12 @@ export default async function DashboardPage({
                 ? `Ends ${formatShortDate(finishDate)}`
                 : "vs. this cohort's own ideal plan"
           }
-          trackValue={pace.gap}
-          flashDirection="up-bad"
         />
         <KpiCard
           icon={<SignOut size={15} />}
           label="Left the program"
           value={leftCount}
           sub="No longer tracked in these numbers"
-          trackValue={leftCount}
-          flashDirection="up-bad"
         />
       </KpiRow>
 
