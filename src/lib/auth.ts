@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { AppUser, Role } from "@/lib/domain/types";
@@ -9,12 +10,19 @@ type UserStatus =
   | { kind: "deactivated"; name: string }
   | { kind: "ok"; user: AppUser };
 
-/** A deactivated person still has a valid Supabase session (deactivating
+/**
+ * A deactivated person still has a valid Supabase session (deactivating
  * doesn't touch auth.users, only app_user.state) — so this has to be
  * distinguished from "no session" to route each correctly. Redirecting a
  * deactivated user to /login would just bounce right back to / (the
- * proxy's own "already signed in" rule), looping forever. */
-async function getUserStatus(): Promise<UserStatus> {
+ * proxy's own "already signed in" rule), looping forever.
+ *
+ * Cached per request: Shell calls requireUser() for its own needs, and
+ * the page being rendered calls it again independently — without this,
+ * that's a fresh auth.getUser() *and* a fresh app_user query, twice,
+ * on every single page load.
+ */
+const getUserStatus = cache(async function getUserStatus(): Promise<UserStatus> {
   const supabase = await createClient();
   const { data: auth } = await supabase.auth.getUser();
   if (!auth.user) return { kind: "signed-out" };
@@ -28,7 +36,7 @@ async function getUserStatus(): Promise<UserStatus> {
   if (!data) return { kind: "signed-out" };
   if (data.state === "deactivated") return { kind: "deactivated", name: data.name };
   return { kind: "ok", user: data as AppUser };
-}
+});
 
 export async function getCurrentUser(): Promise<AppUser | null> {
   const status = await getUserStatus();
