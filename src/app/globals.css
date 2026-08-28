@@ -62,31 +62,32 @@
 }
 
 /*
-  Dark palette values live here, exactly once. Every surface/border shade
-  sits at hue 225 (the same navy) — only lightness steps up as elements
-  rise off the page, not a set of independently-picked greys. The two
-  rules below don't each carry their own copy of these values; they just
-  flip --color-* over to these --dark-* variables when their condition
-  matches, so "OS is dark" and "toggle picked dark" can never drift apart
-  the way two independent copies once did.
+  Dark palette values live here, exactly once — matched against a
+  reference dark-mode dashboard: a near-black, low-saturation base (a
+  hint of cool blue-grey, not a saturated navy) with very low-contrast
+  elevation steps and muted body text, reserving full white for headings
+  only. The two rules below don't each carry their own copy of these
+  values; they just flip --color-* over to these --dark-* variables when
+  their condition matches, so "OS is dark" and "toggle picked dark" can
+  never drift apart the way two independent copies once did.
 */
 :root {
-  --dark-page: #0e152a;
-  --dark-subtle: #10172e;
-  --dark-cell: #121b35;
-  --dark-card: #162141;
-  --dark-border-soft: #1a274c;
-  --dark-hover: #1d2a54;
-  --dark-border: #223263;
-  --dark-divider: #223263;
-  --dark-dashed: #2a3e7a;
-  --dark-neutral-border: #344d98;
+  --dark-page: #0b0d12;
+  --dark-subtle: #0d0f15;
+  --dark-cell: #0f1218;
+  --dark-card: #12151c;
+  --dark-border-soft: #171a22;
+  --dark-hover: #191c25;
+  --dark-border: #1f232c;
+  --dark-divider: #1f232c;
+  --dark-dashed: #262b36;
+  --dark-neutral-border: #2f3542;
 
-  --dark-ink: #f0f0f3;
-  --dark-ink-secondary: #c4c4cc;
-  --dark-ink-tertiary: #9a9aa6;
-  --dark-ink-muted: #82828e;
-  --dark-ink-faint: #63636d;
+  --dark-ink: #f2f3f5;
+  --dark-ink-secondary: #9098a8;
+  --dark-ink-tertiary: #7a8290;
+  --dark-ink-muted: #666e7c;
+  --dark-ink-faint: #4b5361;
 
   /* Every "pale tint + dark text" badge/chip pair (Pill, StatCard, Avatar,
      calendar event chips, the notification bell, ...) needs the opposite
