@@ -62,24 +62,26 @@
 }
 
 /*
-  Dark palette values live here, exactly once — near-black neutral greys
-  (a hair of cool undertone, not a blue-navy tint). The two rules below
-  don't each carry their own copy of these hex values; they just flip
-  --color-* over to these --dark-* variables when their condition matches,
-  so "OS is dark" and "toggle picked dark" can never drift apart the way
-  two independent copies once did.
+  Dark palette values live here, exactly once. Every surface/border shade
+  is the same navy (#131b37) at a different mix with white — not a set of
+  independently-picked greys — so the whole dark theme reads as one color
+  at rising elevations rather than a handful of unrelated near-blacks. The
+  two rules below don't each carry their own copy of these values; they
+  just flip --color-* over to these --dark-* variables when their
+  condition matches, so "OS is dark" and "toggle picked dark" can never
+  drift apart the way two independent copies once did.
 */
 :root {
-  --dark-page: #171717;
-  --dark-card: #131316;
-  --dark-subtle: #18181c;
-  --dark-cell: #141417;
-  --dark-hover: #1e1e23;
-  --dark-border: #242424;
-  --dark-border-soft: #212126;
-  --dark-divider: #242424;
-  --dark-dashed: #2e2e35;
-  --dark-neutral-border: #3a3a42;
+  --dark-page: #131b37;
+  --dark-subtle: color-mix(in srgb, #131b37 95%, white 5%);
+  --dark-cell: color-mix(in srgb, #131b37 93%, white 7%);
+  --dark-card: color-mix(in srgb, #131b37 90%, white 10%);
+  --dark-border-soft: color-mix(in srgb, #131b37 85%, white 15%);
+  --dark-hover: color-mix(in srgb, #131b37 83%, white 17%);
+  --dark-border: color-mix(in srgb, #131b37 78%, white 22%);
+  --dark-divider: color-mix(in srgb, #131b37 78%, white 22%);
+  --dark-dashed: color-mix(in srgb, #131b37 68%, white 32%);
+  --dark-neutral-border: color-mix(in srgb, #131b37 58%, white 42%);
 
   --dark-ink: #f0f0f3;
   --dark-ink-secondary: #c4c4cc;
