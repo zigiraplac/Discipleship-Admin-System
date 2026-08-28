@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { SUPABASE_ANON_KEY, SUPABASE_URL } from "./env";
+import { timeoutFetch } from "./timeout-fetch";
 import type { Database } from "./database.types";
 
 /**
@@ -36,5 +37,6 @@ export const createClient = cache(async function createClient() {
         }
       },
     },
+    global: { fetch: timeoutFetch(20_000) },
   });
 });
