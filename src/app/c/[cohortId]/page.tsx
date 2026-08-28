@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
-import { aggregateCohort, isRecorded, lessonStats, computePace, classRate } from "@/lib/domain/metrics";
+import { getCatchupCountsByEvent } from "@/lib/data/catchup";
+import { aggregateCohort, isRecorded, lessonStats, computePace } from "@/lib/domain/metrics";
 import { cohortHealth } from "@/lib/domain/bands";
 import { CURRICULUM, classSpans, lessonAt } from "@/lib/domain/curriculum";
 import { upcomingBirthdays, formatBirthdayDate } from "@/lib/domain/birthdays";
@@ -27,27 +28,60 @@ import type { Student } from "@/lib/domain/types";
  * lesson has nothing to show yet and would just read as a false "0%". A
  * missing register for a due lesson, on the other hand, genuinely is 0%
  * and stays visible as a gap in the trend rather than quietly vanishing. */
+const EMPTY_BAR: Pick<ChartBar, "rate" | "presentPct" | "catchupPct" | "absentPct"> = {
+  rate: 0,
+  presentPct: 0,
+  catchupPct: 0,
+  absentPct: 0,
+};
+
+/** presentCount excludes catch-up corrections — those are their own
+ * segment — so presentPct + catchupPct + absentPct always adds to 100
+ * for a recorded lesson/class. */
+function splitBar(presentCount: number, catchupCount: number, enrolled: number): typeof EMPTY_BAR {
+  if (!enrolled) return EMPTY_BAR;
+  const presentPct = Math.round((presentCount / enrolled) * 100);
+  const catchupPct = Math.round((catchupCount / enrolled) * 100);
+  const absentPct = Math.max(0, 100 - presentPct - catchupPct);
+  return { rate: presentPct + catchupPct, presentPct, catchupPct, absentPct };
+}
+
+function splitBarTitle(ref: string, split: typeof EMPTY_BAR): string {
+  if (split.rate === 0 && split.presentPct === 0 && split.absentPct === 0) return `${ref} · not recorded`;
+  return split.catchupPct > 0
+    ? `${ref} · ${split.rate}% attended (${split.catchupPct}% caught up) · ${split.absentPct}% absent`
+    : `${ref} · ${split.rate}% attended · ${split.absentPct}% absent`;
+}
+
 function buildLessonBars(
-  lessons: { globalIndex: number; lessonRef: string; date: string; recorded: boolean; rate: number }[],
+  lessons: {
+    globalIndex: number;
+    lessonRef: string;
+    date: string;
+    recorded: boolean;
+    present: number;
+    catchup: number;
+    enrolled: number;
+  }[],
   todayISO: string
 ): ChartBar[] {
   return lessons
     .filter((l) => l.date <= todayISO)
     .sort((a, b) => a.globalIndex - b.globalIndex)
     .slice(-16)
-    .map((l) => ({
-      label: `L${l.globalIndex + 1}`,
-      title: l.recorded ? `${l.lessonRef} · ${l.rate}%` : `${l.lessonRef} · not recorded`,
-      rate: l.recorded ? l.rate : 0,
-    }));
+    .map((l) => {
+      const split = l.recorded ? splitBar(l.present, l.catchup, l.enrolled) : EMPTY_BAR;
+      return { label: `L${l.globalIndex + 1}`, title: splitBarTitle(l.lessonRef, split), ...split };
+    });
 }
 
-function classBarsFromRates(rates: (number | null)[]): ChartBar[] {
-  return rates.map((rate, ci) => ({
-    label: `C${ci + 1}`,
-    title: rate === null ? `${CURRICULUM[ci].title} · not started` : `${CURRICULUM[ci].title} · ${rate}%`,
-    rate: rate ?? 0,
-  }));
+function classBarsFromCounts(
+  counts: { present: number; catchup: number; enrolled: number; started: boolean }[]
+): ChartBar[] {
+  return counts.map((c, ci) => {
+    const split = c.started ? splitBar(c.present, c.catchup, c.enrolled) : EMPTY_BAR;
+    return { label: `C${ci + 1}`, title: splitBarTitle(CURRICULUM[ci].title, split), ...split };
+  });
 }
 
 /** Whole days between two ISO dates — used to interleave lessons/crusades
@@ -112,17 +146,30 @@ export default async function DashboardPage({
     enrolled = pub[0]?.enrolled ?? 0;
     const totalPresent = recorded.reduce((a, p) => a + (p.present ?? 0), 0);
     rate = enrolled && recordedCount ? Math.round((totalPresent / (enrolled * recordedCount)) * 100) : 0;
+    // A teacher's client never sees `lesson_catchup` (pastoral detail,
+    // blocked by RLS) — their chart shows attended/absent only, no
+    // caught-up segment.
     lessonBars = buildLessonBars(
-      pub.map((p) => ({ globalIndex: p.globalIndex, lessonRef: p.lessonRef, date: p.date, recorded: p.recorded, rate: p.rate ?? 0 })),
+      pub.map((p) => ({
+        globalIndex: p.globalIndex,
+        lessonRef: p.lessonRef,
+        date: p.date,
+        recorded: p.recorded,
+        present: p.present ?? 0,
+        catchup: 0,
+        enrolled: p.enrolled ?? 0,
+      })),
       today
     );
-    classBars = classBarsFromRates(
+    classBars = classBarsFromCounts(
       CURRICULUM.map((_, ci) => {
         const inClass = pub.filter((p) => p.classIndex === ci && p.recorded);
-        if (!inClass.length) return null;
-        const totalPresentInClass = inClass.reduce((a, p) => a + (p.present ?? 0), 0);
-        const totalEnrolledInClass = inClass.reduce((a, p) => a + (p.enrolled ?? 0), 0);
-        return totalEnrolledInClass ? Math.round((totalPresentInClass / totalEnrolledInClass) * 100) : null;
+        return {
+          present: inClass.reduce((a, p) => a + (p.present ?? 0), 0),
+          catchup: 0,
+          enrolled: inClass.reduce((a, p) => a + (p.enrolled ?? 0), 0),
+          started: inClass.length > 0,
+        };
       })
     );
 
@@ -165,17 +212,40 @@ export default async function DashboardPage({
     enrolled = agg.enrolled;
     atRiskCount = agg.atRisk;
 
+    const catchupCounts = await getCatchupCountsByEvent(
+      supabase,
+      lessonEvents.map((e) => e.eventId),
+      activeIds
+    );
+
     lessonBars = buildLessonBars(
-      lessonEvents.map((e) => ({
-        globalIndex: e.globalIndex,
-        lessonRef: e.lessonRef,
-        date: e.date,
-        recorded: isRecorded(e),
-        rate: lessonStats(e, activeIds)?.rate ?? 0,
-      })),
+      lessonEvents.map((e) => {
+        const catchup = catchupCounts.get(e.eventId) ?? 0;
+        return {
+          globalIndex: e.globalIndex,
+          lessonRef: e.lessonRef,
+          date: e.date,
+          recorded: isRecorded(e),
+          present: (lessonStats(e, activeIds)?.present ?? 0) - catchup,
+          catchup,
+          enrolled: activeIds.size,
+        };
+      }),
       today
     );
-    classBars = classBarsFromRates(CURRICULUM.map((_, ci) => classRate(lessonEvents, ci, activeIds)));
+    classBars = classBarsFromCounts(
+      CURRICULUM.map((_, ci) => {
+        const inClass = lessonEvents.filter((e) => e.classIndex === ci && isRecorded(e));
+        let present = 0;
+        let catchup = 0;
+        for (const e of inClass) {
+          const cu = catchupCounts.get(e.eventId) ?? 0;
+          present += lessonStats(e, activeIds)!.present - cu;
+          catchup += cu;
+        }
+        return { present, catchup, enrolled: activeIds.size * inClass.length, started: inClass.length > 0 };
+      })
+    );
 
     const upcoming = lessonEvents
       .filter((e) => !isRecorded(e) && e.date > today)
