@@ -2,24 +2,24 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 
 const STEPS = [
   {
-    title: "A student is flagged",
-    text: "Attendance drops below the band. No one has to notice it.",
+    title: "A catch-up plan is recorded",
+    text: "From Follow Up, once you've decided how they'll make up missed lessons.",
   },
   {
-    title: "You reach out",
-    text: "Call or visit. The card shows what happened and when.",
+    title: "Lessons get ticked off",
+    text: "From here or their profile, as each missed lesson is made up.",
   },
   {
-    title: "You record what happened",
-    text: "Catch-up, still with us, or left. It goes on their record.",
+    title: "You close it out",
+    text: "Once every missed lesson is caught up, mark them back on track.",
   },
 ];
 
-export function HowThisWorksCard() {
+export function HowCatchupWorksCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>How this works</CardTitle>
+        <CardTitle>How Catch ups works</CardTitle>
       </CardHeader>
       <div className="flex flex-col gap-4 px-[18px] py-4">
         {STEPS.map((step, i) => (

@@ -55,6 +55,15 @@ export interface Student {
   countryRaw: string | null;
   dobDay: number | null;
   dobMonth: number | null;
+  city: string | null;
+  /** Any registration-form column that didn't map to a known field, keyed
+   * by its original header — see registrations.ts. Not read by any current
+   * feature; a lossless holding pen, not a data model. */
+  extra: Record<string, string> | null;
+  /** When a facilitator/admin last marked this student as contacted while
+   * flagged and awaiting an outcome — cleared by recordOutcome. Null means
+   * either never flagged, or flagged and not yet reached out to. */
+  contactedAt: string | null;
   registeredAt: string | null;
   enrolledAt: string;
   leftAt: string | null;
@@ -107,6 +116,10 @@ export interface AppUser {
   email: string;
   role: Role;
   state: "active" | "invited" | "deactivated";
+  /** So a birthday-of-the-day reminder (ensureBirthdayFacilitatorReminders)
+   * has a real facilitator to reach — set once from Settings → People
+   * (admin) or self-service from Profile. */
+  whatsapp: string | null;
 }
 
 export interface CohortMember {

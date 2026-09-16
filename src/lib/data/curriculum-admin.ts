@@ -1,5 +1,5 @@
 import type { DB } from "./types";
-import { CURRICULUM } from "@/lib/domain/curriculum";
+import { CURRICULUM, partsSummary } from "@/lib/domain/curriculum";
 
 /**
  * Idempotently ensures the fixed reference curriculum (7 classes / 80
@@ -18,7 +18,7 @@ export async function ensureCurriculumSeeded(db: DB): Promise<void> {
   const classRows = CURRICULUM.map((c) => ({
     id: c.n,
     title: c.title,
-    part_note: c.parts,
+    part_note: partsSummary(c),
     lesson_count: c.lessons.length,
     position: c.n,
   }));

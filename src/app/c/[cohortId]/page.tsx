@@ -313,7 +313,7 @@ export default async function DashboardPage({
     .slice(0, 6)
     .map((i) => i.row);
 
-  const attentionHref = NAV_BY_ROLE[user.role].includes("attention") ? `/c/${cohortSlug}/attention` : null;
+  const attentionHref = NAV_BY_ROLE[user.role].includes("followup") ? `/c/${cohortSlug}/followup` : null;
 
   return (
     <div className="flex flex-col gap-[18px]">

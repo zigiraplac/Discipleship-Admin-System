@@ -20,7 +20,7 @@ function navLabel(item: NavItem, role: Role): string {
 
 function isActive(id: string, pathname: string, cohortSlug: string | null): boolean {
   if (id === "dashboard") return pathname === `/c/${cohortSlug}`;
-  if (["lessons", "students", "attention", "calendar", "reports"].includes(id)) {
+  if (["lessons", "students", "followup", "catchup", "crusades", "calendar", "reports"].includes(id)) {
     return pathname.startsWith(`/c/${cohortSlug}/${id}`);
   }
   if (id === "cohorts") return pathname.startsWith("/cohorts");
@@ -56,8 +56,8 @@ function SidebarNavItem({
       <Icon size={17} />
       <span className="flex-1 text-left">{label}</span>
       {!!badge && (
-        <span className="rounded-pill bg-accent-2-100 px-[7px] py-px text-[10px] font-bold text-accent-2-700 tabular">
-          {badge}
+        <span className="grid h-[17px] min-w-[17px] flex-none place-items-center rounded-full bg-accent-2-500 px-1 text-[10px] font-bold leading-none text-white">
+          {badge > 9 ? "9+" : badge}
         </span>
       )}
     </Link>
@@ -73,7 +73,7 @@ export function Sidebar({
 }: {
   role: Role;
   activeCohortSlug: string | null;
-  badges: { lessons?: number; attention?: number };
+  badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
   /** Lets the desktop instance stay hidden below `lg` while the mobile
    * drawer's copy (always visible once opened) uses the default. */
   className?: string;
@@ -122,7 +122,7 @@ export function Sidebar({
           {primary.map((item) => {
             const href = item.href(activeCohortSlug);
             const active = isActive(item.id, pathname, activeCohortSlug);
-            const badge = item.id === "lessons" ? badges.lessons : item.id === "attention" ? badges.attention : undefined;
+            const badge = badges[item.id as keyof typeof badges];
             return (
               <SidebarNavItem
                 key={item.id}

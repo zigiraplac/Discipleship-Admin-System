@@ -107,6 +107,7 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
   revalidatePath(`${base}/lessons/${input.eventId}`);
   revalidatePath(`${base}/calendar`);
   revalidatePath(`${base}/students`);
-  revalidatePath(`${base}/attention`);
+  revalidatePath(`${base}/followup`);
+  revalidatePath(`${base}/catchup`);
   revalidatePath(`${base}/reports`);
 }

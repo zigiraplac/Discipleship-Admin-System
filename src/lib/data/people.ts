@@ -4,7 +4,7 @@ import type { AppUser, Role } from "@/lib/domain/types";
 export async function getPeople(db: DB): Promise<AppUser[]> {
   const { data, error } = await db
     .from("app_user")
-    .select("id, name, email, role, state")
+    .select("id, name, email, role, state, whatsapp")
     .order("name");
   if (error) throw error;
   return (data ?? []) as AppUser[];

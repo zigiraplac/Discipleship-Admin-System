@@ -1,23 +1,56 @@
 import Papa from "papaparse";
 
 /**
- * Parsing and de-duplication for the ministry's Google-Forms sign-up export
- * (`data/registrations.csv`). Rules are the ones agreed with the product
- * owner in 07-data-and-seeding.md — summarized inline below. The guiding
- * rule: never silently discard a person; only exact test rows are dropped,
- * everything else is imported (messy email, messy DOB and all) and shown
- * to a human to untick.
+ * Parsing and de-duplication for a cohort's registration-form export
+ * (Google Forms or similar). The guiding rule: never silently discard a
+ * person; only exact test rows are dropped, everything else is imported
+ * (messy email, messy DOB and all) and shown to a human to untick.
+ *
+ * Columns are matched by **header name**, not position — confirmed against
+ * a real cohort's export (`Names, Gender, dob, marital status, Age range,
+ * tel, email, church, country, city`), which doesn't match the previous
+ * fixed 8-column assumption at all (no timestamp, a single "Names" field,
+ * extra columns this app has no dedicated field for). Every cohort's form
+ * can word/order its columns differently — matching by name is what makes
+ * that safe instead of silently mis-mapping fields.
  */
+
+/** Recognized column → the header text (lowercased, trimmed, punctuation
+ * stripped) that identifies it. First matching header wins if more than
+ * one column matches the same alias. */
+const HEADER_ALIASES: Record<string, string[]> = {
+  timestamp: ["timestamp", "submitted at", "submission date", "submission time"],
+  fullName: ["names", "name", "full name", "fullname", "student name"],
+  firstName: ["first name", "firstname", "given name"],
+  lastName: ["last name", "lastname", "surname", "family name"],
+  email: ["email", "e mail", "email address"],
+  whatsapp: ["tel", "phone", "whatsapp", "contact", "phone number", "telephone", "mobile"],
+  countryRaw: ["country", "nation", "country of residence"],
+  city: ["city", "town"],
+  dobRaw: ["dob", "date of birth", "birthday", "birth date"],
+};
+
+function normalizeHeader(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export interface RawRegistrationRow {
   timestamp: string;
-  firstName: string;
-  lastName: string;
+  fullName: string;
   email: string;
   whatsapp: string;
   countryRaw: string;
+  city: string;
   dobRaw: string;
-  comment: string;
+  /** Every column that didn't match a known field, keyed by its original
+   * (as-written) header — nothing from the file is silently thrown away,
+   * even though nothing reads this yet beyond storing it verbatim. */
+  extra: Record<string, string>;
 }
 
 export interface DedupedRegistrant {
@@ -29,11 +62,13 @@ export interface DedupedRegistrant {
   whatsapp: string | null;
   country: string; // normalised
   countryRaw: string;
+  city: string;
   dobDay: number | null;
   dobMonth: number | null;
   dobRaw: string;
-  registeredAt: string; // ISO — earliest timestamp in the merged group
+  registeredAt: string; // ISO — earliest timestamp in the merged group, or import time if the file has no timestamp column
   mergedCount: number;
+  extra: Record<string, string>;
 }
 
 export interface DedupeResult {
@@ -45,19 +80,55 @@ export interface DedupeResult {
 
 export function parseRegistrationsCsv(raw: string): RawRegistrationRow[] {
   const { data } = Papa.parse<string[]>(raw, { skipEmptyLines: true });
-  const body = data.slice(1); // drop the header row
+  if (data.length < 2) return [];
+  const header = data[0];
+  const body = data.slice(1);
+
+  // Map each recognized field to the column index whose header matches one
+  // of its aliases — first header in the file wins if more than one matches.
+  const indexFor: Partial<Record<keyof typeof HEADER_ALIASES, number>> = {};
+  const matchedIndexes = new Set<number>();
+  header.forEach((raw, i) => {
+    const normalized = normalizeHeader(raw ?? "");
+    for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
+      if (field in indexFor) continue; // already matched an earlier column
+      if (aliases.includes(normalized)) {
+        indexFor[field as keyof typeof HEADER_ALIASES] = i;
+        matchedIndexes.add(i);
+      }
+    }
+  });
+
+  const cell = (cols: string[], key: keyof typeof HEADER_ALIASES): string => {
+    const i = indexFor[key];
+    return i == null ? "" : (cols[i] ?? "").trim();
+  };
+
   return body
-    .filter((cols) => cols.length >= 7 && cols.some((c) => c && c.trim()))
-    .map((cols) => ({
-      timestamp: cols[0] ?? "",
-      firstName: cols[1] ?? "",
-      lastName: cols[2] ?? "",
-      email: cols[3] ?? "",
-      whatsapp: cols[4] ?? "",
-      countryRaw: cols[5] ?? "",
-      dobRaw: cols[6] ?? "",
-      comment: cols[7] ?? "",
-    }));
+    .filter((cols) => cols.some((c) => c && c.trim()))
+    .map((cols) => {
+      const fullNameCol = cell(cols, "fullName");
+      const fullName =
+        fullNameCol || [cell(cols, "firstName"), cell(cols, "lastName")].filter(Boolean).join(" ");
+
+      const extra: Record<string, string> = {};
+      header.forEach((h, i) => {
+        if (matchedIndexes.has(i)) return;
+        const value = (cols[i] ?? "").trim();
+        if (value && h) extra[h.trim()] = value;
+      });
+
+      return {
+        timestamp: cell(cols, "timestamp"),
+        fullName,
+        email: cell(cols, "email"),
+        whatsapp: cell(cols, "whatsapp"),
+        countryRaw: cell(cols, "countryRaw"),
+        city: cell(cols, "city"),
+        dobRaw: cell(cols, "dobRaw"),
+        extra,
+      };
+    });
 }
 
 function stripDiacritics(s: string): string {
@@ -231,6 +302,11 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
     { rows: (RawRegistrationRow & { fullNameRaw: string })[]; tsList: number[] }
   >();
   let testRowsDropped = 0;
+  // When the file has no timestamp column at all, there's no real "merge
+  // order" — fall back to file order, so the last row for a given
+  // person/email in the file wins, same intent as "latest submission wins"
+  // when a real timestamp exists.
+  let rowSeq = 0;
 
   for (const row of rows) {
     let email = row.email.trim();
@@ -239,9 +315,7 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
     if (!email.includes("@") && whatsapp.includes("@")) {
       [email, whatsapp] = [whatsapp, email];
     }
-    const firstName = row.firstName.trim();
-    const lastName = row.lastName.trim();
-    const fullNameRaw = [firstName, lastName].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    const fullNameRaw = row.fullName.replace(/\s+/g, " ").trim();
     const nameKey = normalizeNameKey(fullNameRaw);
     const tokens = nameKey.split(" ").filter(Boolean);
     if (tokens.length && tokens.every((t) => t === "test")) {
@@ -253,8 +327,10 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
     const key = normalizedEmail.includes("@") ? `email:${normalizedEmail}` : `name:${nameKey}`;
 
     const group = groups.get(key) ?? { rows: [], tsList: [] };
-    group.rows.push({ ...row, firstName, lastName, email, whatsapp, fullNameRaw });
-    group.tsList.push(parseTimestamp(row.timestamp));
+    group.rows.push({ ...row, email, whatsapp, fullNameRaw });
+    const ts = parseTimestamp(row.timestamp);
+    group.tsList.push(ts || rowSeq);
+    rowSeq++;
     groups.set(key, group);
   }
 
@@ -273,6 +349,7 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
     const latest = group.rows[latestI];
     const earliestTs = group.tsList[earliestI];
     const dob = parseDob(latest.dobRaw);
+    const hasRealTimestamp = group.rows.some((r) => parseTimestamp(r.timestamp) > 0);
 
     registrants.push({
       id: `reg-${idx++}`,
@@ -283,11 +360,13 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
       whatsapp: latest.whatsapp || null,
       country: normalizeCountry(latest.countryRaw),
       countryRaw: latest.countryRaw,
+      city: latest.city ? titleCase(latest.city) : "",
       dobDay: dob.day,
       dobMonth: dob.month,
       dobRaw: latest.dobRaw,
-      registeredAt: new Date(earliestTs || Date.now()).toISOString(),
+      registeredAt: hasRealTimestamp ? new Date(earliestTs).toISOString() : new Date().toISOString(),
       mergedCount: group.rows.length,
+      extra: latest.extra,
     });
   }
 

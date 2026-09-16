@@ -1,5 +1,6 @@
 import { cache } from "react";
 import type { DB } from "./types";
+import type { Json } from "@/lib/supabase/database.types";
 import type { Student } from "@/lib/domain/types";
 
 interface StudentRow {
@@ -13,13 +14,16 @@ interface StudentRow {
   country_raw: string | null;
   dob_day: number | null;
   dob_month: number | null;
+  city: string | null;
+  extra: Json | null;
+  contacted_at: string | null;
   registered_at: string | null;
   enrolled_at: string;
   left_at: string | null;
 }
 
 const STUDENT_SELECT =
-  "id, cohort_id, full_name, email, email_verified, whatsapp, country, country_raw, dob_day, dob_month, registered_at, enrolled_at, left_at";
+  "id, cohort_id, full_name, email, email_verified, whatsapp, country, country_raw, dob_day, dob_month, city, extra, contacted_at, registered_at, enrolled_at, left_at";
 
 function mapStudentRow(row: StudentRow): Student {
   return {
@@ -33,6 +37,9 @@ function mapStudentRow(row: StudentRow): Student {
     countryRaw: row.country_raw,
     dobDay: row.dob_day,
     dobMonth: row.dob_month,
+    city: row.city,
+    extra: (row.extra as Record<string, string> | null) ?? null,
+    contactedAt: row.contacted_at,
     registeredAt: row.registered_at,
     enrolledAt: row.enrolled_at,
     leftAt: row.left_at,

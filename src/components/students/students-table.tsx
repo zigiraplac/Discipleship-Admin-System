@@ -12,6 +12,7 @@ import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-t
 import { buttonVariants } from "@/components/ui/button";
 import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
 import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
+import { TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
 import type { Bands, OutcomeKind, Status, StudentAggregate } from "@/lib/domain/types";
 
@@ -33,12 +34,20 @@ export function StudentsTable({
   roster,
   outcomesByStudent,
   bands,
+  currentLessonRef,
+  headerAction,
 }: {
   cohortId: string;
   cohortSlug: string;
   roster: StudentAggregate[];
   outcomesByStudent: Record<string, OutcomeKind>;
   bands: Bands;
+  /** "C3 · L7 — Knowing the Spirit", or null once the curriculum is done.
+   * One value for the whole cohort — attendance is register-based (per
+   * lesson event, not per student), so every student's "current lesson" is
+   * necessarily the cohort's own position, not an individual one. */
+  currentLessonRef?: string | null;
+  headerAction?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -75,18 +84,26 @@ export function StudentsTable({
     <>
       <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
         <Segmented options={FILTER_OPTIONS} value={filter} onChange={setFilter} />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Find a name"
-          className="ml-auto"
-          style={{ width: 190 }}
-        />
+        <div className="ml-auto flex items-center gap-2.5">
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find a name"
+            style={{ width: 190 }}
+          />
+          {headerAction}
+        </div>
       </div>
       <Table>
         <THead>
           <SortableTH label="Student" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <SortableTH label="Attended" sortKey="attended" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          {currentLessonRef && <TH>Now at</TH>}
+          <SortableTH
+            label="Lessons taken"
+            sortKey="attended"
+            sort={sort}
+            onSort={(k) => setSort((s) => nextSort(s, k))}
+          />
           <SortableTH label="Attendance" sortKey="attendance" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <SortableTH label="Status" sortKey="status" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <TH align="right" />
@@ -110,8 +127,9 @@ export function StudentsTable({
                     </span>
                   </span>
                 </TD>
-                <TD className="tabular">
-                  {s.attended} / {s.expected}
+                {currentLessonRef && <TD className="text-[12px] text-ink-muted">{left ? "—" : currentLessonRef}</TD>}
+                <TD className="tabular" title={`${s.attended} of ${s.expected} recorded lessons so far`}>
+                  {s.attended} / {TOTAL_LESSONS}
                 </TD>
                 <TD>
                   <span className="flex items-center gap-2.5">
@@ -150,7 +168,7 @@ export function StudentsTable({
           })}
           {rows.length === 0 && (
             <TR>
-              <TD colSpan={5} className="py-6 text-center text-ink-faint">
+              <TD colSpan={currentLessonRef ? 6 : 5} className="py-6 text-center text-ink-faint">
                 No students match.
               </TD>
             </TR>

@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { StatGrid } from "@/components/ui/stat-card";
 import { formatShortDate } from "@/lib/utils";
-import { CURRICULUM } from "@/lib/domain/curriculum";
+import { CURRICULUM, partsSummary } from "@/lib/domain/curriculum";
 import type {
   GeneratedEvent,
   GeneratedLessonEvent,
@@ -76,7 +76,7 @@ export function StepSchedule({
                 <TR key={r.cls.n}>
                   <TD>
                     <div className="text-[13px] font-semibold text-ink">{r.cls.title}</div>
-                    <div className="text-[11px] text-ink-muted">{r.cls.parts}</div>
+                    <div className="text-[11px] text-ink-muted">{partsSummary(r.cls)}</div>
                   </TD>
                   <TD align="right" className="tabular">
                     {r.count}

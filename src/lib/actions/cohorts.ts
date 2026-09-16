@@ -119,6 +119,8 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
     whatsapp: r.whatsapp,
     country: r.country,
     country_raw: r.countryRaw,
+    city: r.city || null,
+    extra: Object.keys(r.extra).length ? r.extra : null,
     dob_day: r.dobDay,
     dob_month: r.dobMonth,
     registered_at: r.registeredAt,
@@ -157,6 +159,7 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
     actor_id: user.id,
     entity: "cohort",
     entity_id: cohortId,
+    cohort_id: cohortId,
     action: "create",
     after: { name: input.name, students: enrol.length, events: eventPayload.length },
   });

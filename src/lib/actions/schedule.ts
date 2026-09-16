@@ -5,30 +5,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
 import { curriculumScheduleItems, placeSchedule, dayAfter, type ScheduleItem } from "@/lib/domain/generator";
+import { scheduleItemKey, one, type EventRow } from "@/lib/domain/schedule-position";
 import { lessonAt } from "@/lib/domain/curriculum";
 import { createNotifications } from "@/lib/data/notifications";
 import { getCohort } from "@/lib/data/cohorts";
 
 export interface PostponeLessonResult {
   shiftedCount: number;
-}
-
-function scheduleItemKey(item: ScheduleItem): string {
-  return item.kind === "lesson" ? `L${item.globalIndex}` : `C${item.afterClass}-${item.crusadeDay}`;
-}
-
-interface EventRow {
-  id: string;
-  event_date: string;
-  kind: "lesson" | "crusade";
-  after_class: number | null;
-  crusade_day: number | null;
-  lesson: { global_index: number } | { global_index: number }[] | null;
-  register: { recorded_at: string | null } | { recorded_at: string | null }[] | null;
-}
-
-function one<T>(v: T | T[] | null): T | null {
-  return Array.isArray(v) ? v[0] ?? null : v;
 }
 
 /**
@@ -46,6 +29,10 @@ function one<T>(v: T | T[] | null): T | null {
 export async function postponeLesson(input: {
   cohortId: string;
   eventId: string;
+  /** Shown on Reports' "What changed" timeline alongside every major
+   * schedule change — optional, but a postponement with no reason on
+   * record just falls back to a plain computed description there. */
+  reason?: string;
 }): Promise<PostponeLessonResult> {
   const actor = await requireRole("facilitator", "admin");
 
@@ -141,9 +128,10 @@ export async function postponeLesson(input: {
     actor_id: actor.id,
     entity: "event",
     entity_id: input.eventId,
+    cohort_id: input.cohortId,
     action: "postpone",
     before: { date: targetInfo.date },
-    after: { anchor, shiftedCount: updates.length },
+    after: { anchor, shiftedCount: updates.length, reason: input.reason?.trim() || null },
   });
 
   const cohortForLinks = await getCohort(admin, input.cohortId);

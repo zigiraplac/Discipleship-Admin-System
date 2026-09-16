@@ -255,3 +255,20 @@ h6 {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Reports' "Download PDF" is the browser's own print dialog (window.print())
+   against a plain, unstyled-for-print page — no PDF library, no separate
+   layout to maintain. `.no-print` hides the app chrome (sidebar/top bar);
+   `.print-area` (the <main> content) is what's left to print. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-area {
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}

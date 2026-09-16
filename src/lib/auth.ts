@@ -29,7 +29,7 @@ const getUserStatus = cache(async function getUserStatus(): Promise<UserStatus> 
 
   const { data } = await supabase
     .from("app_user")
-    .select("id, name, email, role, state")
+    .select("id, name, email, role, state, whatsapp")
     .eq("id", auth.user.id)
     .maybeSingle();
 

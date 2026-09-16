@@ -7,6 +7,92 @@ import { requireRole } from "@/lib/auth";
 import { createNotifications } from "@/lib/data/notifications";
 import { getCohort } from "@/lib/data/cohorts";
 
+export interface AddStudentInput {
+  cohortId: string;
+  fullName: string;
+  email: string | null;
+  whatsapp: string | null;
+  country: string | null;
+  city: string | null;
+  dobDay: number | null;
+  dobMonth: number | null;
+}
+
+/**
+ * The only other way a `student` row gets created is in bulk, at cohort
+ * creation, from an admin-uploaded CSV (createCohort). This covers the gap
+ * for a real student who shows up after that import is done — same
+ * validation as `updateStudent`, same admin-only gate (RLS's
+ * `student_write_admin` policy only allows an insert from `is_admin()`
+ * regardless, so this couldn't be opened up to facilitators without a
+ * policy change too).
+ */
+export async function addStudent(input: AddStudentInput): Promise<{ studentId: string }> {
+  const actor = await requireRole("admin");
+
+  const fullName = input.fullName.trim();
+  if (!fullName) throw new Error("Enter a name.");
+
+  if (input.dobDay != null && (input.dobDay < 1 || input.dobDay > 31)) {
+    throw new Error("Birthday day must be between 1 and 31.");
+  }
+  if (input.dobMonth != null && (input.dobMonth < 1 || input.dobMonth > 12)) {
+    throw new Error("Birthday month must be between 1 and 12.");
+  }
+  if ((input.dobDay == null) !== (input.dobMonth == null)) {
+    throw new Error("Enter both a birthday day and month, or leave both blank.");
+  }
+
+  const supabase = await createClient();
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("student")
+    .insert({
+      cohort_id: input.cohortId,
+      full_name: fullName,
+      full_name_raw: fullName,
+      email: input.email?.trim() || null,
+      whatsapp: input.whatsapp?.trim() || null,
+      country: input.country?.trim() || null,
+      city: input.city?.trim() || null,
+      dob_day: input.dobDay,
+      dob_month: input.dobMonth,
+      registered_at: now,
+      enrolled_at: now,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const admin = createAdminClient();
+  const cohort = await getCohort(supabase, input.cohortId);
+  const cohortSlug = cohort?.slug ?? input.cohortId;
+  const { data: members } = await admin
+    .from("cohort_member")
+    .select("user_id")
+    .eq("cohort_id", input.cohortId)
+    .neq("user_id", actor.id);
+  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
+  if (recipientIds.length) {
+    await createNotifications(
+      admin,
+      recipientIds.map((userId) => ({
+        userId,
+        kind: "student_updated",
+        title: `${fullName} joined the cohort`,
+        body: "Added after the initial import.",
+        href: `/c/${cohortSlug}/students/${data.id}`,
+      }))
+    );
+  }
+
+  const base = `/c/${cohortSlug}`;
+  revalidatePath(base);
+  revalidatePath(`${base}/students`);
+
+  return { studentId: data.id };
+}
+
 export interface UpdateStudentInput {
   studentId: string;
   cohortId: string;
@@ -86,5 +172,28 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
   const base = `/c/${cohortSlug}`;
   revalidatePath(`${base}/students`);
   revalidatePath(`${base}/students/${input.studentId}`);
-  revalidatePath(`${base}/attention`);
+  revalidatePath(`${base}/followup`);
+}
+
+/**
+ * "I reached out, now waiting to hear back" — the one piece of Follow Up
+ * tracking that didn't exist before the WhatsApp deep-link was the only
+ * option. Facilitator/admin only, same as recordOutcome (the action that
+ * closes this back to null again once a real decision is made).
+ */
+export async function markStudentContacted(input: { studentId: string; cohortId: string }): Promise<void> {
+  const actor = await requireRole("facilitator", "admin");
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("student")
+    .update({ contacted_at: new Date().toISOString(), contacted_by: actor.id })
+    .eq("id", input.studentId)
+    .eq("cohort_id", input.cohortId);
+  if (error) throw error;
+
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
+  revalidatePath(`${base}/followup`);
+  revalidatePath(`${base}/students/${input.studentId}`);
 }

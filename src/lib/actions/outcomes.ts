@@ -54,6 +54,16 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
   });
   if (error) throw new Error("Couldn't record this outcome. Please try again.");
 
+  // Recording any real decision closes the "needs contact" cycle that
+  // `markStudentContacted` (src/lib/actions/students.ts) opened — if this
+  // student ever falls below the band again later, Follow Up should treat
+  // them as freshly flagged, not still "contacted" from a previous round.
+  await supabase
+    .from("student")
+    .update({ contacted_at: null, contacted_by: null })
+    .eq("id", input.studentId)
+    .eq("cohort_id", input.cohortId);
+
   // audit_log is admin-write-only by RLS — go through the admin client so
   // a facilitator recording an outcome doesn't get an RLS error here, the
   // one pastoral decision most worth having a trail for.
@@ -88,7 +98,8 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
-  revalidatePath(`${base}/attention`);
+  revalidatePath(`${base}/followup`);
+  revalidatePath(`${base}/catchup`);
   revalidatePath(`${base}/students`);
   revalidatePath(`${base}/students/${input.studentId}`);
 }

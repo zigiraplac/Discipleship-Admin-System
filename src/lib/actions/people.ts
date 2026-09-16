@@ -15,6 +15,10 @@ export interface InvitePersonInput {
   /** Cohorts to attach this person to — meaningless for admin (sees
    * everything already) and leadership (sees everything, read-only). */
   cohortIds: string[];
+  /** So a birthday-of-the-day reminder (ensureBirthdayFacilitatorReminders)
+   * has someone real to reach, right from the start — optional, can also
+   * be added later from Settings or self-service from Profile. */
+  whatsapp?: string;
 }
 
 export interface InvitePersonResult {
@@ -117,6 +121,7 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
     email,
     role: input.role,
     state: "invited",
+    whatsapp: input.whatsapp?.trim() || null,
   });
   if (userErr) throw userErr;
 
@@ -159,6 +164,9 @@ export interface UpdatePersonInput {
    * A" is just editing A's list to include it (and, separately, editing
    * or deactivating B). */
   cohortIds: string[];
+  /** Empty string clears it — same field invitePerson sets at signup and
+   * a person can self-service from Profile. */
+  whatsapp?: string;
 }
 
 /** Admin-only. Renames, re-roles, and/or reassigns which cohorts someone
@@ -175,7 +183,7 @@ export async function updatePerson(input: UpdatePersonInput): Promise<void> {
 
   const { error: userErr } = await admin
     .from("app_user")
-    .update({ name, role: input.role })
+    .update({ name, role: input.role, whatsapp: input.whatsapp?.trim() || null })
     .eq("id", input.id);
   if (userErr) throw new Error("Couldn't update this person. Please try again.");
 
