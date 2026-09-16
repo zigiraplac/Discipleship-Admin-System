@@ -14,6 +14,7 @@ import { MobileNav } from "./mobile-nav";
 import { usePageHead } from "./page-head";
 import { signOutAction } from "@/lib/actions/auth";
 import { getCohortQuickStats } from "@/lib/actions/cohorts";
+import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/domain/types";
 import type { QuickStats } from "@/lib/data/quick-stats";
 import type { NotificationView } from "@/lib/data/notifications";
@@ -33,6 +34,7 @@ export function TopBar({
   roleLabel,
   notifications,
   badges,
+  className,
 }: {
   role: Role;
   cohorts: CohortSwitcherItem[];
@@ -44,7 +46,8 @@ export function TopBar({
   userName: string;
   roleLabel: string;
   notifications: NotificationView[];
-  badges: { lessons?: number; attention?: number };
+  badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
+  className?: string;
 }) {
   const { title, subtitle } = usePageHead();
   const router = useRouter();
@@ -64,7 +67,12 @@ export function TopBar({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-4 py-3.5 sm:gap-4 sm:px-[26px]">
+    <header
+      className={cn(
+        "sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-card px-4 py-3.5 sm:gap-4 sm:px-[26px]",
+        className
+      )}
+    >
       <MobileNav role={role} activeCohortSlug={navCohortSlug} badges={badges} />
 
       <div className="min-w-0">
@@ -113,7 +121,7 @@ export function TopBar({
       )}
 
       <ThemeToggle />
-      <NotificationsBell notifications={notifications} />
+      <NotificationsBell notifications={notifications} role={role} />
 
       <Popover>
         <PopoverTrigger className="flex items-center gap-2.5 border-0 bg-transparent p-[3px]">

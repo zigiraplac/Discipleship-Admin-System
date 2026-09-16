@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireUser, roleLabel } from "@/lib/auth";
+import { NAV_BY_ROLE } from "@/lib/roles";
 import { listCohorts, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
-import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
+import { getCrusadeEvents, getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
 import { listNotifications, ensureBirthdayNotifications } from "@/lib/data/notifications";
 import { aggregateCohort } from "@/lib/domain/metrics";
+import { daysUntilAnnual } from "@/lib/domain/birthdays";
 import { todayISO } from "@/lib/utils";
 import { NAV_ITEMS } from "./nav-items";
 import { Sidebar } from "./sidebar";
@@ -20,7 +22,9 @@ const PAGE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   lessons: "Lessons",
   students: "Students",
-  attention: "Attention",
+  followup: "Follow Up",
+  catchup: "Catch ups",
+  crusades: "Crusades",
   calendar: "Calendar",
   reports: "Reports",
   cohorts: "Cohorts",
@@ -57,14 +61,7 @@ export async function Shell({
   // below, which needs the actual cohort_id foreign key.
   const linkCohortSlug = activeCohort?.slug ?? cohorts[0]?.slug ?? null;
 
-  const allowedNav = new Set(
-    {
-      facilitator: ["dashboard", "lessons", "students", "attention", "calendar", "reports", "cohorts"],
-      admin: ["dashboard", "lessons", "students", "attention", "calendar", "reports", "cohorts", "settings"],
-      teacher: ["dashboard", "lessons", "calendar", "reports"],
-      leadership: ["dashboard", "students", "reports", "cohorts"],
-    }[user.role]
-  );
+  const allowedNav = new Set(NAV_BY_ROLE[user.role]);
 
   // The switcher's per-cohort "34 students · 82%" line used to be
   // computed here for every cohort on every page load — the same heavy
@@ -74,7 +71,7 @@ export async function Shell({
   // opened (getCohortQuickStats, lib/actions/cohorts.ts).
   const switcherItems: CohortSwitcherItem[] = cohorts.map((c) => ({ id: c.id, slug: c.slug, name: c.name }));
 
-  let badges: { lessons?: number; attention?: number } = {};
+  let badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number } = {};
   const searchIndex = {
     pages: NAV_ITEMS.filter((n) => allowedNav.has(n.id) && (!n.cohortScoped || linkCohortSlug)).map((n) => ({
       kind: "PAGE" as const,
@@ -87,9 +84,18 @@ export async function Shell({
 
   if (activeCohortId && allowedNav.has("dashboard")) {
     if (user.role === "teacher") {
-      const pub = await getLessonEventsPublic(supabase, activeCohortId);
+      const [pub, crusadeEvents] = await Promise.all([
+        getLessonEventsPublic(supabase, activeCohortId),
+        getCrusadeEvents(supabase, activeCohortId),
+      ]);
       const outstanding = pub.filter((p) => !p.recorded && p.date <= today);
-      badges = { lessons: outstanding.length || undefined };
+      // "Something's happening today" — a lightweight nudge toward Calendar,
+      // same idea as every other nav badge, just keyed off dates instead of
+      // an open task. Teacher's version skips the birthday check (would
+      // need a students fetch this branch doesn't otherwise do).
+      const todayCount =
+        pub.filter((p) => p.date === today).length + crusadeEvents.filter((e) => e.date === today).length;
+      badges = { lessons: outstanding.length || undefined, calendar: allowedNav.has("calendar") ? todayCount || undefined : undefined };
       searchIndex.lessons = pub.map((p) => ({
         kind: "LESSON",
         label: p.lessonTitle,
@@ -97,10 +103,11 @@ export async function Shell({
         meta: p.lessonRef,
       }));
     } else {
-      const [students, lessonEvents, outcomes] = await Promise.all([
+      const [students, lessonEvents, outcomes, crusadeEvents] = await Promise.all([
         getStudents(supabase, activeCohortId),
         getLessonEvents(supabase, activeCohortId),
         getOutcomesForCohort(supabase, activeCohortId),
+        getCrusadeEvents(supabase, activeCohortId),
       ]);
       // Opportunistic — a birthday has no discrete moment to notify at, so
       // this just ensures the next 7 days' worth exist every time someone
@@ -116,11 +123,29 @@ export async function Shell({
       const agg = aggregateCohort(students, lessonEvents, bands, today);
       const latest = latestByStudent(outcomes);
       // Left students stay in the search index (still findable) but don't
-      // count toward the attention badge — they're no longer tracked.
-      const toContact = agg.roster.filter((s) => !s.leftAt && s.status !== "On track" && !latest.has(s.id)).length;
+      // count toward either badge — they're no longer tracked.
+      const neverContacted = agg.roster.filter(
+        (s) => !s.leftAt && s.status !== "On track" && !latest.has(s.id) && !s.contactedAt
+      ).length;
+      const readyToUpdate = agg.roster.filter(
+        (s) => !s.leftAt && latest.get(s.id)?.kind === "catchup" && s.missed === 0
+      ).length;
+      // "Something's happening today" — a lesson due, a crusade day, or a
+      // student's birthday — nudges toward Calendar the same way every
+      // other nav badge nudges toward its own page, instead of only
+      // showing up if someone happens to open it.
+      const birthdaysToday = students.filter(
+        (s) => !s.leftAt && s.dobDay != null && s.dobMonth != null && daysUntilAnnual(s.dobDay, s.dobMonth, today) === 0
+      ).length;
+      const todayCount =
+        lessonEvents.filter((e) => e.date === today).length +
+        crusadeEvents.filter((e) => e.date === today).length +
+        birthdaysToday;
       badges = {
         lessons: agg.outstanding.length || undefined,
-        attention: allowedNav.has("attention") ? toContact || undefined : undefined,
+        followup: allowedNav.has("followup") ? neverContacted || undefined : undefined,
+        catchup: allowedNav.has("catchup") ? readyToUpdate || undefined : undefined,
+        calendar: allowedNav.has("calendar") ? todayCount || undefined : undefined,
       };
       if (allowedNav.has("students")) {
         searchIndex.students = agg.roster.map((s) => ({
@@ -148,7 +173,12 @@ export async function Shell({
       <PageHeadProvider>
         <ToastProvider>
           <div className="flex min-h-screen bg-page">
-            <Sidebar role={user.role} activeCohortSlug={linkCohortSlug} badges={badges} className="hidden lg:flex" />
+            <Sidebar
+              role={user.role}
+              activeCohortSlug={linkCohortSlug}
+              badges={badges}
+              className="no-print hidden lg:flex"
+            />
             <div className="flex min-w-0 flex-1 flex-col">
               <TopBar
                 role={user.role}
@@ -159,8 +189,11 @@ export async function Shell({
                 roleLabel={roleLabel(user.role)}
                 notifications={notifications}
                 badges={badges}
+                className="no-print"
               />
-              <main className="min-w-0 flex-1 px-4 py-[18px] pb-[70px] sm:px-[26px] sm:py-[22px]">{children}</main>
+              <main className="print-area min-w-0 flex-1 px-4 py-[18px] pb-[70px] sm:px-[26px] sm:py-[22px]">
+                {children}
+              </main>
             </div>
           </div>
         </ToastProvider>

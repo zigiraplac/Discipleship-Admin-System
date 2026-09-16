@@ -17,7 +17,7 @@ export function MobileNav({
 }: {
   role: Role;
   activeCohortSlug: string | null;
-  badges: { lessons?: number; attention?: number };
+  badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
 }) {
   const [open, setOpen] = useState(false);
 
