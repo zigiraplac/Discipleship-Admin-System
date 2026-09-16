@@ -13,7 +13,10 @@ import type { Status, CohortHealth } from "@/lib/domain/types";
 // health signal that isn't real.
 export type PillTone = "cyan" | "yellow" | "magenta" | "grey" | "green" | "violet" | "teal" | "sky" | "amber";
 
-const TONE_CLASSES: Record<PillTone, string> = {
+/** Exported so a non-Pill element (e.g. the notifications bell's icon
+ * chips) can share the exact same tone palette instead of inventing a
+ * second one. */
+export const TONE_CLASSES: Record<PillTone, string> = {
   cyan: "bg-accent-100 text-accent-800",
   yellow: "bg-yellow-100 text-yellow-ink",
   magenta: "bg-accent-2-100 text-accent-2-700",

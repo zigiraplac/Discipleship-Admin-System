@@ -45,8 +45,8 @@ export async function updateBands(bands: Bands): Promise<void> {
       recipientIds.map((userId) => ({
         userId,
         kind: "bands_updated",
-        title: "Attendance status thresholds changed",
-        body: `On track ≥ ${bands.activeThreshold}% · Needs help ≥ ${bands.helpThreshold}%. Student statuses may have shifted.`,
+        title: "Attendance thresholds changed",
+        body: `On track ≥ ${bands.activeThreshold}% · Needs help ≥ ${bands.helpThreshold}%`,
       }))
     );
   }
