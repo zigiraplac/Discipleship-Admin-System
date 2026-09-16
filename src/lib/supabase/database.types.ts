@@ -41,6 +41,7 @@ export interface Database {
           email: string;
           role: "facilitator" | "admin" | "teacher" | "leadership";
           state: "active" | "invited" | "deactivated";
+          whatsapp: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["app_user"]["Row"]> & {
@@ -119,6 +120,10 @@ export interface Database {
           country_raw: string | null;
           dob_day: number | null;
           dob_month: number | null;
+          city: string | null;
+          extra: Json | null;
+          contacted_at: string | null;
+          contacted_by: string | null;
           registered_at: string | null;
           enrolled_at: string;
           left_at: string | null;
@@ -246,6 +251,7 @@ export interface Database {
           actor_id: string | null;
           entity: string;
           entity_id: string;
+          cohort_id: string | null;
           action: string;
           before: Json | null;
           after: Json | null;
@@ -268,6 +274,7 @@ export interface Database {
           body: string | null;
           href: string | null;
           dedupe_key: string | null;
+          data: Json | null;
           read_at: string | null;
           created_at: string;
         };
@@ -333,6 +340,7 @@ export interface Database {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       activate_self: { Args: Record<string, never>; Returns: undefined };
       update_own_name: { Args: { new_name: string }; Returns: undefined };
+      update_own_whatsapp: { Args: { new_whatsapp: string }; Returns: undefined };
       create_cohort_with_schedule: {
         Args: {
           p_name: string;
