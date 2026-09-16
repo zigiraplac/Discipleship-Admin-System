@@ -34,6 +34,22 @@ export async function updateOwnName(name: string): Promise<void> {
 }
 
 /**
+ * Same reasoning as `update_own_name` — a narrow SECURITY DEFINER function
+ * (0023_app_user_whatsapp.sql) rather than a general "update your own row"
+ * policy, so this can never touch `role`. Lets every person set the
+ * WhatsApp number a same-day birthday reminder
+ * (ensureBirthdayFacilitatorReminders) actually reaches them on, without
+ * needing an admin to do it for them.
+ */
+export async function updateOwnWhatsapp(whatsapp: string): Promise<void> {
+  await requireUser();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("update_own_whatsapp", { new_whatsapp: whatsapp });
+  if (error) throw error;
+  revalidatePath("/", "layout");
+}
+
+/**
  * An active session alone isn't enough to prove you're the account owner
  * (a left-open browser, a stolen session cookie) — so this re-verifies the
  * *current* password before setting a new one. Supabase has no separate

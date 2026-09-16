@@ -4,7 +4,12 @@ import { getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getCrusadeEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
-import { ensureBirthdayNotifications, ensureAttentionEscalation, ensureCrusadeReminders } from "@/lib/data/notifications";
+import {
+  ensureBirthdayNotifications,
+  ensureBirthdayFacilitatorReminders,
+  ensureAttentionEscalation,
+  ensureCrusadeReminders,
+} from "@/lib/data/notifications";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 
@@ -17,6 +22,10 @@ import { todayISO } from "@/lib/utils";
  *   - birthdays: same `ensureBirthdayNotifications`, so the dedupe key
  *     guarantees it's still safe even though this may run alongside the
  *     opportunistic check too.
+ *   - birthday-of-the-day: separately, `ensureBirthdayFacilitatorReminders`
+ *     fires exactly on the day, straight to that cohort's own facilitators
+ *     (not the broad recipient list), with a ready-to-send WhatsApp
+ *     message when the student has a number on file.
  *   - attention escalation: a cohort with students flagged for attendance
  *     who've *never* had an outcome recorded gets one summary
  *     notification (not one per student) to that cohort's own members
@@ -60,7 +69,7 @@ export async function GET(request: Request) {
   for (const cohort of cohorts ?? []) {
     try {
       const [{ data: members, error: membersErr }, students, lessonEvents, outcomes, crusadeEvents] = await Promise.all([
-        admin.from("cohort_member").select("user_id").eq("cohort_id", cohort.id),
+        admin.from("cohort_member").select("user_id, capacity").eq("cohort_id", cohort.id),
         getStudents(admin, cohort.id),
         getLessonEvents(admin, cohort.id),
         getOutcomesForCohort(admin, cohort.id),
@@ -78,6 +87,17 @@ export async function GET(request: Request) {
       for (const userId of recipientIds) {
         await ensureBirthdayNotifications(admin, userId, activeStudents, today);
       }
+
+      const facilitatorIds = (members ?? [])
+        .filter((m) => m.capacity === "facilitator")
+        .map((m) => m.user_id);
+      await ensureBirthdayFacilitatorReminders(admin, {
+        cohortId: cohort.id,
+        cohortSlug: cohort.slug,
+        students: activeStudents,
+        facilitatorIds,
+        todayISO: today,
+      });
 
       const agg = aggregateCohort(activeStudents, lessonEvents, bands, today);
       const latest = latestByStudent(outcomes);

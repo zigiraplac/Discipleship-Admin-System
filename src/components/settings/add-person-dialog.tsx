@@ -26,6 +26,7 @@ export function AddPersonDialog({ cohorts }: { cohorts: { id: string; name: stri
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [role, setRole] = useState<Role>("facilitator");
   const [cohortIds, setCohortIds] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(false);
@@ -39,6 +40,7 @@ export function AddPersonDialog({ cohorts }: { cohorts: { id: string; name: stri
   function reset() {
     setName("");
     setEmail("");
+    setWhatsapp("");
     setRole("facilitator");
     setCohortIds(new Set());
     setError(null);
@@ -58,7 +60,7 @@ export function AddPersonDialog({ cohorts }: { cohorts: { id: string; name: stri
     setPending(true);
     setError(null);
     try {
-      const result = await invitePerson({ name, email, role, cohortIds: [...cohortIds] });
+      const result = await invitePerson({ name, email, role, cohortIds: [...cohortIds], whatsapp });
       if (result.resendLink) {
         // This email already had an account with no profile attached
         // (removed by hand, or an earlier invite that didn't finish) —
@@ -151,6 +153,15 @@ export function AddPersonDialog({ cohorts }: { cohorts: { id: string; name: stri
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="add-person-whatsapp">WhatsApp number (optional)</Label>
+                <Input
+                  id="add-person-whatsapp"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="e.g. +250 788 123 456"
                 />
               </div>
               <div>
