@@ -6,10 +6,12 @@ import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
 import { aggregateCohort } from "@/lib/domain/metrics";
+import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { Card } from "@/components/ui/card";
 import { StudentsTable } from "@/components/students/students-table";
+import { AddStudentDialog } from "@/components/students/add-student-dialog";
 import type { OutcomeKind } from "@/lib/domain/types";
 
 export default async function StudentsPage({
@@ -39,12 +41,22 @@ export default async function StudentsPage({
   const outcomesByStudent: Record<string, OutcomeKind> = {};
   for (const [studentId, outcome] of latest) outcomesByStudent[studentId] = outcome.kind;
   const activeCount = students.filter((s) => !s.leftAt).length;
+  const current = agg.recordedCount < TOTAL_LESSONS ? lessonAt(agg.recordedCount) : null;
+  const currentLessonRef = current ? `${current.ref} — ${current.title}` : null;
 
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Students" subtitle={`${cohort.name} · ${activeCount} enrolled`} />
       <Card className="overflow-hidden">
-        <StudentsTable cohortId={cohortId} cohortSlug={cohort.slug} roster={agg.roster} outcomesByStudent={outcomesByStudent} bands={bands} />
+        <StudentsTable
+          cohortId={cohortId}
+          cohortSlug={cohort.slug}
+          roster={agg.roster}
+          outcomesByStudent={outcomesByStudent}
+          bands={bands}
+          currentLessonRef={currentLessonRef}
+          headerAction={user.role === "admin" ? <AddStudentDialog cohortId={cohortId} /> : null}
+        />
       </Card>
     </div>
   );

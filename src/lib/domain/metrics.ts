@@ -44,43 +44,52 @@ export function aggregateCohort(
   const recordedCount = recorded.length;
   const enrolled = students.length;
 
-  const tally = new Map<string, { attended: number }>();
-  for (const s of students) tally.set(s.id, { attended: 0 });
+  const tally = new Map<string, { attended: number; expected: number }>();
+  for (const s of students) tally.set(s.id, { attended: 0, expected: 0 });
 
   let totalPresent = 0;
   for (const ev of recorded) {
     const reg = ev.register;
     for (const s of students) {
+      // A student added mid-cohort (src/lib/actions/students.ts:addStudent)
+      // wasn't around for lessons recorded before they enrolled — counting
+      // those against them would show someone brand new as having missed
+      // everything taught so far. Only lessons on/after their own
+      // enrollment date count toward their personal expected/attended.
+      if (ev.date < s.enrolledAt.slice(0, 10)) continue;
+      const t = tally.get(s.id)!;
+      t.expected++;
       if (reg.attendance[s.id] !== "present") continue;
       totalPresent++;
-      const t = tally.get(s.id)!;
       t.attended++;
     }
   }
 
   const roster: StudentAggregate[] = students.map((s, idx) => {
     const t = tally.get(s.id)!;
-    const rate = recordedCount ? Math.round((t.attended / recordedCount) * 100) : 0;
+    const rate = t.expected ? Math.round((t.attended / t.expected) * 100) : 0;
     // A brand-new cohort has nothing to judge anyone by yet — don't flag
     // every student "At risk" just because no register has been saved.
     // The attention loop only starts once there's at least one recorded
     // lesson (04-interactions-and-state.md: "0 and — are not interchangeable").
-    const status = recordedCount === 0 ? "On track" : statusOf(rate, bands);
+    const status = t.expected === 0 ? "On track" : statusOf(rate, bands);
     return {
       ...s,
       idx,
       attended: t.attended,
-      expected: recordedCount,
-      missed: recordedCount - t.attended,
+      expected: t.expected,
+      missed: t.expected - t.attended,
       rate,
       status,
     };
   });
 
-  const rate =
-    enrolled && recordedCount
-      ? Math.round((totalPresent / (enrolled * recordedCount)) * 100)
-      : 0;
+  // Denominator is the sum of each student's own `expected` (lessons
+  // recorded since *their* enrollment), not `enrolled * recordedCount` —
+  // that would assume everyone was around for every recorded lesson, which
+  // undercounts the cohort-wide rate as soon as anyone joined mid-cohort.
+  const totalExpected = roster.reduce((sum, r) => sum + r.expected, 0);
+  const rate = totalExpected ? Math.round((totalPresent / totalExpected) * 100) : 0;
   const atRisk = roster.filter((r) => r.status !== "On track").length;
 
   const spans = classSpans();
