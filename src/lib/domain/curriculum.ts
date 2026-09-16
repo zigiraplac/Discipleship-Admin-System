@@ -4,10 +4,19 @@
  * Titles copied verbatim from the ministry's own curriculum (02-domain-model.md).
  */
 
+/** One labeled slice of a class's lessons, in curriculum order — e.g. class
+ * 3's "Intimacy" (7 lessons) then "Consecration" (6 lessons). A class with
+ * no real sub-split still gets one part covering all of it, so every class
+ * uses the same shape and the UI never needs a special case. */
+export interface CurriculumPart {
+  label: string;
+  count: number;
+}
+
 export interface CurriculumClass {
   n: number; // 1..7
   title: string;
-  parts: string; // subtitle shown in the UI, e.g. "Intimacy 7 · Consecration 6"
+  parts: CurriculumPart[];
   lessons: string[];
 }
 
@@ -15,7 +24,7 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 1,
     title: "Foundational Teachings",
-    parts: "16 lessons",
+    parts: [{ label: "Lessons", count: 16 }],
     lessons: [
       "Salvation Insurance",
       "Assurance of Forgiveness",
@@ -38,7 +47,7 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 2,
     title: "Deep Teachings",
-    parts: "15 lessons",
+    parts: [{ label: "Lessons", count: 15 }],
     lessons: [
       "The Vision of God",
       "Stages of Growth",
@@ -60,7 +69,10 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 3,
     title: "Intimacy & Consecration",
-    parts: "Intimacy 7 · Consecration 6",
+    parts: [
+      { label: "Intimacy", count: 7 },
+      { label: "Consecration", count: 6 },
+    ],
     lessons: [
       "Knowing the Spirit",
       "The Voice of the Spirit",
@@ -80,7 +92,10 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 4,
     title: "Intercession & Listening",
-    parts: "Warfare 11 · Listening 5",
+    parts: [
+      { label: "Warfare", count: 11 },
+      { label: "Listening", count: 5 },
+    ],
     lessons: [
       "Reality of the Conflict",
       "The Kingdom of Darkness",
@@ -103,7 +118,7 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 5,
     title: "Evangelism",
-    parts: "8 lessons",
+    parts: [{ label: "Lessons", count: 8 }],
     lessons: [
       "Motivation",
       "The Message",
@@ -118,7 +133,7 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 6,
     title: "Discipleship & Communication",
-    parts: "5 lessons",
+    parts: [{ label: "Lessons", count: 5 }],
     lessons: [
       "The Call of God",
       "Making Disciples",
@@ -130,7 +145,7 @@ export const CURRICULUM: CurriculumClass[] = [
   {
     n: 7,
     title: "The Church Family",
-    parts: "7 lessons",
+    parts: [{ label: "Lessons", count: 7 }],
     lessons: [
       "The Church in God’s Purpose",
       "Church Growth Models",
@@ -144,6 +159,33 @@ export const CURRICULUM: CurriculumClass[] = [
 ];
 
 export const TOTAL_LESSONS = CURRICULUM.reduce((n, c) => n + c.lessons.length, 0); // 80
+
+/** "Part A — Intimacy" for a class with more than one part, or just
+ * "Lessons" when there's only one — so a single-part class never shows a
+ * meaningless "Part A". `index` is the part's position within its class. */
+export function partDisplayLabel(part: CurriculumPart, index: number, totalParts: number): string {
+  if (totalParts <= 1) return part.label;
+  return `Part ${String.fromCharCode(65 + index)} — ${part.label}`;
+}
+
+/** Compact subtitle for a class, e.g. "Intimacy 7 · Consecration 6" or
+ * "16 lessons" — the same text the DB's `class.part_note` stores. */
+export function partsSummary(cls: CurriculumClass): string {
+  if (cls.parts.length <= 1) return `${cls.lessons.length} lessons`;
+  return cls.parts.map((p) => `${p.label} ${p.count}`).join(" · ");
+}
+
+/** [firstIndexInClass, lastIndexInClass] (0-based, within the class's own
+ * lesson list) for each of a class's parts, in order. */
+export function partSpans(cls: CurriculumClass): [number, number][] {
+  const spans: [number, number][] = [];
+  let acc = 0;
+  for (const part of cls.parts) {
+    spans.push([acc, acc + part.count - 1]);
+    acc += part.count;
+  }
+  return spans;
+}
 
 export interface LessonLocator {
   classIndex: number; // 0-based
