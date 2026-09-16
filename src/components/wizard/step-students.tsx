@@ -162,7 +162,9 @@ export function StepStudents({
                   <div className="truncate text-[13px] font-semibold text-ink">{r.fullName}</div>
                   <div className="truncate text-[11px] text-ink-muted">{r.email ?? "No email"}</div>
                 </div>
-                <div className="w-24 flex-none truncate text-xs text-ink-tertiary">{r.country || "—"}</div>
+                <div className="w-28 flex-none truncate text-xs text-ink-tertiary">
+                  {[r.city, r.country].filter(Boolean).join(", ") || "—"}
+                </div>
                 <div className="w-14 flex-none text-right text-xs text-ink-tertiary tabular">
                   {formatBirthday(r.dobDay, r.dobMonth)}
                 </div>
