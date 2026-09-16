@@ -4,11 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import { listCohorts, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
-import { aggregateCohort, computePace, monthlyRates } from "@/lib/domain/metrics";
+import { aggregateCohort, computePace } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
-import { CohortCard } from "@/components/cohorts/cohort-card";
-import { NewCohortTile } from "@/components/cohorts/new-cohort-tile";
+import { CohortsBoard } from "@/components/cohorts/cohorts-board";
 import { ExecutiveOverview } from "@/components/cohorts/executive-overview";
 
 /**
@@ -33,11 +32,9 @@ export default async function CohortsPage() {
         getLessonEvents(supabase, cohort.id),
       ]);
       const students = allStudents.filter((s) => !s.leftAt);
-      const activeIds = new Set(students.map((s) => s.id));
       const agg = aggregateCohort(students, lessonEvents, bands, today);
-      const monthly = monthlyRates(lessonEvents, activeIds);
       const pace = computePace(cohort, agg.recordedCount, today);
-      return { cohort, agg, monthly, pace };
+      return { cohort, agg, pace };
     })
   );
 
@@ -45,15 +42,7 @@ export default async function CohortsPage() {
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Cohorts" subtitle="Switch between cohorts, or start a new one." />
       <ExecutiveOverview rows={cards} bands={bands} />
-      <div
-        className="grid gap-4"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
-      >
-        {cards.map(({ cohort, agg, pace }) => (
-          <CohortCard key={cohort.id} cohort={cohort} agg={agg} paceGap={pace.gap} />
-        ))}
-        {user.role === "admin" && <NewCohortTile />}
-      </div>
+      <CohortsBoard rows={cards} bands={bands} canCreateCohort={user.role === "admin"} />
     </div>
   );
 }
