@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 
-export interface AttentionTab {
+export interface TabGroup {
   key: string;
   label: string;
   count: number;
@@ -11,9 +11,9 @@ export interface AttentionTab {
 }
 
 /** Switches between the "everything at once" view and one group at a
- * time — the stacked sections it replaces made it easy to lose a
- * specific group (like who's on catch-up) inside the full page. */
-export function AttentionTabs({ tabs }: { tabs: AttentionTab[] }) {
+ * time — shared by Follow Up and Catch ups (formerly one "Attention" page's
+ * `AttentionTabs`), each with their own two groups plus an "All". */
+export function GroupTabs({ tabs }: { tabs: TabGroup[] }) {
   const [active, setActive] = useState(tabs[0]?.key ?? "");
   const options: SegmentedOption<string>[] = tabs.map((t) => ({ value: t.key, label: `${t.label} (${t.count})` }));
   const current = tabs.find((t) => t.key === active) ?? tabs[0];

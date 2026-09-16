@@ -125,6 +125,6 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
   revalidatePath(`${base}/calendar`);
   revalidatePath(`${base}/students`);
   revalidatePath(`${base}/students/${input.studentId}`);
-  revalidatePath(`${base}/attention`);
+  revalidatePath(`${base}/catchup`);
   revalidatePath(`${base}/reports`);
 }
