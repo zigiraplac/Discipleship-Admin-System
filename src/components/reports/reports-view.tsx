@@ -1,16 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DownloadSimple } from "@phosphor-icons/react";
+import { DownloadSimple, FilePdf } from "@phosphor-icons/react";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
-import type { Bands, CrusadeEventView } from "@/lib/domain/types";
-import type { CrusadeReport } from "@/lib/data/crusades";
+import type { Bands } from "@/lib/domain/types";
+import type { MajorChange } from "@/lib/data/audit";
 import { ByClassCard } from "./by-class-card";
 import { MonthChartCard } from "./month-chart-card";
 import { HighlightCards } from "./highlight-cards";
-import { CrusadesTable } from "./crusades-table";
+import { WhatsChangedCard } from "@/components/shared/whats-changed-card";
 import { downloadLessonsCsv } from "./csv-export";
 import { formatRangeLabel, inRange, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
 
@@ -21,29 +21,27 @@ const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
 ];
 
 export function ReportsView({
-  cohortId,
   cohortName,
   lessons,
-  crusadeEvents,
-  reportsByAfterClass,
-  canRecordCrusades,
+  majorChanges,
   enrolled,
   bands,
   today,
   paceGap,
 }: {
-  cohortId: string;
   cohortName: string;
   lessons: ReportLesson[];
-  crusadeEvents: CrusadeEventView[];
-  reportsByAfterClass: Map<number, CrusadeReport>;
-  canRecordCrusades: boolean;
+  majorChanges: MajorChange[];
   enrolled: number;
   bands: Bands;
   today: string;
   /** Positive = behind the cohort's own ideal pace, 0/negative = on or ahead. */
   paceGap: number;
 }) {
+  // Crusade postponements are Crusades' own history now (see the Crusades
+  // page) — Reports only narrates lesson/cohort-level schedule changes, so
+  // nothing crusade-related leaks back in here.
+  const nonCrusadeChanges = useMemo(() => majorChanges.filter((c) => c.changeKind !== "crusade"), [majorChanges]);
   const [period, setPeriod] = useState<Period>("Month");
 
   const range = useMemo(() => resolvePeriodRange(period, today, lessons), [period, today, lessons]);
@@ -65,19 +63,33 @@ export function ReportsView({
 
   return (
     <div className="flex flex-col gap-[18px]">
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Only shown when printing — the screen already has this in the
+          top bar's page title, which .no-print hides for print. */}
+      <div className="hidden print:block">
+        <div className="text-[20px] font-bold text-ink">{cohortName} — Report</div>
+        <div className="text-xs text-ink-muted">
+          {period} · {rangeLabel} · generated {today}
+        </div>
+      </div>
+
+      <div className="no-print flex flex-wrap items-center gap-3">
         <Segmented options={PERIOD_OPTIONS} value={period} onChange={setPeriod} solid />
         <span className="text-xs text-ink-muted">{rangeLabel}</span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="ml-auto"
-          onClick={() => downloadLessonsCsv(inPeriod, cohortName, `${period}-${rangeLabel}`)}
-        >
-          <DownloadSimple size={14} />
-          Download report
-        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button type="button" variant="secondary" size="sm" onClick={() => window.print()}>
+            <FilePdf size={14} />
+            Download PDF
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => downloadLessonsCsv(inPeriod, cohortName, `${period}-${rangeLabel}`)}
+          >
+            <DownloadSimple size={14} />
+            Download CSV
+          </Button>
+        </div>
       </div>
 
       <StatGrid>
@@ -103,12 +115,10 @@ export function ReportsView({
         </div>
       </div>
 
-      <CrusadesTable
-        cohortId={cohortId}
-        crusadeEvents={crusadeEvents}
-        reportsByAfterClass={reportsByAfterClass}
-        canRecord={canRecordCrusades}
-        today={today}
+      <WhatsChangedCard
+        changes={nonCrusadeChanges}
+        subtitle="Lesson postponements and cohort milestones, with reasons where given — crusade weekends have their own history on the Crusades page"
+        emptyLabel="Nothing schedule-affecting has happened in this cohort yet."
       />
     </div>
   );
