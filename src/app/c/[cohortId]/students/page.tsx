@@ -59,7 +59,9 @@ export default async function StudentsPage({
           outcomesByStudent={outcomesByStudent}
           bands={bands}
           headerAction={
-            user.role === "admin" ? <AddStudentDialog cohortId={cohortId} recordedLessons={recordedLessons} /> : null
+            user.role === "admin" || user.role === "facilitator" ? (
+              <AddStudentDialog cohortId={cohortId} recordedLessons={recordedLessons} />
+            ) : null
           }
         />
       </Card>

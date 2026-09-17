@@ -302,8 +302,13 @@ export default async function DashboardPage({
       },
     }));
 
+    // "On track" specifically, not just "has some expected lessons" — a
+    // 0%-attendance student was slipping in here whenever fewer than 5
+    // people genuinely had good attendance. This and `needsFollowUp`
+    // below are opposite halves of the same roster (every status other
+    // than "On track"), so nobody is double-counted or dropped.
     topAttenders = agg.roster
-      .filter((s) => s.expected > 0)
+      .filter((s) => s.status === "On track" && s.expected > 0)
       .sort((a, b) => b.rate - a.rate)
       .slice(0, 5);
 
@@ -364,14 +369,14 @@ export default async function DashboardPage({
     .map((i) => i.row);
 
   // Gated by who can actually *do* the thing, not just who can see the
-  // page it lives on — "Add student" only exists as a button for admin
-  // (students/page.tsx), and only facilitator/admin can open a register
-  // to record it, so showing these to anyone else would be a shortcut to
-  // a page with nothing to click.
+  // page it lives on — "Add student" only exists as a button for
+  // facilitator/admin (students/page.tsx), and only those two roles can
+  // open a register to record it, so showing these to anyone else would
+  // be a shortcut to a page with nothing to click.
   const allowedNav = NAV_BY_ROLE[user.role];
   const canRecordLessons = user.role === "facilitator" || user.role === "admin";
   const rawActions: (QuickAction | false)[] = [
-    user.role === "admin" && {
+    canRecordLessons && {
       label: "Add student",
       href: `/c/${cohortSlug}/students?add=1`,
       icon: UserPlus,

@@ -27,8 +27,8 @@ export interface RecordedLessonOption {
   date: string;
 }
 
-/** Admin-only trigger + form — the page decides whether to render this at
- * all (only for user.role === "admin"), this component doesn't re-check.
+/** Facilitator/admin trigger + form — the page decides whether to render
+ * this at all (only for those two roles), this component doesn't re-check.
  * Covers the one gap the CSV import wizard leaves: a real student who
  * shows up after that import is already done — including one who was
  * actually there for some already-recorded lessons before anyone entered

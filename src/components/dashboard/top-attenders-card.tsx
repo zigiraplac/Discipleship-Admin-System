@@ -28,11 +28,15 @@ export function TopAttendersCard({
 }) {
   const [view, setView] = useState<View>("good");
   const rows = view === "good" ? good : followUp;
+  // "Top 5" only when there actually are 5 to show — fewer than that
+  // shouldn't imply a longer list exists, and none at all says so plainly
+  // rather than showing an empty "Top 5" header over nothing.
+  const title = rows.length > 0 ? `Top ${rows.length}` : "None";
 
   return (
     <Card className="p-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[15px] font-bold text-ink">Top 5</div>
+        <div className="text-[15px] font-bold text-ink">{title}</div>
         <select
           value={view}
           onChange={(e) => setView(e.target.value as View)}
