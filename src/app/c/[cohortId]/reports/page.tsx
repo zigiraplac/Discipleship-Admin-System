@@ -6,7 +6,8 @@ import { getBands, getCohort } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getAuditLogForCohort } from "@/lib/data/audit";
-import { computePace, lessonStats } from "@/lib/domain/metrics";
+import { aggregateCohort, computePace, lessonStats } from "@/lib/domain/metrics";
+import { cohortHealth } from "@/lib/domain/bands";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { ReportsView } from "@/components/reports/reports-view";
@@ -43,7 +44,14 @@ export default async function ReportsPage({
   const students = allStudents.filter((s) => !s.leftAt);
   const activeIds = new Set(students.map((s) => s.id));
   const enrolled = students.length;
+  const leftCount = allStudents.length - enrolled;
+  const today = todayISO();
   let lessons: ReportLesson[];
+  // Per-student status (health/needs-follow-up) needs the full register,
+  // which RLS blocks for teacher (same reason Dashboard's own "Needs
+  // follow up" KPI and table are hidden for that role) — null here means
+  // ReportsView leaves those cards out rather than showing a wrong number.
+  let insights: { health: ReturnType<typeof cohortHealth>; atRisk: number } | null = null;
 
   if (user.role === "teacher") {
     const pub = await getLessonEventsPublic(supabase, cohortId);
@@ -78,9 +86,10 @@ export default async function ReportsPage({
         rate: stats?.rate ?? null,
       };
     });
+    const agg = aggregateCohort(students, full, bands, today);
+    insights = { health: cohortHealth(agg.rate, agg.atRisk, agg.enrolled), atRisk: agg.atRisk };
   }
 
-  const today = todayISO();
   const recordedCount = lessons.filter((l) => l.recorded).length;
   const pace = computePace(cohort, recordedCount, today);
 
@@ -92,6 +101,8 @@ export default async function ReportsPage({
         lessons={lessons}
         majorChanges={majorChanges}
         enrolled={enrolled}
+        leftCount={leftCount}
+        insights={insights}
         bands={bands}
         today={today}
         paceGap={pace.gap}

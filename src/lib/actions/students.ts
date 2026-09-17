@@ -16,6 +16,15 @@ export interface AddStudentInput {
   city: string | null;
   dobDay: number | null;
   dobMonth: number | null;
+  /** Recorded lesson events this student already attended before being
+   * entered into the system — a facilitator forgetting to register someone
+   * for the first few lessons shouldn't mean their real attendance is
+   * unrecoverable. When given, `enrolled_at` is backdated to the earliest
+   * of these instead of "now," so the existing per-student expected/
+   * attended window (aggregateCohort, metrics.ts) counts everything from
+   * their real start date forward — including any lesson in between that
+   * wasn't ticked, which correctly comes out as a real miss. */
+  attendedEventIds?: string[];
 }
 
 /**
@@ -45,6 +54,31 @@ export async function addStudent(input: AddStudentInput): Promise<{ studentId: s
 
   const supabase = await createClient();
   const now = new Date().toISOString();
+
+  // Never trust event ids from the client outright — same defensive check
+  // toggleLessonCatchup uses (catchup.ts) — confirm each one is actually a
+  // recorded lesson belonging to this cohort before it can move their
+  // enrollment date or get an attendance mark written against it.
+  let backfillEvents: { id: string; event_date: string }[] = [];
+  if (input.attendedEventIds?.length) {
+    const { data: rows, error: eventsErr } = await supabase
+      .from("event")
+      .select("id, event_date, kind, register(recorded_at)")
+      .eq("cohort_id", input.cohortId)
+      .in("id", input.attendedEventIds);
+    if (eventsErr) throw new Error("Couldn't verify those lessons. Please try again.");
+    backfillEvents = (rows ?? [])
+      .filter((r) => {
+        const reg = Array.isArray(r.register) ? r.register[0] : r.register;
+        return r.kind === "lesson" && reg?.recorded_at != null;
+      })
+      .map((r) => ({ id: r.id, event_date: r.event_date }));
+  }
+
+  const enrolledAt = backfillEvents.length
+    ? new Date(`${backfillEvents.reduce((min, e) => (e.event_date < min ? e.event_date : min), backfillEvents[0].event_date)}T00:00:00Z`).toISOString()
+    : now;
+
   const { data, error } = await supabase
     .from("student")
     .insert({
@@ -58,11 +92,26 @@ export async function addStudent(input: AddStudentInput): Promise<{ studentId: s
       dob_day: input.dobDay,
       dob_month: input.dobMonth,
       registered_at: now,
-      enrolled_at: now,
+      enrolled_at: enrolledAt,
     })
     .select("id")
     .single();
   if (error) throw error;
+
+  // A plain "they were there" mark, not a catch-up correction — no
+  // lesson_catchup row, since that table specifically means "made up a
+  // missed lesson later," which isn't what happened here. Same atomic RPC
+  // toggleLessonCatchup already uses (0009_atomic_writes.sql), so no new
+  // migration is needed for this.
+  for (const ev of backfillEvents) {
+    const { error: markErr } = await supabase.rpc("set_attendance_mark", {
+      p_event_id: ev.id,
+      p_student_id: data.id,
+      p_present: true,
+      p_actor: actor.id,
+    });
+    if (markErr) throw new Error("Student was added, but couldn't backfill their attendance. Please try again.");
+  }
 
   const admin = createAdminClient();
   const cohort = await getCohort(supabase, input.cohortId);
@@ -89,6 +138,7 @@ export async function addStudent(input: AddStudentInput): Promise<{ studentId: s
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
   revalidatePath(`${base}/students`);
+  revalidatePath(`${base}/reports`);
 
   return { studentId: data.id };
 }

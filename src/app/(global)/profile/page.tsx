@@ -9,7 +9,7 @@ export default async function ProfilePage() {
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Profile" subtitle="Your own account settings" />
       <div className="flex max-w-[420px] flex-col gap-4">
-        <NameForm name={user.name} email={user.email} roleLabel={roleLabel(user.role)} whatsapp={user.whatsapp} />
+        <NameForm name={user.name} email={user.email} roleLabel={roleLabel(user.role)} />
         <PasswordForm />
       </div>
     </div>

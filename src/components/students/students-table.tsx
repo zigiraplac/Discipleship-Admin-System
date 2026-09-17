@@ -12,7 +12,7 @@ import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-t
 import { buttonVariants } from "@/components/ui/button";
 import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
 import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
-import { TOTAL_LESSONS } from "@/lib/domain/curriculum";
+import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
 import type { Bands, OutcomeKind, Status, StudentAggregate } from "@/lib/domain/types";
 
@@ -34,7 +34,6 @@ export function StudentsTable({
   roster,
   outcomesByStudent,
   bands,
-  currentLessonRef,
   headerAction,
 }: {
   cohortId: string;
@@ -42,11 +41,6 @@ export function StudentsTable({
   roster: StudentAggregate[];
   outcomesByStudent: Record<string, OutcomeKind>;
   bands: Bands;
-  /** "C3 · L7 — Knowing the Spirit", or null once the curriculum is done.
-   * One value for the whole cohort — attendance is register-based (per
-   * lesson event, not per student), so every student's "current lesson" is
-   * necessarily the cohort's own position, not an individual one. */
-  currentLessonRef?: string | null;
   headerAction?: React.ReactNode;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -97,7 +91,7 @@ export function StudentsTable({
       <Table>
         <THead>
           <SortableTH label="Student" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          {currentLessonRef && <TH>Now at</TH>}
+          <TH>Completed through</TH>
           <SortableTH
             label="Lessons taken"
             sortKey="attended"
@@ -127,7 +121,16 @@ export function StudentsTable({
                     </span>
                   </span>
                 </TD>
-                {currentLessonRef && <TD className="text-[12px] text-ink-muted">{left ? "—" : currentLessonRef}</TD>}
+                <TD className="text-[12px] text-ink-muted">
+                  {left || s.lastAttendedGlobalIndex == null ? (
+                    left ? "—" : <span className="text-ink-faint">Not started</span>
+                  ) : (
+                    (() => {
+                      const l = lessonAt(s.lastAttendedGlobalIndex);
+                      return `${l.ref} — ${l.title}`;
+                    })()
+                  )}
+                </TD>
                 <TD className="tabular" title={`${s.attended} of ${s.expected} recorded lessons so far`}>
                   {s.attended} / {TOTAL_LESSONS}
                 </TD>
@@ -151,6 +154,15 @@ export function StudentsTable({
                         <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
                       )}
                     </span>
+                  ) : s.expected === 0 ? (
+                    // `status` defaults to "On track" here purely so a
+                    // just-enrolled student isn't flagged "At risk" with
+                    // nothing recorded since they joined (metrics.ts) — but
+                    // showing that as the same green "On track" pill next to
+                    // a real 0/80 reads as a contradiction. This is a
+                    // distinct, neutral "hasn't started yet," not a judged
+                    // good rate.
+                    <Pill tone="grey">Not started</Pill>
                   ) : (
                     <StatusPill status={s.status} />
                   )}
@@ -168,7 +180,7 @@ export function StudentsTable({
           })}
           {rows.length === 0 && (
             <TR>
-              <TD colSpan={currentLessonRef ? 6 : 5} className="py-6 text-center text-ink-faint">
+              <TD colSpan={6} className="py-6 text-center text-ink-faint">
                 No students match.
               </TD>
             </TR>

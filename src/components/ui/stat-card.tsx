@@ -23,6 +23,7 @@ export function StatCard({
   label,
   value,
   sub,
+  trend,
   icon: IconEl,
   tone = "cyan",
   className,
@@ -30,6 +31,10 @@ export function StatCard({
   label: string;
   value: React.ReactNode;
   sub?: React.ReactNode;
+  /** An optional compact visual (e.g. a sparkline) rendered below `sub` —
+   * for the rare stat where a single number benefits from showing its
+   * trend, not a general-purpose slot every card needs. */
+  trend?: React.ReactNode;
   icon?: Icon;
   tone?: PillTone;
   className?: string;
@@ -46,6 +51,7 @@ export function StatCard({
       </div>
       <div className="mt-2 text-[26px] font-bold leading-none text-ink tabular">{value}</div>
       {sub && <div className="mt-[5px] text-xs text-ink-muted">{sub}</div>}
+      {trend && <div className="mt-2">{trend}</div>}
     </Card>
   );
 }

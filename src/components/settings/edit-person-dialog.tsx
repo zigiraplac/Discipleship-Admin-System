@@ -40,7 +40,6 @@ export function EditPersonDialog({
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(person.name);
-  const [whatsapp, setWhatsapp] = useState(person.whatsapp ?? "");
   const [role, setRole] = useState<Role>(person.role);
   const [cohortIds, setCohortIds] = useState<Set<string>>(new Set(currentCohortIds));
   const [pending, setPending] = useState(false);
@@ -54,7 +53,6 @@ export function EditPersonDialog({
 
   function reset() {
     setName(person.name);
-    setWhatsapp(person.whatsapp ?? "");
     setRole(person.role);
     setCohortIds(new Set(currentCohortIds));
     setError(null);
@@ -73,7 +71,7 @@ export function EditPersonDialog({
     setPending(true);
     setError(null);
     try {
-      await updatePerson({ id: person.id, name, role, cohortIds: [...cohortIds], whatsapp });
+      await updatePerson({ id: person.id, name, role, cohortIds: [...cohortIds] });
       show(`Saved changes to ${name}.`);
       setOpen(false);
       router.refresh();
@@ -130,15 +128,6 @@ export function EditPersonDialog({
           <div>
             <Label htmlFor="edit-person-name">Name</Label>
             <Input id="edit-person-name" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="edit-person-whatsapp">WhatsApp number</Label>
-            <Input
-              id="edit-person-whatsapp"
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(e.target.value)}
-              placeholder="e.g. +250 788 123 456"
-            />
           </div>
           <div>
             <Label>Role</Label>

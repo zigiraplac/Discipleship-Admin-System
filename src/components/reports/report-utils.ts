@@ -104,8 +104,14 @@ export function monthLabel(monthKey: string): string {
 }
 
 /** Local equivalent of `monthlyRates` from domain/metrics.ts, operating on
- * the normalized `ReportLesson[]` shared by both roles. */
-export function monthlyRatesFrom(lessons: ReportLesson[], enrolled: number): MonthlyRate[] {
+ * the normalized `ReportLesson[]` shared by both roles. Only needs these
+ * three fields, so a caller with a lighter-weight lesson shape (e.g. the
+ * Dashboard's own per-role lesson mapping) can reuse it without building a
+ * full `ReportLesson`. */
+export function monthlyRatesFrom(
+  lessons: Pick<ReportLesson, "date" | "recorded" | "present">[],
+  enrolled: number
+): MonthlyRate[] {
   const byMonth = new Map<string, { present: number; n: number }>();
   for (const l of lessons) {
     if (!l.recorded || !enrolled || l.present == null) continue;

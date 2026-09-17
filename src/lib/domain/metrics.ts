@@ -44,34 +44,54 @@ export function aggregateCohort(
   const recordedCount = recorded.length;
   const enrolled = students.length;
 
-  const tally = new Map<string, { attended: number; expected: number }>();
-  for (const s of students) tally.set(s.id, { attended: 0, expected: 0 });
+  const tally = new Map<
+    string,
+    { attended: number; expected: number; lastAttendedGlobalIndex: number | null; streak: number }
+  >();
+  for (const s of students) tally.set(s.id, { attended: 0, expected: 0, lastAttendedGlobalIndex: null, streak: 0 });
 
   let totalPresent = 0;
   for (const ev of recorded) {
     const reg = ev.register;
     for (const s of students) {
+      const t = tally.get(s.id)!;
+      // "Last attended" is real history regardless of the enrollment
+      // window below — a backfilled present mark from before a
+      // late-added student's system-entry date still counts as something
+      // they actually attended.
+      if (reg.attendance[s.id] === "present") {
+        if (t.lastAttendedGlobalIndex == null || ev.globalIndex > t.lastAttendedGlobalIndex) {
+          t.lastAttendedGlobalIndex = ev.globalIndex;
+        }
+      }
       // A student added mid-cohort (src/lib/actions/students.ts:addStudent)
       // wasn't around for lessons recorded before they enrolled — counting
       // those against them would show someone brand new as having missed
       // everything taught so far. Only lessons on/after their own
       // enrollment date count toward their personal expected/attended.
       if (ev.date < s.enrolledAt.slice(0, 10)) continue;
-      const t = tally.get(s.id)!;
       t.expected++;
-      if (reg.attendance[s.id] !== "present") continue;
+      if (reg.attendance[s.id] !== "present") {
+        t.streak++;
+        continue;
+      }
       totalPresent++;
       t.attended++;
+      t.streak = 0;
     }
   }
 
   const roster: StudentAggregate[] = students.map((s, idx) => {
     const t = tally.get(s.id)!;
     const rate = t.expected ? Math.round((t.attended / t.expected) * 100) : 0;
-    // A brand-new cohort has nothing to judge anyone by yet — don't flag
-    // every student "At risk" just because no register has been saved.
-    // The attention loop only starts once there's at least one recorded
-    // lesson (04-interactions-and-state.md: "0 and — are not interchangeable").
+    // A brand-new cohort (or a student who just joined) has nothing to
+    // judge them by yet — don't flag them "At risk" just because no
+    // register has been saved since they enrolled
+    // (04-interactions-and-state.md: "0 and — are not interchangeable").
+    // This is *not* the same as a real "On track" — callers that display
+    // status should treat `expected === 0` as its own "not started yet"
+    // case rather than showing it as if it were a judged, healthy rate
+    // (see students-table.tsx).
     const status = t.expected === 0 ? "On track" : statusOf(rate, bands);
     return {
       ...s,
@@ -81,6 +101,8 @@ export function aggregateCohort(
       missed: t.expected - t.attended,
       rate,
       status,
+      lastAttendedGlobalIndex: t.lastAttendedGlobalIndex,
+      currentMissStreak: t.streak,
     };
   });
 

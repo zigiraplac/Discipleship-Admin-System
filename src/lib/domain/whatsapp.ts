@@ -92,18 +92,3 @@ We'd love to have you continue with us. Would you like to catch up on what you'v
 
 Please let us know either way — God bless you!`;
 }
-
-/**
- * A ready-to-send birthday greeting — pre-fills the facilitator's WhatsApp
- * chat with the student (see `ensureBirthdayFacilitatorReminders`,
- * src/lib/data/notifications.ts) so wishing them well is one tap away
- * instead of a blank chat to write from scratch.
- */
-export function birthdayGreetingMessage(fullName: string): string {
-  const firstName = fullName.trim().split(/\s+/)[0] ?? fullName;
-  return `Shalom Beloved ${firstName}, 🎉🎂
-
-Happy birthday! We're so grateful to have you in the cohort and we're praying for a year full of God's blessing, growth, and joy over your life.
-
-Wishing you a wonderful day — God bless you!`;
-}

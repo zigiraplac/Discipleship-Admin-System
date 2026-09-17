@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Cake, BookOpen, Megaphone, HandWaving, WarningCircle, UserCircle, Sliders, WhatsappLogo } from "@phosphor-icons/react";
+import { Bell, Cake, BookOpen, Megaphone, HandWaving, WarningCircle, UserCircle, Sliders } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { TONE_CLASSES, type PillTone } from "@/components/ui/pill";
 import { markNotificationRead, markAllNotificationsRead } from "@/lib/actions/notifications";
@@ -15,7 +15,6 @@ import type { Role } from "@/lib/domain/types";
 
 const ICON_BY_KIND: Record<string, typeof Bell> = {
   birthday: Cake,
-  birthday_today: WhatsappLogo,
   lesson_postponed: BookOpen,
   crusade_postponed: Megaphone,
   crusade_upcoming: Megaphone,
@@ -31,7 +30,6 @@ const ICON_BY_KIND: Record<string, typeof Bell> = {
 // glance.
 const TONE_BY_KIND: Record<string, PillTone> = {
   birthday: "violet",
-  birthday_today: "green",
   lesson_postponed: "amber",
   crusade_postponed: "amber",
   crusade_upcoming: "teal",

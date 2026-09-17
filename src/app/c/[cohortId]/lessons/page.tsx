@@ -4,8 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
-import { getLessonEvents, getLessonEventsPublic, getCrusadeEvents } from "@/lib/data/lessons";
-import { TOTAL_LESSONS, CURRICULUM } from "@/lib/domain/curriculum";
+import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
+import { TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { todayISO, formatShortDate } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
@@ -26,8 +26,6 @@ export default async function LessonsPage({
   const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
   if (!cohort) notFound();
   const cohortId = cohort.id;
-
-  const crusadeEvents = await getCrusadeEvents(supabase, cohortId);
 
   const today = todayISO();
   let rows: LessonRow[] = [];
@@ -54,13 +52,6 @@ export default async function LessonsPage({
   const missingSub = missingRows[0]?.lessonRef ?? "all up to date";
   const lastLessonDate = rows[rows.length - 1]?.date;
 
-  const weekendsByClass = new Map<number, { fridayDate: string }>();
-  for (const ev of crusadeEvents) {
-    if (ev.crusadeDay !== 0) continue;
-    weekendsByClass.set(ev.afterClass, { fridayDate: ev.date });
-  }
-  const weekendsDone = [...weekendsByClass.values()].filter((w) => w.fridayDate <= today).length;
-
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Lessons" subtitle={`${cohort.name} · the register lives here`} />
@@ -78,11 +69,6 @@ export default async function LessonsPage({
           label="Remaining"
           value={TOTAL_LESSONS - recordedCount}
           sub={lastLessonDate ? `ends ${formatShortDate(lastLessonDate)}` : undefined}
-        />
-        <StatCard
-          label="Crusades done"
-          value={weekendsDone}
-          sub={`of ${CURRICULUM.length} weekends`}
         />
       </StatGrid>
 

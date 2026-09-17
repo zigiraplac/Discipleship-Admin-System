@@ -25,7 +25,17 @@ export function ProfileCard({ student }: { student: StudentAggregate }) {
             {student.email ?? "No email"} · {student.country ?? "—"}
           </div>
         </div>
-        {left ? <Pill tone="grey">Left</Pill> : <StatusPill status={student.status} />}
+        {left ? (
+          <Pill tone="grey">Left</Pill>
+        ) : student.expected === 0 ? (
+          // Same reasoning as students-table.tsx — "On track" here is only
+          // a neutral default (nothing recorded since they enrolled), not a
+          // judged good rate; showing it as such next to a real 0/N reads
+          // as a contradiction.
+          <Pill tone="grey">Not started</Pill>
+        ) : (
+          <StatusPill status={student.status} />
+        )}
       </div>
 
       {left && (

@@ -120,22 +120,3 @@ export function CardGridSkeleton({ count = 4 }: { count?: number }) {
     </div>
   );
 }
-
-/** Mirrors the "Whole journey" heatmap (lessons-heatmap.tsx) — a wide grid
- * of small pulsing squares. */
-export function HeatmapSkeleton() {
-  return (
-    <Card className="overflow-hidden p-[18px]">
-      <Skeleton className="h-4 w-28" />
-      <Skeleton className="mt-2 h-3 w-64" />
-      <div
-        className="mt-5 grid"
-        style={{ gridTemplateColumns: "repeat(52, 11px)", gridTemplateRows: "repeat(7, 11px)", gap: 3 }}
-      >
-        {Array.from({ length: 52 * 7 }).map((_, i) => (
-          <Skeleton key={i} className="rounded-[2px]" />
-        ))}
-      </div>
-    </Card>
-  );
-}

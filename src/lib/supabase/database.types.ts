@@ -41,7 +41,6 @@ export interface Database {
           email: string;
           role: "facilitator" | "admin" | "teacher" | "leadership";
           state: "active" | "invited" | "deactivated";
-          whatsapp: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["app_user"]["Row"]> & {
@@ -340,7 +339,6 @@ export interface Database {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       activate_self: { Args: Record<string, never>; Returns: undefined };
       update_own_name: { Args: { new_name: string }; Returns: undefined };
-      update_own_whatsapp: { Args: { new_whatsapp: string }; Returns: undefined };
       create_cohort_with_schedule: {
         Args: {
           p_name: string;

@@ -32,31 +32,26 @@ export function CatchupBoard({
 }) {
   const [view, setView] = useState<ViewMode>("list");
 
-  const render = (roster: CatchupEntry[]) =>
-    view === "list" ? (
-      <Card className="overflow-hidden">
-        <CatchupList entries={roster} cohortId={cohortId} cohortSlug={cohortSlug} bands={bands} canRecord={canRecord} />
-      </Card>
-    ) : (
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-        {roster.map(({ student, outcome, sinceProgress }) => (
-          <CatchupCard
-            key={student.id}
-            cohortId={cohortId}
-            cohortSlug={cohortSlug}
-            student={student}
-            outcome={outcome}
-            sinceProgress={sinceProgress}
-            bands={bands}
-            lessonEvents={lessonEvents}
-            canRecord={canRecord}
-          />
-        ))}
-        {roster.length === 0 && (
-          <Card className="col-span-full px-6 py-10 text-center text-sm text-ink-muted">Nobody in this group.</Card>
-        )}
-      </div>
-    );
+  const cardGrid = (roster: CatchupEntry[]) => (
+    <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+      {roster.map(({ student, outcome, sinceProgress }) => (
+        <CatchupCard
+          key={student.id}
+          cohortId={cohortId}
+          cohortSlug={cohortSlug}
+          student={student}
+          outcome={outcome}
+          sinceProgress={sinceProgress}
+          bands={bands}
+          lessonEvents={lessonEvents}
+          canRecord={canRecord}
+        />
+      ))}
+      {roster.length === 0 && (
+        <Card className="col-span-full px-6 py-10 text-center text-sm text-ink-muted">Nobody in this group.</Card>
+      )}
+    </div>
+  );
 
   const groups: { key: string; title: string; roster: CatchupEntry[] }[] = [
     { key: "catchup", title: "On catch-up", roster: onCatchup },
@@ -78,7 +73,7 @@ export function CatchupBoard({
                   <h2 className="text-[15px] font-bold text-ink">{g.title}</h2>
                   <span className="text-xs font-semibold text-ink-muted tabular">{g.roster.length}</span>
                 </div>
-                {render(g.roster)}
+                {cardGrid(g.roster)}
               </div>
             ))}
           {entries.length === 0 && (
@@ -87,7 +82,7 @@ export function CatchupBoard({
         </div>
       ),
     },
-    ...groups.map((g) => ({ key: g.key, label: g.title, count: g.roster.length, content: render(g.roster) })),
+    ...groups.map((g) => ({ key: g.key, label: g.title, count: g.roster.length, content: cardGrid(g.roster) })),
   ];
 
   return (
@@ -95,7 +90,13 @@ export function CatchupBoard({
       <div className="flex justify-end">
         <ViewToggle value={view} onChange={setView} />
       </div>
-      <GroupTabs tabs={tabs} />
+      {view === "list" ? (
+        <Card className="overflow-hidden">
+          <CatchupList entries={entries} cohortId={cohortId} cohortSlug={cohortSlug} bands={bands} canRecord={canRecord} />
+        </Card>
+      ) : (
+        <GroupTabs tabs={tabs} />
+      )}
     </div>
   );
 }

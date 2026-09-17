@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import { WarningCircle, PhoneCall } from "@phosphor-icons/react/dist/ssr";
 import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort, getBands } from "@/lib/data/cohorts";
@@ -9,7 +8,6 @@ import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
-import { StatCard, StatGrid } from "@/components/ui/stat-card";
 import { FollowUpBoard } from "@/components/followup/followup-board";
 import { HowFollowUpWorksCard } from "@/components/followup/how-it-works-card";
 import type { FollowUpEntry } from "@/components/followup/followup-list";
@@ -58,21 +56,6 @@ export default async function FollowUpPage({
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Follow Up" subtitle={`${cohort.name} · ${entries.length} to follow up`} />
-
-      <StatGrid>
-        <StatCard
-          label="Needs contact"
-          value={needsContact.length}
-          icon={needsContact.length > 0 ? WarningCircle : undefined}
-          tone="yellow"
-        />
-        <StatCard
-          label="Contacted, awaiting outcome"
-          value={contactedAwaiting.length}
-          icon={contactedAwaiting.length > 0 ? PhoneCall : undefined}
-          tone="cyan"
-        />
-      </StatGrid>
 
       <FollowUpBoard
         entries={entries}

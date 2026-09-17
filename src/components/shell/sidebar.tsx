@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
-import { NAV_ITEMS, type NavItem } from "./nav-items";
+import { NAV_ITEMS, NAV_GROUP_LABELS, NAV_GROUP_ORDER, type NavItem } from "./nav-items";
 import { SearchTrigger } from "./search-palette";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
@@ -90,8 +90,35 @@ export function Sidebar({
   // there genuinely isn't one yet, in which case those items would point
   // nowhere (`/c/null`) and are hidden instead of shown broken.
   const primary = NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
+  // Dashboard has no group — stays standalone above every section, the way
+  // a "home" item usually does. Everything else is grouped by function
+  // (Schedule / Students / Reports) so the sidebar reads as a few short
+  // lists instead of one long undifferentiated one.
+  const ungrouped = primary.filter((n) => !n.group);
+  const sections = NAV_GROUP_ORDER.map((group) => ({
+    group,
+    label: NAV_GROUP_LABELS[group],
+    items: primary.filter((n) => n.group === group),
+  })).filter((s) => s.items.length > 0);
   const manage = NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id));
   const canCreateCohort = role === "admin";
+
+  const renderItem = (item: NavItem) => {
+    const href = item.href(activeCohortSlug);
+    const active = isActive(item.id, pathname, activeCohortSlug);
+    const badge = badges[item.id as keyof typeof badges];
+    return (
+      <SidebarNavItem
+        key={item.id}
+        item={item}
+        label={navLabel(item, role)}
+        href={href}
+        active={active}
+        badge={badge}
+        onNavigate={onNavigate}
+      />
+    );
+  };
 
   return (
     <aside className={cn("sticky top-0 flex h-screen w-60 flex-none flex-col border-r border-border bg-card", className)}>
@@ -118,44 +145,23 @@ export function Sidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3">
-        <div className="flex flex-col gap-0.5">
-          {primary.map((item) => {
-            const href = item.href(activeCohortSlug);
-            const active = isActive(item.id, pathname, activeCohortSlug);
-            const badge = badges[item.id as keyof typeof badges];
-            return (
-              <SidebarNavItem
-                key={item.id}
-                item={item}
-                label={navLabel(item, role)}
-                href={href}
-                active={active}
-                badge={badge}
-                onNavigate={onNavigate}
-              />
-            );
-          })}
-        </div>
+        {ungrouped.length > 0 && <div className="flex flex-col gap-0.5">{ungrouped.map(renderItem)}</div>}
+
+        {sections.map((section) => (
+          <div key={section.group} className="flex flex-col gap-0.5">
+            <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+              {section.label}
+            </div>
+            {section.items.map(renderItem)}
+          </div>
+        ))}
 
         {manage.length > 0 && (
           <div className="flex flex-col gap-0.5">
             <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
               Manage
             </div>
-            {manage.map((item) => {
-              const href = item.href(activeCohortSlug);
-              const active = isActive(item.id, pathname, activeCohortSlug);
-              return (
-                <SidebarNavItem
-                  key={item.id}
-                  item={item}
-                  label={navLabel(item, role)}
-                  href={href}
-                  active={active}
-                  onNavigate={onNavigate}
-                />
-              );
-            })}
+            {manage.map(renderItem)}
           </div>
         )}
       </nav>

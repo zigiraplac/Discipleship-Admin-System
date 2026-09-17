@@ -59,6 +59,11 @@
   --shadow-dropdown: 0 12px 30px rgba(20, 25, 32, 0.13);
   --shadow-login: 0 18px 50px rgba(20, 25, 32, 0.1);
   --shadow-modal: 0 24px 60px rgba(20, 25, 32, 0.24);
+  /* Dashboard donut rings' (Ring3D) drop-shadow — dark enough to read
+     against a white card. On a near-black dark card this same low-opacity
+     dark shadow would be invisible, so it gets its own dark override
+     below instead of just reusing one of the shadows above. */
+  --shadow-ring: 0 8px 12px rgba(15, 23, 42, 0.22);
 }
 
 /*
@@ -114,6 +119,11 @@
   --dark-rose-text: #ec9fb3;
   --dark-emerald-tint: #10291f;
   --dark-emerald-text: #6fd8a3;
+
+  /* Darker + more opaque than the light version — against a near-black
+     (not pure-black) card this still shows a visible falloff at the ring's
+     edge, where the light-mode shadow's color/opacity would just blend in. */
+  --dark-shadow-ring: 0 8px 14px rgba(0, 0, 0, 0.55);
 }
 
 /* Applies when the OS is set to dark (unless the toggle below explicitly
@@ -161,6 +171,7 @@
     --color-rose-700: var(--dark-rose-text);
     --color-emerald-100: var(--dark-emerald-tint);
     --color-emerald-700: var(--dark-emerald-text);
+    --shadow-ring: var(--dark-shadow-ring);
   }
 }
 
@@ -202,6 +213,7 @@
   --color-rose-700: var(--dark-rose-text);
   --color-emerald-100: var(--dark-emerald-tint);
   --color-emerald-700: var(--dark-emerald-text);
+  --shadow-ring: var(--dark-shadow-ring);
 }
 
 body {

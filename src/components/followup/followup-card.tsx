@@ -3,10 +3,11 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { WhatsappLogo, PhoneCall } from "@phosphor-icons/react";
+import { WhatsappLogo, UserCheck } from "@phosphor-icons/react";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill } from "@/components/ui/pill";
+import { StreakBadge } from "@/components/shared/streak-badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
@@ -85,12 +86,15 @@ export function FollowUpCard({
       <div className="flex items-center gap-3 p-4">
         <Avatar name={student.fullName} size="lg" />
         <div className="min-w-0 flex-1">
-          <Link
-            href={`/c/${cohortSlug}/students/${student.id}`}
-            className="block truncate text-[14px] font-bold text-ink hover:underline"
-          >
-            {student.fullName}
-          </Link>
+          <span className="flex items-center gap-1.5">
+            <Link
+              href={`/c/${cohortSlug}/students/${student.id}`}
+              className="truncate text-[14px] font-bold text-ink hover:underline"
+            >
+              {student.fullName}
+            </Link>
+            <StreakBadge streak={student.currentMissStreak} />
+          </span>
           <div className="mt-0.5 text-[11px] text-ink-muted tabular">
             {student.rate}% · {student.attended}/{student.expected} lessons
           </div>
@@ -127,11 +131,6 @@ export function FollowUpCard({
             {currentOutcomeKind ? "Change outcome" : "Record outcome"}
           </Button>
         )}
-        {canRecord && !contacted && (
-          <Button variant="secondary" size="sm" disabled={pending} onClick={handleMarkContacted} aria-label="Mark contacted">
-            {pending ? <Spinner /> : <PhoneCall size={15} />}
-          </Button>
-        )}
         {whatsappLink && (
           <a
             href={whatsappLink}
@@ -142,6 +141,22 @@ export function FollowUpCard({
           >
             <WhatsappLogo size={15} weight="fill" />
           </a>
+        )}
+        {canRecord && !contacted && (
+          // Distinct from the WhatsApp button above on purpose — this isn't
+          // another way to reach the student, it's marking down that
+          // outreach already happened (clears once a real outcome is
+          // recorded). A checkmark reads as "log this," not "call them."
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={pending}
+            onClick={handleMarkContacted}
+            aria-label={`Mark ${student.fullName} as contacted`}
+            title="Mark as contacted"
+          >
+            {pending ? <Spinner /> : <UserCheck size={15} />}
+          </Button>
         )}
         <Link
           href={`/c/${cohortSlug}/students/${student.id}`}

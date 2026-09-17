@@ -1,8 +1,6 @@
 import type { DB } from "./types";
 import type { Json } from "@/lib/supabase/database.types";
-import type { Student } from "@/lib/domain/types";
 import { upcomingBirthdays, type BirthdaySource } from "@/lib/domain/birthdays";
-import { whatsappHref, birthdayGreetingMessage } from "@/lib/domain/whatsapp";
 import { daysBetween } from "@/lib/utils";
 
 /** Structured payload for a `birthday` notification — lets the bell
@@ -224,61 +222,4 @@ export async function ensureBirthdayNotifications(
       data: { kind: "birthday", studentId: b.studentId, dobDay: b.day, dobMonth: b.month },
     }))
   );
-}
-
-/**
- * The day-of reminder — distinct from `ensureBirthdayNotifications`'
- * "coming up in the next week" heads-up: this fires exactly once, on the
- * birthday itself, straight to that cohort's own facilitators (not
- * whoever happens to be viewing), with a message already written and,
- * when the student has a WhatsApp number on file, a link that opens
- * straight into a pre-filled chat with them — wishing them well is one
- * tap away instead of a blank chat to write from scratch.
- *
- * This can't reach a facilitator outside the app on its own — there's no
- * WhatsApp Business API (or any outbound messaging) integration here, so
- * "automatic" means "the moment they next open the app, it's waiting for
- * them," not a push straight to their phone. `app_user.whatsapp`
- * (0023_app_user_whatsapp.sql) exists for the day this becomes real
- * outbound sending, and already makes the reminder itself easy to act on.
- */
-export async function ensureBirthdayFacilitatorReminders(
-  db: DB,
-  input: {
-    cohortId: string;
-    cohortSlug: string;
-    students: Student[];
-    /** cohort_member rows with capacity 'facilitator' for this cohort —
-     * deliberately not the broader "every cohort member" list the other
-     * ensure* functions use; this is addressed to the facilitator only. */
-    facilitatorIds: string[];
-    todayISO: string;
-  }
-): Promise<void> {
-  if (!input.facilitatorIds.length) return;
-  const today = upcomingBirthdays(input.students, input.todayISO, input.students.length).filter(
-    (b) => b.daysUntil === 0
-  );
-  if (!today.length) return;
-
-  const year = input.todayISO.slice(0, 4);
-  const byId = new Map(input.students.map((s) => [s.id, s]));
-
-  for (const b of today) {
-    const student = byId.get(b.studentId);
-    const waHref = student?.whatsapp ? whatsappHref(student.whatsapp, student.country, birthdayGreetingMessage(b.name)) : null;
-    await createNotifications(
-      db,
-      input.facilitatorIds.map((userId) => ({
-        userId,
-        kind: "birthday_today",
-        title: `🎂 ${b.name}'s birthday is today!`,
-        body: waHref
-          ? "Tap to open WhatsApp with a birthday message ready to send."
-          : "No WhatsApp number on file for them yet — give them a shout-out today.",
-        href: waHref ?? `/c/${input.cohortSlug}/students/${b.studentId}`,
-        dedupeKey: `birthday-today:${b.studentId}:${year}`,
-      }))
-    );
-  }
 }

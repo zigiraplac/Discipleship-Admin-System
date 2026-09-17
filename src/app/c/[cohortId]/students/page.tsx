@@ -5,8 +5,7 @@ import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
-import { aggregateCohort } from "@/lib/domain/metrics";
-import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
+import { aggregateCohort, isRecorded } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { Card } from "@/components/ui/card";
@@ -41,8 +40,13 @@ export default async function StudentsPage({
   const outcomesByStudent: Record<string, OutcomeKind> = {};
   for (const [studentId, outcome] of latest) outcomesByStudent[studentId] = outcome.kind;
   const activeCount = students.filter((s) => !s.leftAt).length;
-  const current = agg.recordedCount < TOTAL_LESSONS ? lessonAt(agg.recordedCount) : null;
-  const currentLessonRef = current ? `${current.ref} — ${current.title}` : null;
+
+  // For "Add student"'s attendance-backfill checklist — every already-taken
+  // lesson a facilitator might need to tick for someone entered late.
+  const recordedLessons = lessonEvents
+    .filter(isRecorded)
+    .sort((a, b) => a.globalIndex - b.globalIndex)
+    .map((e) => ({ eventId: e.eventId, lessonRef: e.lessonRef, lessonTitle: e.lessonTitle, date: e.date }));
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -54,8 +58,9 @@ export default async function StudentsPage({
           roster={agg.roster}
           outcomesByStudent={outcomesByStudent}
           bands={bands}
-          currentLessonRef={currentLessonRef}
-          headerAction={user.role === "admin" ? <AddStudentDialog cohortId={cohortId} /> : null}
+          headerAction={
+            user.role === "admin" ? <AddStudentDialog cohortId={cohortId} recordedLessons={recordedLessons} /> : null
+          }
         />
       </Card>
     </div>

@@ -31,29 +31,24 @@ export function FollowUpBoard({
 }) {
   const [view, setView] = useState<ViewMode>("list");
 
-  const render = (roster: FollowUpEntry[]) =>
-    view === "list" ? (
-      <Card className="overflow-hidden">
-        <FollowUpList entries={roster} cohortId={cohortId} cohortSlug={cohortSlug} lessonEvents={lessonEvents} canRecord={canRecord} />
-      </Card>
-    ) : (
-      <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
-        {roster.map(({ student, currentOutcomeKind }) => (
-          <FollowUpCard
-            key={student.id}
-            student={student}
-            cohortId={cohortId}
-            cohortSlug={cohortSlug}
-            currentOutcomeKind={currentOutcomeKind}
-            lessonEvents={lessonEvents}
-            canRecord={canRecord}
-          />
-        ))}
-        {roster.length === 0 && (
-          <Card className="col-span-full px-6 py-10 text-center text-sm text-ink-muted">Nobody in this group.</Card>
-        )}
-      </div>
-    );
+  const cardGrid = (roster: FollowUpEntry[]) => (
+    <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+      {roster.map(({ student, currentOutcomeKind }) => (
+        <FollowUpCard
+          key={student.id}
+          student={student}
+          cohortId={cohortId}
+          cohortSlug={cohortSlug}
+          currentOutcomeKind={currentOutcomeKind}
+          lessonEvents={lessonEvents}
+          canRecord={canRecord}
+        />
+      ))}
+      {roster.length === 0 && (
+        <Card className="col-span-full px-6 py-10 text-center text-sm text-ink-muted">Nobody in this group.</Card>
+      )}
+    </div>
+  );
 
   const groups: { key: string; title: string; roster: FollowUpEntry[] }[] = [
     { key: "contact", title: "Needs contact", roster: needsContact },
@@ -75,7 +70,7 @@ export function FollowUpBoard({
                   <h2 className="text-[15px] font-bold text-ink">{g.title}</h2>
                   <span className="text-xs font-semibold text-ink-muted tabular">{g.roster.length}</span>
                 </div>
-                {render(g.roster)}
+                {cardGrid(g.roster)}
               </div>
             ))}
           {entries.length === 0 && (
@@ -84,7 +79,7 @@ export function FollowUpBoard({
         </div>
       ),
     },
-    ...groups.map((g) => ({ key: g.key, label: g.title, count: g.roster.length, content: render(g.roster) })),
+    ...groups.map((g) => ({ key: g.key, label: g.title, count: g.roster.length, content: cardGrid(g.roster) })),
   ];
 
   return (
@@ -92,7 +87,13 @@ export function FollowUpBoard({
       <div className="flex justify-end">
         <ViewToggle value={view} onChange={setView} />
       </div>
-      <GroupTabs tabs={tabs} />
+      {view === "list" ? (
+        <Card className="overflow-hidden">
+          <FollowUpList entries={entries} cohortId={cohortId} cohortSlug={cohortSlug} lessonEvents={lessonEvents} canRecord={canRecord} />
+        </Card>
+      ) : (
+        <GroupTabs tabs={tabs} />
+      )}
     </div>
   );
 }

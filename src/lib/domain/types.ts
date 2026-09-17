@@ -116,10 +116,6 @@ export interface AppUser {
   email: string;
   role: Role;
   state: "active" | "invited" | "deactivated";
-  /** So a birthday-of-the-day reminder (ensureBirthdayFacilitatorReminders)
-   * has a real facilitator to reach — set once from Settings → People
-   * (admin) or self-service from Profile. */
-  whatsapp: string | null;
 }
 
 export interface CohortMember {
@@ -166,4 +162,14 @@ export interface StudentAggregate extends Student {
   missed: number;
   rate: number; // 0..100
   status: Status;
+  /** The highest curriculum position (0-based, see curriculum.ts) this
+   * student was actually marked present for — their own real progress,
+   * not the cohort's. Null if they've never been marked present. */
+  lastAttendedGlobalIndex: number | null;
+  /** Consecutive misses counting back from the most recent recorded lesson
+   * within this student's own enrollment window — resets to 0 on their
+   * last present mark. Distinct from `missed` (a lifetime total): this is
+   * what catches someone who's gone quiet *recently*, even if their
+   * overall rate hasn't tipped into a worse band yet. */
+  currentMissStreak: number;
 }

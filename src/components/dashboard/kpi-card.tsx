@@ -28,7 +28,7 @@ export function KpiCard({
   sub: React.ReactNode;
 }) {
   return (
-    <Card className="p-[15px] px-4">
+    <Card className="p-3 px-3.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-semibold text-ink-tertiary">{label}</span>
         <span className="grid size-8 flex-none place-items-center rounded-full bg-accent-100 text-accent-800">

@@ -1,16 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DownloadSimple, FilePdf } from "@phosphor-icons/react";
+import { DownloadSimple, FilePdf, WarningCircle, SignOut } from "@phosphor-icons/react";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { StatCard, StatGrid } from "@/components/ui/stat-card";
+import { HealthPill } from "@/components/ui/pill";
 import { Button } from "@/components/ui/button";
-import type { Bands } from "@/lib/domain/types";
+import type { Bands, CohortHealth } from "@/lib/domain/types";
 import type { MajorChange } from "@/lib/data/audit";
 import { ByClassCard } from "./by-class-card";
 import { MonthChartCard } from "./month-chart-card";
 import { HighlightCards } from "./highlight-cards";
 import { WhatsChangedCard } from "@/components/shared/whats-changed-card";
+import { TrendSparkline } from "./trend-sparkline";
 import { downloadLessonsCsv } from "./csv-export";
 import { formatRangeLabel, inRange, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
 
@@ -25,6 +27,8 @@ export function ReportsView({
   lessons,
   majorChanges,
   enrolled,
+  leftCount,
+  insights,
   bands,
   today,
   paceGap,
@@ -33,6 +37,11 @@ export function ReportsView({
   lessons: ReportLesson[];
   majorChanges: MajorChange[];
   enrolled: number;
+  leftCount: number;
+  /** Null for teacher — per-student status needs the full register, which
+   * RLS blocks for that role (same reason Dashboard hides its own "Needs
+   * follow up" KPI/table there). */
+  insights: { health: CohortHealth; atRisk: number } | null;
   bands: Bands;
   today: string;
   /** Positive = behind the cohort's own ideal pace, 0/negative = on or ahead. */
@@ -98,6 +107,7 @@ export function ReportsView({
           label="Attendance"
           value={attendanceRate != null ? `${attendanceRate}%` : "—"}
           sub={`target ${bands.activeThreshold}%`}
+          trend={<TrendSparkline lessons={lessons} enrolled={enrolled} bands={bands} />}
         />
         <StatCard label="Absences" value={sumAbsent} sub="seats missed" />
         <StatCard
@@ -105,6 +115,27 @@ export function ReportsView({
           value={paceGap <= 0 ? "On pace" : `${paceGap} behind`}
           sub="vs. this cohort's own ideal plan"
         />
+      </StatGrid>
+
+      {/* Dashboard-only insights, folded into the report itself instead of
+          a separate embedded view — insights is null for teacher (RLS
+          blocks the per-student data behind it), so those two cards drop
+          out rather than show a wrong number; left-count needs nothing
+          RLS-gated, so it always renders. */}
+      <StatGrid>
+        {insights && (
+          <StatCard label="Cohort health" value={<HealthPill health={insights.health} />} sub="overall status" />
+        )}
+        {insights && (
+          <StatCard
+            icon={WarningCircle}
+            tone="magenta"
+            label="Needs follow up"
+            value={insights.atRisk}
+            sub={`of ${enrolled} enrolled`}
+          />
+        )}
+        <StatCard icon={SignOut} tone="grey" label="Left the program" value={leftCount} sub="no longer enrolled" />
       </StatGrid>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
