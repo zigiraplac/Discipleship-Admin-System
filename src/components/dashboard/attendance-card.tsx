@@ -31,13 +31,18 @@ const SEGMENTS: { key: "presentPct" | "catchupPct" | "absentPct"; label: string;
   { key: "absentPct", label: "Absent", color: "var(--color-accent-2-400)" },
 ];
 
-// The simpler two-series Present/Absent view used by "Lessons" — catch-ups
+// The simpler two-segment Present/Absent stack used by "Lessons" — catch-ups
 // fold into "Present" there (still fully broken out in the native tooltip
-// text), since a raw per-lesson headcount reads clearer as two bars than
+// text), since a raw per-lesson headcount reads clearer as two segments than
 // three.
 const LESSONS_LEGEND = [
   { label: "Present", color: "var(--color-accent)" },
   { label: "Absent", color: "var(--color-accent-2-500)" },
+];
+
+const LESSON_SEGMENTS: { key: "presentCount" | "absentCount"; color: string }[] = [
+  { key: "presentCount", color: "var(--color-accent)" },
+  { key: "absentCount", color: "var(--color-accent-2-500)" },
 ];
 
 function niceCeil(n: number): number {
@@ -111,16 +116,6 @@ function curvePoint(index: number, count: number, value: number): { x: number; y
   return { x, y };
 }
 
-const BAR_WIDTH = 28;
-
-/** A plain rectangular bar for "Lessons" mode (small rounded top corner
- * only, matching the Classes bar-stack's own convention) — no pill/
- * cylinder shape, just a standard bar chart. Classes (7 categories) and
- * Monthly (a trend line) keep their own styles. */
-function LessonBar({ height, color }: { height: number; color: string }) {
-  return <div className="flex-none rounded-t-[3px]" style={{ width: BAR_WIDTH, height, background: color }} />;
-}
-
 /**
  * One "Attendance" card, one outer toggle between two whole visual
  * styles — bar-chart-style "Cylinders" (with its own Lessons/Classes/
@@ -171,7 +166,7 @@ function CylindersBody({
   const isLessons = mode === "lessons";
   const bars = mode === "lessons" ? lessonBars : mode === "classes" ? classBars : [];
 
-  const axisMax = isLessons ? niceCeil(Math.max(1, ...bars.map((b) => Math.max(b.presentCount, b.absentCount)))) : 100;
+  const axisMax = isLessons ? niceCeil(Math.max(1, ...bars.map((b) => b.presentCount + b.absentCount))) : 100;
   const axisTicks = [1, 0.8, 0.6, 0.4, 0.2, 0].map((f) => Math.round(axisMax * f));
   const axisSuffix = isLessons ? "" : "%";
 
@@ -292,8 +287,8 @@ function CylindersBody({
           ) : isLessons && bars.length > 0 ? (
             <div className="relative flex items-end justify-center gap-3" style={{ height: PLOT_HEIGHT }}>
               {bars.map((b, i) => {
-                const presentH = b.presentCount > 0 ? Math.max(6, (b.presentCount / axisMax) * PLOT_HEIGHT) : 0;
-                const absentH = b.absentCount > 0 ? Math.max(6, (b.absentCount / axisMax) * PLOT_HEIGHT) : 0;
+                const total = b.presentCount + b.absentCount;
+                const stackHeight = total > 0 ? Math.max(4, (total / axisMax) * PLOT_HEIGHT) : 0;
                 return (
                   <div
                     key={i}
@@ -317,9 +312,17 @@ function CylindersBody({
                         </div>
                       </div>
                     )}
-                    <div className="flex h-full items-end gap-2">
-                      <LessonBar height={presentH} color="var(--color-accent)" />
-                      <LessonBar height={absentH} color="var(--color-accent-2-500)" />
+                    <div
+                      className="flex w-4 flex-col-reverse overflow-hidden rounded-t-[3px] rounded-b-[1px]"
+                      style={{ height: stackHeight }}
+                    >
+                      {LESSON_SEGMENTS.map((seg) => (
+                        <div
+                          key={seg.key}
+                          className="w-full"
+                          style={{ height: `${total > 0 ? (b[seg.key] / total) * 100 : 0}%`, background: seg.color }}
+                        />
+                      ))}
                     </div>
                   </div>
                 );
