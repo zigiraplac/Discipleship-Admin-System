@@ -11,12 +11,12 @@ import { aggregateCohort, isRecorded, lessonStats, computePace } from "@/lib/dom
 import { cohortHealth } from "@/lib/domain/bands";
 import { CURRICULUM, classSpans, lessonAt } from "@/lib/domain/curriculum";
 import { upcomingBirthdays, formatBirthdayDate } from "@/lib/domain/birthdays";
-import { crusadeWeekends, monthlyRatesFrom, type MonthlyRate } from "@/components/reports/report-utils";
+import { crusadeWeekends } from "@/components/reports/report-utils";
 import { todayISO, formatShortDate } from "@/lib/utils";
 import { NAV_BY_ROLE } from "@/lib/roles";
 import { PageHead } from "@/components/shell/page-head";
 import { KpiRow, KpiCard, type DeltaTone } from "@/components/dashboard/kpi-card";
-import { AttendanceCard, type ChartBar, type OverallAttendance } from "@/components/dashboard/attendance-card";
+import { AttendanceCard, type ChartBar } from "@/components/dashboard/attendance-card";
 import { UpcomingEventsCard, type UpcomingEventRow } from "@/components/shared/upcoming-events";
 import { TopAttendersCard } from "@/components/dashboard/top-attenders-card";
 import { Greeting } from "@/components/dashboard/greeting";
@@ -155,9 +155,7 @@ export default async function DashboardPage({
   // the real, live-reflowed schedule already answers "when does this
   // finish", so there's no need to re-derive a projection from scratch.
   let finishDate: string | null = null;
-  let paceLessons: { date: string; recorded: boolean; present: number | null }[] = [];
   let statusSegments: DonutSegment[] | null = null;
-  let overallAttendance: OverallAttendance = { present: 0, absent: 0, rate: 0 };
 
   const canOpenStudent = NAV_BY_ROLE[user.role].includes("students");
   const studentHref = canOpenStudent ? (id: string) => `/c/${cohortSlug}/students/${id}` : null;
@@ -169,14 +167,11 @@ export default async function DashboardPage({
     ]);
     studentsForBirthdays = students.filter((s) => !s.leftAt);
     finishDate = pub[pub.length - 1]?.date ?? null;
-    paceLessons = pub.map((p) => ({ date: p.date, recorded: p.recorded, present: p.present }));
     const recorded = pub.filter((p) => p.recorded);
     recordedCount = recorded.length;
     enrolled = pub[0]?.enrolled ?? 0;
     const totalPresent = recorded.reduce((a, p) => a + (p.present ?? 0), 0);
     rate = enrolled && recordedCount ? Math.round((totalPresent / (enrolled * recordedCount)) * 100) : 0;
-    const totalExpected = enrolled * recordedCount;
-    overallAttendance = { present: totalPresent, absent: Math.max(0, totalExpected - totalPresent), rate };
     // A teacher's client never sees `lesson_catchup` (pastoral detail,
     // blocked by RLS) — their chart shows attended/absent only, no
     // caught-up segment.
@@ -234,18 +229,11 @@ export default async function DashboardPage({
     const students = allStudents.filter((s) => !s.leftAt);
     const activeIds = new Set(students.map((s) => s.id));
     finishDate = lessonEvents[lessonEvents.length - 1]?.date ?? null;
-    paceLessons = lessonEvents.map((e) => ({
-      date: e.date,
-      recorded: isRecorded(e),
-      present: lessonStats(e, activeIds)?.present ?? null,
-    }));
     const agg = aggregateCohort(students, lessonEvents, bands, today);
     recordedCount = agg.recordedCount;
     rate = agg.rate;
     enrolled = agg.enrolled;
     atRiskCount = agg.atRisk;
-    const totalExpected = agg.roster.reduce((s, r) => s + r.expected, 0);
-    overallAttendance = { present: agg.totalPresent, absent: Math.max(0, totalExpected - agg.totalPresent), rate: agg.rate };
     nextLessonHref = agg.outstanding[0]
       ? `/c/${cohortSlug}/lessons/${agg.outstanding[0].eventId}`
       : `/c/${cohortSlug}/lessons`;
@@ -324,8 +312,6 @@ export default async function DashboardPage({
       { label: "At risk", count: agg.roster.filter((s) => s.status === "At risk").length, tone: "magenta" },
     ];
   }
-
-  const monthlyRates: MonthlyRate[] = monthlyRatesFrom(paceLessons, enrolled);
 
   let classIndex = spans.findIndex(([a, b]) => recordedCount >= a && recordedCount <= b);
   if (classIndex < 0) classIndex = CURRICULUM.length - 1;
@@ -449,7 +435,7 @@ export default async function DashboardPage({
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
-          <AttendanceCard lessonBars={lessonBars} classBars={classBars} monthlyRates={monthlyRates} overall={overallAttendance} />
+          <AttendanceCard lessonBars={lessonBars} classBars={classBars} />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
             {topAttenders !== null && needsFollowUp !== null && (
               <TopAttendersCard good={topAttenders} followUp={needsFollowUp} bands={bands} />
