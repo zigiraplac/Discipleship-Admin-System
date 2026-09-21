@@ -63,6 +63,7 @@ export interface Database {
           facilitator_id: string | null;
           status: "running" | "complete" | "archived";
           lessons_per_session: number;
+          interval_weeks: number;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["cohort"]["Row"]> & {
@@ -318,6 +319,44 @@ export interface Database {
             columns: ["event_id"];
             isOneToOne: false;
             referencedRelation: "event";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      cohort_schedule_period: {
+        Row: {
+          id: string;
+          cohort_id: string;
+          starts_at_position: number;
+          teaching_days: number[];
+          lessons_per_session: number;
+          interval_weeks: number;
+          effective_date: string;
+          reason: string | null;
+          actor_id: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["cohort_schedule_period"]["Row"]> & {
+          cohort_id: string;
+          starts_at_position: number;
+          teaching_days: number[];
+          lessons_per_session: number;
+          effective_date: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["cohort_schedule_period"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "cohort_schedule_period_cohort_id_fkey";
+            columns: ["cohort_id"];
+            isOneToOne: false;
+            referencedRelation: "cohort";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "cohort_schedule_period_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "app_user";
             referencedColumns: ["id"];
           },
         ];

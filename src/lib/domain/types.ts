@@ -41,6 +41,11 @@ export interface Cohort {
    * a postponed lesson (and everything after it) reflows around whatever
    * this cohort's actual value is. */
   lessonsPerSession: number;
+  /** How many weeks between teaching weeks — 1 means every week. This,
+   * `teachingDays`, and `lessonsPerSession` together are the cohort's
+   * *original* (creation-time) cadence, never overwritten by a later
+   * change — see `ScheduleSegment` in `src/lib/domain/generator.ts`. */
+  intervalWeeks: number;
   createdAt: string;
 }
 

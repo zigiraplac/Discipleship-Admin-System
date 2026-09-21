@@ -1,15 +1,25 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { File, UploadSimple, X } from "@phosphor-icons/react";
+import { File, UploadSimple, X, DownloadSimple } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { StatGrid } from "@/components/ui/stat-card";
 import { Pill } from "@/components/ui/pill";
 import { cn, formatShortDate, todayISO } from "@/lib/utils";
-import type { DedupeResult } from "@/lib/domain/registrations";
+import { CSV_COLUMN_GUIDE, buildTemplateCsv, type DedupeResult } from "@/lib/domain/registrations";
 import { StepCard } from "./step-card";
 import { Tile } from "./stat-tile";
+
+function downloadTemplateCsv() {
+  const blob = new Blob([buildTemplateCsv()], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "student-registration-template.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -49,6 +59,7 @@ export function StepStudents({
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const willBeEnrolled = dedupe ? dedupe.registrants.length - excludedIds.size : 0;
+  const phoneNeedsReviewCount = dedupe ? dedupe.registrants.filter((r) => r.phoneNeedsReview).length : 0;
 
   const filtered = useMemo(() => {
     if (!dedupe) return [];
@@ -68,6 +79,32 @@ export function StepStudents({
             anything is created.
           </p>
         </div>
+
+        <div className="rounded-control border border-border-soft px-3.5 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[13px] font-semibold text-ink">Columns this system recognizes</span>
+            <Button type="button" variant="secondary" size="sm" onClick={downloadTemplateCsv}>
+              <DownloadSimple size={13} />
+              Download template
+            </Button>
+          </div>
+          <p className="mt-1 text-xs text-ink-muted">
+            Column order doesn&rsquo;t matter, and any extra column is kept, not rejected — only the
+            header <em>names</em> below are matched (not case-sensitive).
+          </p>
+          <div className="mt-2.5 flex flex-col gap-1.5">
+            {CSV_COLUMN_GUIDE.map((col) => (
+              <div key={col.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+                <span className={cn("flex-none font-semibold", col.required ? "text-ink" : "text-ink-secondary")}>
+                  {col.label}
+                  {col.required && <span className="text-accent-2-700"> *</span>}
+                </span>
+                <span className="text-ink-faint">{col.aliases.join(" · ")}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
@@ -126,6 +163,7 @@ export function StepStudents({
         <Tile label="Duplicates merged" value={dedupe.duplicatesMerged} tone="yellow" />
         <Tile label="Test rows dropped" value={dedupe.testRowsDropped} tone="magenta" />
         <Tile label="Will be enrolled" value={willBeEnrolled} tone="cyan" />
+        <Tile label="Phone needs check" value={phoneNeedsReviewCount} tone={phoneNeedsReviewCount > 0 ? "magenta" : undefined} />
       </StatGrid>
 
       <div>
@@ -159,7 +197,14 @@ export function StepStudents({
                   className="size-4 flex-none accent-accent"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-ink">{r.fullName}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-[13px] font-semibold text-ink">{r.fullName}</div>
+                    {r.phoneNeedsReview && (
+                      <Pill tone="magenta" className="flex-none">
+                        Check phone
+                      </Pill>
+                    )}
+                  </div>
                   <div className="truncate text-[11px] text-ink-muted">{r.email ?? "No email"}</div>
                 </div>
                 <div className="w-28 flex-none truncate text-xs text-ink-tertiary">

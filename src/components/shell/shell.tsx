@@ -17,6 +17,7 @@ import { TopBar, type CohortSwitcherItem } from "./top-bar";
 import { PageHeadProvider } from "./page-head";
 import { ToastProvider } from "@/components/ui/toast";
 import { SearchProvider, type SearchResultItem } from "./search-palette";
+import { IdleLogout } from "./idle-logout";
 
 const PAGE_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
@@ -172,6 +173,7 @@ export async function Shell({
     <SearchProvider index={searchIndex}>
       <PageHeadProvider>
         <ToastProvider>
+          <IdleLogout />
           <div className="flex min-h-screen bg-page">
             <Sidebar
               role={user.role}

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { NAV_BY_ROLE, requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBands, getCohort } from "@/lib/data/cohorts";
+import { getBands, getCohort, getScheduleSegments } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getAuditLogForCohort } from "@/lib/data/audit";
@@ -33,9 +33,10 @@ export default async function ReportsPage({
   // broader read policy exists either) — read it through the admin client,
   // same as the couple of other cross-cutting reads elsewhere in the app
   // that need to see past what RLS alone would allow this viewer's role.
-  const [allStudents, majorChanges] = await Promise.all([
+  const [allStudents, majorChanges, scheduleSegments] = await Promise.all([
     getStudents(supabase, cohortId),
     getAuditLogForCohort(createAdminClient(), cohortId),
+    getScheduleSegments(supabase, cohortId),
   ]);
 
   // Left students stop counting toward the cohort's own numbers, same as
@@ -91,7 +92,7 @@ export default async function ReportsPage({
   }
 
   const recordedCount = lessons.filter((l) => l.recorded).length;
-  const pace = computePace(cohort, recordedCount, today);
+  const pace = computePace(cohort, scheduleSegments, recordedCount, today);
 
   return (
     <div className="flex flex-col gap-[18px]">

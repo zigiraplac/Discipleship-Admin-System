@@ -2,6 +2,7 @@ import { cache } from "react";
 import type { DB } from "./types";
 import type { Bands, Cohort } from "@/lib/domain/types";
 import { DEFAULT_BANDS } from "@/lib/domain/types";
+import type { ScheduleSegment } from "@/lib/domain/generator";
 
 interface CohortRow {
   id: string;
@@ -12,11 +13,12 @@ interface CohortRow {
   teaching_days: number[];
   status: "running" | "complete" | "archived";
   lessons_per_session: number;
+  interval_weeks: number;
   created_at: string;
 }
 
 const COHORT_SELECT =
-  "id, slug, name, city, start_date, teaching_days, status, lessons_per_session, created_at";
+  "id, slug, name, city, start_date, teaching_days, status, lessons_per_session, interval_weeks, created_at";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -59,6 +61,7 @@ function mapCohortRow(row: CohortRow, facilitatorNames: string[]): Cohort {
     facilitatorName: facilitatorNames.length ? facilitatorNames.join(", ") : null,
     status: row.status,
     lessonsPerSession: row.lessons_per_session,
+    intervalWeeks: row.interval_weeks,
     createdAt: row.created_at,
   };
 }
@@ -137,3 +140,24 @@ export async function setBands(db: DB, bands: Bands): Promise<void> {
   ]);
   if (error) throw error;
 }
+
+/** Every recorded cadence change for this cohort, ascending by
+ * `startsAtPosition` — see `computePace`/`buildIdealSchedule`. Empty for
+ * the (typical) cohort that's never changed cadence. */
+export const getScheduleSegments = cache(async function getScheduleSegments(
+  db: DB,
+  cohortId: string
+): Promise<ScheduleSegment[]> {
+  const { data, error } = await db
+    .from("cohort_schedule_period")
+    .select("starts_at_position, teaching_days, lessons_per_session, interval_weeks")
+    .eq("cohort_id", cohortId)
+    .order("starts_at_position");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    startsAtPosition: r.starts_at_position,
+    teachingDays: r.teaching_days,
+    lessonsPerSession: r.lessons_per_session,
+    intervalWeeks: r.interval_weeks,
+  }));
+});

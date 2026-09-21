@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { listCohorts, getBands } from "@/lib/data/cohorts";
+import { listCohorts, getBands, getScheduleSegments } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { aggregateCohort, computePace } from "@/lib/domain/metrics";
@@ -27,13 +27,14 @@ export default async function CohortsPage() {
   // used everywhere else, rather than a partial figure from getQuickStats.
   const cards = await Promise.all(
     cohorts.map(async (cohort) => {
-      const [allStudents, lessonEvents] = await Promise.all([
+      const [allStudents, lessonEvents, scheduleSegments] = await Promise.all([
         getStudents(supabase, cohort.id),
         getLessonEvents(supabase, cohort.id),
+        getScheduleSegments(supabase, cohort.id),
       ]);
       const students = allStudents.filter((s) => !s.leftAt);
       const agg = aggregateCohort(students, lessonEvents, bands, today);
-      const pace = computePace(cohort, agg.recordedCount, today);
+      const pace = computePace(cohort, scheduleSegments, agg.recordedCount, today);
       return { cohort, agg, pace };
     })
   );

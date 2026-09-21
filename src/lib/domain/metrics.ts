@@ -1,6 +1,6 @@
 import { CURRICULUM, classSpans } from "./curriculum";
 import { cohortHealth, statusOf } from "./bands";
-import { buildEvents } from "./generator";
+import { buildIdealSchedule, type ScheduleSegment } from "./generator";
 import type {
   Bands,
   Cohort,
@@ -304,13 +304,23 @@ export interface PaceStatus {
  * changes future dates, not this formula — the gap just naturally closes
  * back toward 0 as recorded lessons catch up to wherever the reflowed
  * schedule now expects them to be.
+ *
+ * `segments` (from `cohort_schedule_period`, ascending by `startsAtPosition`)
+ * let a deliberate mid-cohort cadence change re-baseline the target from
+ * the change point on, instead of either rewriting the whole ideal
+ * schedule from day one (wrong: it'd judge already-taught weeks by a
+ * cadence that wasn't in force then) or never changing it at all (wrong:
+ * the gap would keep growing forever after a real, approved slowdown). An
+ * empty list (the common case — most cohorts never change cadence)
+ * behaves exactly like the old flat single-cadence calculation.
  */
 export function computePace(
-  cohort: Pick<Cohort, "startDate" | "teachingDays" | "lessonsPerSession">,
+  cohort: Pick<Cohort, "startDate" | "teachingDays" | "lessonsPerSession" | "intervalWeeks">,
+  segments: ScheduleSegment[],
   recordedCount: number,
   todayISO: string
 ): PaceStatus {
-  const events = buildEvents(cohort.startDate, cohort.teachingDays, cohort.lessonsPerSession);
+  const events = buildIdealSchedule(cohort, segments);
   const expectedByNow = events.filter((e) => e.kind === "lesson" && e.date <= todayISO).length;
   return { expectedByNow, actual: recordedCount, gap: expectedByNow - recordedCount };
 }

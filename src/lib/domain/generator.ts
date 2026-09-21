@@ -94,15 +94,24 @@ const MAX_GUARD = 500;
  * Friday. Used both for a fresh cohort (the full item list, from the
  * start date) and for a reflow (just the not-yet-taught suffix, from the
  * day after whatever got postponed).
+ *
+ * `intervalWeeks` (default 1, i.e. every week) gates which weeks count as
+ * teaching weeks at all — week 0 is the one containing `startISO` itself,
+ * and only every `intervalWeeks`-th week after that is eligible. Only
+ * lesson placement respects it; a crusade weekend is a one-off milestone
+ * after a class finishes, not a recurring weekly slot, so it always lands
+ * on the next Friday regardless.
  */
 export function placeSchedule(
   items: ScheduleItem[],
   startISO: string,
   teachingDays: number[],
-  lessonsPerSession: number
+  lessonsPerSession: number,
+  intervalWeeks = 1
 ): GeneratedEvent[] {
   const days = new Set(teachingDays);
-  let cursor = parseISODate(startISO);
+  const anchor = parseISODate(startISO);
+  let cursor = anchor;
   const events: GeneratedEvent[] = [];
 
   const advanceTo = (pred: (d: Date) => boolean) => {
@@ -110,11 +119,17 @@ export function placeSchedule(
     while (!pred(cursor) && guard++ < MAX_GUARD) cursor = addDays(cursor, 1);
   };
 
+  const isEligibleWeek = (d: Date) => {
+    if (intervalWeeks <= 1) return true;
+    const daysSinceAnchor = Math.round((d.getTime() - anchor.getTime()) / 86400000);
+    return Math.floor(daysSinceAnchor / 7) % intervalWeeks === 0;
+  };
+
   let i = 0;
   while (i < items.length) {
     const item = items[i];
     if (item.kind === "lesson") {
-      advanceTo((d) => days.has(d.getUTCDay()));
+      advanceTo((d) => days.has(d.getUTCDay()) && isEligibleWeek(d));
       const dateStr = toISODate(cursor);
       let placed = 0;
       while (i < items.length && items[i].kind === "lesson" && placed < lessonsPerSession) {
@@ -140,9 +155,61 @@ export function placeSchedule(
 export function buildEvents(
   startISO: string,
   teachingDays: number[],
-  lessonsPerSession = 1
+  lessonsPerSession = 1,
+  intervalWeeks = 1
 ): GeneratedEvent[] {
-  return placeSchedule(curriculumScheduleItems(), startISO, teachingDays, lessonsPerSession);
+  return placeSchedule(curriculumScheduleItems(), startISO, teachingDays, lessonsPerSession, intervalWeeks);
+}
+
+/**
+ * One cadence change, effective from a curriculum position onward — see
+ * `cohort_schedule_period` (supabase/migrations/0023_cohort_schedule_periods.sql).
+ * A cohort that's never changed cadence has none of these; its schedule is
+ * just its own base `teachingDays`/`lessonsPerSession`/`intervalWeeks` from
+ * position 0.
+ */
+export interface ScheduleSegment {
+  startsAtPosition: number;
+  teachingDays: number[];
+  lessonsPerSession: number;
+  intervalWeeks: number;
+}
+
+export interface BaseCadence {
+  startDate: string;
+  teachingDays: number[];
+  lessonsPerSession: number;
+  intervalWeeks: number;
+}
+
+/**
+ * The cohort's full ideal schedule, replayed segment by segment: the base
+ * cadence from position 0 up to the first change, then each recorded
+ * change's own cadence for its own range — each segment's dates chained
+ * onto the day right after the previous segment's last placed date, so a
+ * cadence change never retroactively rewrites what already happened.
+ * `segments` must be sorted ascending by `startsAtPosition`.
+ */
+export function buildIdealSchedule(base: BaseCadence, segments: ScheduleSegment[]): GeneratedEvent[] {
+  const items = curriculumScheduleItems();
+  const boundaries = [0, ...segments.map((s) => s.startsAtPosition), items.length];
+  const cadences = [
+    { teachingDays: base.teachingDays, lessonsPerSession: base.lessonsPerSession, intervalWeeks: base.intervalWeeks },
+    ...segments,
+  ];
+
+  let cursorISO = base.startDate;
+  const events: GeneratedEvent[] = [];
+  for (let i = 0; i < cadences.length; i++) {
+    const slice = items.slice(boundaries[i], boundaries[i + 1]);
+    if (!slice.length) continue;
+    const c = cadences[i];
+    const placed = placeSchedule(slice, cursorISO, c.teachingDays, c.lessonsPerSession, c.intervalWeeks);
+    events.push(...placed);
+    const last = placed[placed.length - 1];
+    if (last) cursorISO = dayAfter(last.date);
+  }
+  return events;
 }
 
 export function lastLessonDate(events: GeneratedEvent[]): string | null {

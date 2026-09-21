@@ -1,4 +1,5 @@
 import Papa from "papaparse";
+import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 
 /**
  * Parsing and de-duplication for a cohort's registration-form export
@@ -30,6 +31,35 @@ const HEADER_ALIASES: Record<string, string[]> = {
   dobRaw: ["dob", "date of birth", "birthday", "birth date"],
 };
 
+/** The same recognized-column info `parseRegistrationsCsv` matches
+ * against, reshaped for display (the upload step's "accepted columns"
+ * guide) — one source of truth, so that list can never drift out of sync
+ * with what the parser actually accepts. */
+export const CSV_COLUMN_GUIDE: { label: string; required: boolean; aliases: string[] }[] = [
+  { label: "Full name", required: true, aliases: HEADER_ALIASES.fullName },
+  { label: "— or First name + Last name", required: false, aliases: [...HEADER_ALIASES.firstName, ...HEADER_ALIASES.lastName] },
+  { label: "Email", required: false, aliases: HEADER_ALIASES.email },
+  { label: "WhatsApp / phone", required: false, aliases: HEADER_ALIASES.whatsapp },
+  { label: "Country", required: false, aliases: HEADER_ALIASES.countryRaw },
+  { label: "City", required: false, aliases: HEADER_ALIASES.city },
+  { label: "Date of birth", required: false, aliases: HEADER_ALIASES.dobRaw },
+  { label: "Submission time", required: false, aliases: HEADER_ALIASES.timestamp },
+];
+
+/** A starter CSV, matching this system's own recognized headers, for
+ * whoever's building the actual sign-up form — a real column-name
+ * mismatch is much easier to avoid up front than to debug after an
+ * import. Any extra/renamed column beyond these still imports fine (see
+ * `extra` on `RawRegistrationRow`); this is a helpful starting point, not
+ * a strict schema. */
+export function buildTemplateCsv(): string {
+  const rows = [
+    ["Full Name", "Email", "WhatsApp", "Country", "City", "Date of Birth"],
+    ["Jane Uwase", "jane@example.com", "0788123456", "Rwanda", "Kigali", "14/03"],
+  ];
+  return rows.map((row) => row.map((v) => `"${v.replace(/"/g, '""')}"`).join(",")).join("\n");
+}
+
 function normalizeHeader(s: string): string {
   return s
     .toLowerCase()
@@ -60,6 +90,11 @@ export interface DedupedRegistrant {
   email: string | null;
   emailVerified: boolean;
   whatsapp: string | null;
+  /** True when `whatsapp` couldn't be confidently normalized (country not
+   * recognized, or the number just doesn't parse for it) — surfaced in
+   * the wizard so a human fixes it rather than an inconsistent format
+   * silently going in. Always false when there's no number at all. */
+  phoneNeedsReview: boolean;
   country: string; // normalised
   countryRaw: string;
   city: string;
@@ -238,6 +273,52 @@ const KNOWN_COUNTRIES = [
   "Finland",
 ];
 
+/** ISO 3166-1 alpha-2 for each `KNOWN_COUNTRIES` entry — the one extra
+ * thing `normalizeCountry`'s free-text matching doesn't give us, needed to
+ * validate/normalize a phone number via libphonenumber-js. Deliberately
+ * not looked up over the network at import time (unlike the interactive
+ * Add/Edit Student country picker, src/lib/countries.ts) — a CSV import
+ * previews instantly and offline today, and this ministry's registrants
+ * only ever come from this same known set of countries in practice. */
+const KNOWN_COUNTRY_ISO2: Record<string, CountryCode> = {
+  Belgium: "BE",
+  Ghana: "GH",
+  Morocco: "MA",
+  Burundi: "BI",
+  Rwanda: "RW",
+  Kenya: "KE",
+  Spain: "ES",
+  Canada: "CA",
+  Germany: "DE",
+  Mozambique: "MZ",
+  USA: "US",
+  Zambia: "ZM",
+  Luxembourg: "LU",
+  France: "FR",
+  Finland: "FI",
+};
+
+/**
+ * Best-effort E.164 normalization for one CSV row's phone number — only
+ * when `country` resolved to one of `KNOWN_COUNTRIES` (an unrecognized
+ * free-text country gives no ISO code to validate against). Returns the
+ * original raw value and `needsReview: true` whenever normalization isn't
+ * possible or the number doesn't parse as valid, so the row surfaces in
+ * the wizard's review step instead of silently keeping an inconsistent
+ * format — same "never silently guess" policy as the rest of this file.
+ */
+function normalizeRegistrantPhone(raw: string, country: string): { whatsapp: string | null; needsReview: boolean } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { whatsapp: null, needsReview: false };
+
+  const iso2 = KNOWN_COUNTRY_ISO2[country];
+  if (iso2) {
+    const parsed = parsePhoneNumberFromString(trimmed, iso2);
+    if (parsed?.isValid()) return { whatsapp: parsed.number, needsReview: false };
+  }
+  return { whatsapp: trimmed, needsReview: true };
+}
+
 const CITY_HINTS: Record<string, string> = {
   bruxelles: "Belgium",
   brussel: "Belgium",
@@ -350,6 +431,8 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
     const earliestTs = group.tsList[earliestI];
     const dob = parseDob(latest.dobRaw);
     const hasRealTimestamp = group.rows.some((r) => parseTimestamp(r.timestamp) > 0);
+    const country = normalizeCountry(latest.countryRaw);
+    const { whatsapp, needsReview } = normalizeRegistrantPhone(latest.whatsapp, country);
 
     registrants.push({
       id: `reg-${idx++}`,
@@ -357,8 +440,9 @@ export function dedupeRegistrations(rows: RawRegistrationRow[]): DedupeResult {
       fullNameRaw: latest.fullNameRaw,
       email: latest.email.includes("@") ? latest.email.toLowerCase() : null,
       emailVerified: WELLFORMED_EMAIL.test(latest.email),
-      whatsapp: latest.whatsapp || null,
-      country: normalizeCountry(latest.countryRaw),
+      whatsapp,
+      phoneNeedsReview: needsReview,
+      country,
       countryRaw: latest.countryRaw,
       city: latest.city ? titleCase(latest.city) : "",
       dobDay: dob.day,

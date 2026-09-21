@@ -16,6 +16,8 @@ import { Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { updateStudent } from "@/lib/actions/students";
+import { normalizeStudentPhone } from "@/lib/countries";
+import { CountryCityPhoneFields } from "./country-city-phone-fields";
 import type { Student } from "@/lib/domain/types";
 
 /** Admin-only trigger + form — the page decides whether to render this at
@@ -50,12 +52,13 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
     setPending(true);
     setError(null);
     try {
+      const normalizedWhatsapp = whatsapp ? await normalizeStudentPhone(whatsapp, country) : null;
       await updateStudent({
         studentId: student.id,
         cohortId,
         fullName,
         email: email || null,
-        whatsapp: whatsapp || null,
+        whatsapp: normalizedWhatsapp,
         country: country || null,
         dobDay: dobDay ? Number(dobDay) : null,
         dobMonth: dobMonth ? Number(dobMonth) : null,
@@ -93,14 +96,13 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
             <Label htmlFor="edit-email">Email</Label>
             <Input id="edit-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div>
-            <Label htmlFor="edit-whatsapp">WhatsApp</Label>
-            <Input id="edit-whatsapp" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor="edit-country">Country</Label>
-            <Input id="edit-country" value={country} onChange={(e) => setCountry(e.target.value)} />
-          </div>
+          <CountryCityPhoneFields
+            idPrefix="edit"
+            country={country}
+            onCountryChange={setCountry}
+            whatsapp={whatsapp}
+            onWhatsappChange={setWhatsapp}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="edit-dob-day">Birthday day</Label>

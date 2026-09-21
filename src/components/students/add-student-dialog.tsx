@@ -17,6 +17,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { formatShortDate } from "@/lib/utils";
 import { addStudent } from "@/lib/actions/students";
+import { normalizeStudentPhone } from "@/lib/countries";
+import { CountryCityPhoneFields } from "./country-city-phone-fields";
 
 const EMPTY = { fullName: "", email: "", whatsapp: "", country: "", city: "", dobDay: "", dobMonth: "" };
 
@@ -97,11 +99,12 @@ export function AddStudentDialog({
     setPending(true);
     setError(null);
     try {
+      const whatsapp = form.whatsapp ? await normalizeStudentPhone(form.whatsapp, form.country) : null;
       await addStudent({
         cohortId,
         fullName: form.fullName,
         email: form.email || null,
-        whatsapp: form.whatsapp || null,
+        whatsapp,
         country: form.country || null,
         city: form.city || null,
         dobDay: form.dobDay ? Number(form.dobDay) : null,
@@ -141,20 +144,15 @@ export function AddStudentDialog({
             <Label htmlFor="add-email">Email</Label>
             <Input id="add-email" type="email" value={form.email} onChange={set("email")} />
           </div>
-          <div>
-            <Label htmlFor="add-whatsapp">WhatsApp</Label>
-            <Input id="add-whatsapp" value={form.whatsapp} onChange={set("whatsapp")} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="add-country">Country</Label>
-              <Input id="add-country" value={form.country} onChange={set("country")} />
-            </div>
-            <div>
-              <Label htmlFor="add-city">City</Label>
-              <Input id="add-city" value={form.city} onChange={set("city")} />
-            </div>
-          </div>
+          <CountryCityPhoneFields
+            idPrefix="add"
+            country={form.country}
+            onCountryChange={(v) => setForm((f) => ({ ...f, country: v }))}
+            city={form.city}
+            onCityChange={(v) => setForm((f) => ({ ...f, city: v }))}
+            whatsapp={form.whatsapp}
+            onWhatsappChange={(v) => setForm((f) => ({ ...f, whatsapp: v }))}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="add-dob-day">Birthday day</Label>

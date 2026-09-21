@@ -46,6 +46,26 @@ function describe(row: AuditRow): { summary: string; effect: string | null; chan
     };
   }
 
+  if (row.entity === "cohort" && row.action === "schedule_change") {
+    const shiftedCount = typeof after.shiftedCount === "number" ? after.shiftedCount : 0;
+    const days = Array.isArray(after.teachingDays) ? (after.teachingDays as unknown[]).length : null;
+    const perSession = typeof after.lessonsPerSession === "number" ? after.lessonsPerSession : null;
+    const interval = typeof after.intervalWeeks === "number" ? after.intervalWeeks : null;
+    const cadence =
+      days != null && perSession != null
+        ? `${days} day${days === 1 ? "" : "s"}/week, ${perSession} lesson${perSession === 1 ? "" : "s"}/session${
+            interval && interval > 1 ? `, every ${interval} weeks` : ""
+          }`
+        : null;
+    return {
+      summary: "The teaching schedule changed",
+      effect:
+        (cadence ? `Now: ${cadence}. ` : "") +
+        (shiftedCount > 0 ? `${shiftedCount} upcoming lessons and crusade days rescheduled.` : "Nothing upcoming needed to move."),
+      changeKind: "cohort",
+    };
+  }
+
   if (row.entity === "event" && row.action === "postpone") {
     const shiftedCount = typeof after.shiftedCount === "number" ? after.shiftedCount : 0;
     const shiftedText =

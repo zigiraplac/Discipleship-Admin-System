@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { CheckCircle, WarningCircle, BookOpen, Gauge, Megaphone, UserPlus, ChartLineUp } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { getCohort, getBands } from "@/lib/data/cohorts";
+import { getCohort, getBands, getScheduleSegments } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic, getCrusadeEvents } from "@/lib/data/lessons";
 import { getCrusadeReports } from "@/lib/data/crusades";
@@ -130,9 +130,10 @@ export default async function DashboardPage({
   // Crusades nav item too) — fetched once regardless of which branch below
   // runs. "Done" matches the Crusades page's own definition: a report
   // recorded, not just the weekend's date having passed.
-  const [crusadeEvents, crusadeReports] = await Promise.all([
+  const [crusadeEvents, crusadeReports, scheduleSegments] = await Promise.all([
     getCrusadeEvents(supabase, cohortId),
     getCrusadeReports(supabase, cohortId),
+    getScheduleSegments(supabase, cohortId),
   ]);
   const weekends = crusadeWeekends(crusadeEvents);
   const crusadesDone = weekends.filter((w) => crusadeReports.has(w.afterClass)).length;
@@ -323,7 +324,7 @@ export default async function DashboardPage({
   // Never stored — re-derived from the cohort's own ideal plan (real
   // start date, teaching days, lessons/session) vs. what's actually
   // recorded, so postponing a lesson can never leave this stale.
-  const pace = computePace(cohort, recordedCount, today);
+  const pace = computePace(cohort, scheduleSegments, recordedCount, today);
   const onPace = pace.gap <= 0;
 
   // Same tiers already shown on the Cohorts switcher list — surfaced here
