@@ -10,6 +10,7 @@ import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { saveRegister } from "@/lib/actions/register";
+import { ImportMeetAttendanceDialog } from "./import-meet-attendance-dialog";
 import { cn } from "@/lib/utils";
 
 export interface RegisterRosterEntry {
@@ -105,6 +106,11 @@ export function RegisterForm({
     setAttendance({});
   }
 
+  function applyImportedAttendance(imported: Record<string, "present" | "absent">) {
+    if (!allPresentEnabled) return;
+    setAttendance(imported);
+  }
+
   const filteredRoster = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return roster;
@@ -191,6 +197,11 @@ export function RegisterForm({
           >
             All present
           </Button>
+          <ImportMeetAttendanceDialog
+            roster={roster.map((r) => ({ id: r.id, fullName: r.fullName }))}
+            onApply={applyImportedAttendance}
+            disabled={!allPresentEnabled}
+          />
         </div>
 
         <div className="p-[18px]">

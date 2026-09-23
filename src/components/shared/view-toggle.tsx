@@ -9,7 +9,7 @@ const OPTIONS: SegmentedOption<ViewMode>[] = [
   { value: "list", label: "List" },
 ];
 
-/** Shared Cards/List switch — Catch ups, Lessons, and Cohorts each let a
+/** Shared Cards/List switch — Catch ups, Follow Up, and Cohorts each let a
  * viewer pick whichever reads better for what they're doing: cards for a
  * scan of a handful of things, a dense list for comparing many at once. */
 export function ViewToggle({

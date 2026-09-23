@@ -1,6 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // `pdf-parse` wraps `pdfjs-dist`, which loads its own worker file
+  // (`pdf.worker.mjs`) via a runtime path lookup that doesn't survive
+  // Turbopack/webpack bundling the server action that imports it —
+  // "Setting up fake worker failed: Cannot find module .../pdf.worker.mjs".
+  // Marking both packages external means Node resolves them straight
+  // from node_modules at request time instead, same as any other
+  // server-only Node dependency this app doesn't bundle.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
   experimental: {
     // Dynamic routes (everything here — auth-gated, RLS-scoped) default
     // to a 0s client cache, meaning every navigation, even a page you

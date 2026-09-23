@@ -24,7 +24,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { CURRICULUM, partDisplayLabel, partSpans, partsSummary } from "@/lib/domain/curriculum";
 import { cn, formatShortDate } from "@/lib/utils";
 import { postponeLesson } from "@/lib/actions/schedule";
-import { ViewToggle, type ViewMode } from "@/components/shared/view-toggle";
 import type { Role } from "@/lib/domain/types";
 
 export type LessonRowStatus = "recorded" | "missing" | "upcoming";
@@ -86,7 +85,6 @@ export function LessonsBrowser({
   rows: LessonRow[];
 }) {
   const [filter, setFilter] = useState<"all" | LessonRowStatus>("all");
-  const [view, setView] = useState<ViewMode>("list");
   const canOpenRegister = role === "facilitator" || role === "admin";
 
   const rowsByClass = useMemo(() => {
@@ -127,7 +125,6 @@ export function LessonsBrowser({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2.5">
         <Segmented options={FILTER_OPTIONS} value={filter} onChange={setFilter} />
-        <ViewToggle value={view} onChange={setView} className="ml-auto" />
       </div>
 
       <div className="flex flex-col gap-2.5">
@@ -208,7 +205,6 @@ export function LessonsBrowser({
                   {cls.parts.length <= 1 ? (
                     <LessonRowsView
                       rows={filteredRows}
-                      view={view}
                       currentPositionId={currentPositionId}
                       cohortId={cohortId}
                       cohortSlug={cohortSlug}
@@ -226,7 +222,6 @@ export function LessonsBrowser({
                             </div>
                             <LessonRowsView
                               rows={partRows}
-                              view={view}
                               currentPositionId={currentPositionId}
                               cohortId={cohortId}
                               cohortSlug={cohortSlug}
@@ -250,46 +245,20 @@ export function LessonsBrowser({
   );
 }
 
-/** Switches a set of rows (a whole class, or one part of a Part A/B split)
- * between the dense list (a table) and a scannable card grid. */
+/** One class's rows (or one part of a Part A/B split), as a dense list. */
 function LessonRowsView({
   rows,
-  view,
   currentPositionId,
   cohortId,
   cohortSlug,
   canOpenRegister,
 }: {
   rows: LessonRow[];
-  view: ViewMode;
   currentPositionId: string | null;
   cohortId: string;
   cohortSlug: string;
   canOpenRegister: boolean;
 }) {
-  if (view === "cards") {
-    return (
-      <div
-        className="grid gap-3 p-[14px]"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))" }}
-      >
-        {rows.map((row) => (
-          <LessonCard
-            key={row.eventId}
-            row={row}
-            isCurrent={row.eventId === currentPositionId}
-            cohortId={cohortId}
-            cohortSlug={cohortSlug}
-            canOpenRegister={canOpenRegister}
-          />
-        ))}
-        {rows.length === 0 && (
-          <div className="col-span-full py-6 text-center text-sm text-ink-faint">0 lessons match this filter.</div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <Table>
       <THead>
@@ -318,54 +287,6 @@ function LessonRowsView({
         )}
       </tbody>
     </Table>
-  );
-}
-
-/** A single lesson, as a compact tile — the Cards view's equivalent of
- * `LessonTR`, same information and actions, laid out to be scanned as a
- * grid instead of read down a table. */
-function LessonCard({
-  row,
-  isCurrent,
-  cohortId,
-  cohortSlug,
-  canOpenRegister,
-}: {
-  row: LessonRow;
-  isCurrent: boolean;
-  cohortId: string;
-  cohortSlug: string;
-  canOpenRegister: boolean;
-}) {
-  return (
-    <Card className={cn("flex flex-col gap-2.5 p-3.5", isCurrent && "border-accent-300")}>
-      <div className="flex items-start gap-2">
-        <StatusDot status={row.status} isCurrent={isCurrent} />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-semibold text-ink">{row.lessonTitle}</div>
-          <div className="text-[11px] text-ink-muted">{row.lessonRef}</div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between text-[11px] text-ink-muted">
-        <span>{formatShortDate(row.date)}</span>
-        {row.edited && <Pill tone="amber">Postponed</Pill>}
-      </div>
-      <div className="flex items-center gap-2">
-        <ProgressBar pct={row.ratePct} tone={row.tone} className="flex-1" />
-        <span className="flex-none text-[12px] font-semibold tabular text-ink-secondary">
-          {row.presentText}
-          {row.ratePct !== null ? ` · ${row.ratePct}%` : ""}
-        </span>
-      </div>
-      <div className="mt-auto flex items-center gap-2 pt-1">
-        {row.status === "missing" && canOpenRegister && (
-          <PostponeButton cohortId={cohortId} eventId={row.eventId} lessonRef={row.lessonRef} />
-        )}
-        <span className="flex-1">
-          <RowAction cohortSlug={cohortSlug} row={row} canOpenRegister={canOpenRegister} />
-        </span>
-      </div>
-    </Card>
   );
 }
 
