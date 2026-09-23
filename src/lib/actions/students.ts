@@ -152,6 +152,13 @@ export interface UpdateStudentInput {
   country: string | null;
   dobDay: number | null;
   dobMonth: number | null;
+  /** ISO date (YYYY-MM-DD) — the window `aggregateCohort` (metrics.ts)
+   * uses to decide which lessons count toward this student's own
+   * expected/attended totals. `addStudent`'s own backfill checklist only
+   * offers lessons already *recorded* at add-time; a lesson recorded
+   * later than that (e.g. a Meet report imported for an earlier date)
+   * has no way to be backdated except here. */
+  enrolledAt: string;
 }
 
 /**
@@ -177,6 +184,9 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
   if ((input.dobDay == null) !== (input.dobMonth == null)) {
     throw new Error("Enter both a birthday day and month, or leave both blank.");
   }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.enrolledAt)) {
+    throw new Error("Enter a valid enrollment date.");
+  }
 
   const supabase = await createClient();
   const { error } = await supabase
@@ -188,6 +198,7 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
       country: input.country?.trim() || null,
       dob_day: input.dobDay,
       dob_month: input.dobMonth,
+      enrolled_at: `${input.enrolledAt}T00:00:00Z`,
     })
     .eq("id", input.studentId)
     .eq("cohort_id", input.cohortId);

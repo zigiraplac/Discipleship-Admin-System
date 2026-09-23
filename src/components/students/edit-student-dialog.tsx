@@ -32,6 +32,7 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
   const [country, setCountry] = useState(student.country ?? "");
   const [dobDay, setDobDay] = useState(student.dobDay?.toString() ?? "");
   const [dobMonth, setDobMonth] = useState(student.dobMonth?.toString() ?? "");
+  const [enrolledAt, setEnrolledAt] = useState(student.enrolledAt.slice(0, 10));
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,6 +45,7 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
       setCountry(student.country ?? "");
       setDobDay(student.dobDay?.toString() ?? "");
       setDobMonth(student.dobMonth?.toString() ?? "");
+      setEnrolledAt(student.enrolledAt.slice(0, 10));
       setError(null);
     }
   }
@@ -62,6 +64,7 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
         country: country || null,
         dobDay: dobDay ? Number(dobDay) : null,
         dobMonth: dobMonth ? Number(dobMonth) : null,
+        enrolledAt,
       });
       show("Student details updated.");
       setOpen(false);
@@ -83,7 +86,8 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
         <div className="px-5 pt-5">
           <DialogTitle className="text-[15px] font-bold text-ink">Edit student</DialogTitle>
           <DialogDescription className="mt-1 text-xs text-ink-muted">
-            Corrects what&rsquo;s on file — doesn&rsquo;t touch attendance or outcome history.
+            Corrects what&rsquo;s on file. Changing &ldquo;Enrolled since&rdquo; changes which lessons count toward
+            their attendance rate — everything else here doesn&rsquo;t touch attendance or outcome history.
           </DialogDescription>
         </div>
 
@@ -126,6 +130,21 @@ export function EditStudentDialog({ cohortId, student }: { cohortId: string; stu
                 onChange={(e) => setDobMonth(e.target.value)}
               />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="edit-enrolled-at">Enrolled since</Label>
+            <input
+              id="edit-enrolled-at"
+              type="date"
+              value={enrolledAt}
+              onChange={(e) => setEnrolledAt(e.target.value)}
+              className="w-full rounded-control border border-border bg-subtle px-3 py-2.5 text-sm text-ink focus-visible:border-accent focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2"
+            />
+            <p className="mt-1 text-[11px] text-ink-faint">
+              Only matters for a lesson recorded <em>after</em> the fact — e.g. a Meet report imported for a
+              date before this student was added. Backdating this to their real start date lets that lesson
+              count instead of reading as 0%.
+            </p>
           </div>
           {error && <div className="text-[12px] font-medium text-accent-2-700">{error}</div>}
         </div>

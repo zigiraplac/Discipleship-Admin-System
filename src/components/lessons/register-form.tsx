@@ -109,6 +109,11 @@ export function RegisterForm({
   function applyImportedAttendance(imported: Record<string, "present" | "absent">) {
     if (!allPresentEnabled) return;
     setAttendance(imported);
+    // The import only pre-fills these tiles — a facilitator seeing the
+    // dialog close can easily read that as "done" and navigate away
+    // without ever pressing Save, leaving the register genuinely empty
+    // (recorded_at stays null) even though the tiles looked right.
+    show('Attendance pre-filled from the report — click "Save register" below to actually save it.');
   }
 
   const filteredRoster = useMemo(() => {
