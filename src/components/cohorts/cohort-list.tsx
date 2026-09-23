@@ -5,6 +5,7 @@ import { HealthPill, Pill } from "@/components/ui/pill";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { buttonVariants } from "@/components/ui/button";
 import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
+import { DeleteCohortDialog } from "./delete-cohort-dialog";
 import type { Bands, Cohort } from "@/lib/domain/types";
 import type { CohortAggregate, PaceStatus } from "@/lib/domain/metrics";
 
@@ -17,7 +18,7 @@ export interface CohortListRow {
 /** Same cohorts as the card grid, one row per cohort instead — for
  * comparing every cohort's health/attendance/pace side by side rather than
  * scanning tile by tile. */
-export function CohortList({ rows, bands }: { rows: CohortListRow[]; bands: Bands }) {
+export function CohortList({ rows, bands, canDelete }: { rows: CohortListRow[]; bands: Bands; canDelete?: boolean }) {
   return (
     <Card className="overflow-hidden">
       <Table>
@@ -64,9 +65,12 @@ export function CohortList({ rows, bands }: { rows: CohortListRow[]; bands: Band
                   </Pill>
                 </TD>
                 <TD align="right">
-                  <Link href={`/c/${cohort.slug}`} className={buttonVariants({ variant: "secondary", size: "row" })}>
-                    Open
-                  </Link>
+                  <span className="flex items-center justify-end gap-2">
+                    {canDelete && <DeleteCohortDialog cohortId={cohort.id} cohortName={cohort.name} triggerVariant="icon" />}
+                    <Link href={`/c/${cohort.slug}`} className={buttonVariants({ variant: "secondary", size: "row" })}>
+                      Open
+                    </Link>
+                  </span>
                 </TD>
               </TR>
             );

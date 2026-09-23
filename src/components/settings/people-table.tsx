@@ -7,6 +7,7 @@ import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-t
 import { Avatar } from "@/components/ui/avatar";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { EditPersonDialog } from "./edit-person-dialog";
+import { RemovePersonDialog } from "./remove-person-dialog";
 import { roleLabel } from "@/lib/roles";
 import { describeScope } from "@/lib/data/people";
 import type { AppUser, Role } from "@/lib/domain/types";
@@ -76,7 +77,7 @@ export function PeopleTable({
           <StaticTH>Cohorts</StaticTH>
           <SortableTH label="State" sortKey="state" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <StaticTH>
-            <span className="sr-only">Edit</span>
+            <span className="sr-only">Actions</span>
           </StaticTH>
         </THead>
         <tbody>
@@ -101,12 +102,14 @@ export function PeopleTable({
                 <Pill tone={STATE_TONE[person.state]}>{STATE_LABEL[person.state]}</Pill>
               </TD>
               <TD>
-                <EditPersonDialog
-                  person={person}
-                  cohorts={cohorts}
-                  currentCohortIds={(scopesByUser.get(person.id) ?? []).map((s) => s.cohortId)}
-                  isSelf={person.id === currentUserId}
-                />
+                <span className="flex items-center gap-1">
+                  <EditPersonDialog
+                    person={person}
+                    cohorts={cohorts}
+                    currentCohortIds={(scopesByUser.get(person.id) ?? []).map((s) => s.cohortId)}
+                  />
+                  <RemovePersonDialog person={person} isSelf={person.id === currentUserId} />
+                </span>
               </TD>
             </TR>
           ))}

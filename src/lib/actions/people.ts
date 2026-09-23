@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { SITE_URL } from "@/lib/supabase/env";
 import { requireRole } from "@/lib/auth";
 import { createNotification } from "@/lib/data/notifications";
+import { getPersonFootprint, type PersonFootprintItem } from "@/lib/data/people";
 import { roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
 
@@ -244,6 +245,77 @@ export async function deactivatePerson(id: string): Promise<void> {
     entity_id: id,
     action: "deactivate",
     after: { name: target.name },
+  });
+
+  revalidatePath("/settings");
+}
+
+/** Admin-only — feeds the Danger Zone's pre-flight check in
+ * `EditPersonDialog` before it ever shows a delete button. */
+export async function getPersonDeletionFootprint(id: string): Promise<PersonFootprintItem[]> {
+  await requireRole("admin");
+  const admin = createAdminClient();
+  return getPersonFootprint(admin, id);
+}
+
+/**
+ * Admin-only, and not on yourself. Unlike `deactivatePerson`, this is
+ * genuinely permanent — it calls Supabase Auth's own `deleteUser`, which
+ * cascades `app_user` away automatically (`id references auth.users on
+ * delete cascade`). Re-runs the same footprint check the UI already
+ * showed, rather than trusting it — a moment could have passed since the
+ * dialog opened, and this is exactly the one action where "probably still
+ * true" isn't good enough. Any non-empty footprint aborts with the same
+ * breakdown so the caller can show *why*, not just that it failed.
+ */
+export async function deletePersonPermanently(id: string): Promise<void> {
+  const actor = await requireRole("admin");
+  if (actor.id === id) {
+    throw new Error("You can't delete your own account.");
+  }
+
+  const admin = createAdminClient();
+
+  const { data: target, error: targetErr } = await admin
+    .from("app_user")
+    .select("name, email, role")
+    .eq("id", id)
+    .maybeSingle();
+  if (targetErr) throw new Error("Couldn't load this person. Please try again.");
+  if (!target) throw new Error("This person no longer exists.");
+
+  if (target.role === "admin") {
+    const { count, error: countErr } = await admin
+      .from("app_user")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .eq("state", "active");
+    if (countErr) throw new Error("Couldn't verify admin count. Please try again.");
+    if ((count ?? 0) <= 1) {
+      throw new Error("Can't delete the last active admin — promote someone else first.");
+    }
+  }
+
+  const footprint = await getPersonFootprint(admin, id);
+  if (footprint.length) {
+    throw new Error(
+      `Still has recorded activity (${footprint.map((f) => f.label.toLowerCase()).join(", ")}) — clear that first.`
+    );
+  }
+
+  const { error: deleteErr } = await admin.auth.admin.deleteUser(id);
+  if (deleteErr) throw new Error("Couldn't delete this person. Please try again.");
+
+  // Global, not tied to any cohort — this is the one audit entry that
+  // must survive regardless of which cohorts get deleted later, since
+  // it's the permanent record of the deletion itself.
+  await admin.from("audit_log").insert({
+    actor_id: actor.id,
+    entity: "app_user",
+    entity_id: id,
+    cohort_id: null,
+    action: "delete",
+    before: { name: target.name, email: target.email, role: target.role },
   });
 
   revalidatePath("/settings");

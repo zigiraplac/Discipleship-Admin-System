@@ -13,6 +13,7 @@ import { buildEvents } from "@/lib/domain/generator";
 import { ensureCurriculumSeeded } from "@/lib/data/curriculum-admin";
 import { getBands } from "@/lib/data/cohorts";
 import { getQuickStats, type QuickStats } from "@/lib/data/quick-stats";
+import { createNotifications } from "@/lib/data/notifications";
 import { todayISO } from "@/lib/utils";
 
 /**
@@ -166,4 +167,67 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
 
   revalidatePath("/cohorts");
   return { cohortId, studentsCount: enrol.length, eventsCount: eventPayload.length };
+}
+
+/**
+ * Permanent — every student, event, register, outcome, crusade report,
+ * and schedule-change record for this cohort cascades away with it
+ * (`on delete cascade` on each table's own `cohort_id`, see 0001_init.sql
+ * / 0023_cohort_schedule_periods.sql). `confirmName` is re-checked here,
+ * not just in the dialog that collects it — a server action is callable
+ * directly, so the "type the name to confirm" step has to be enforced on
+ * this side too, not just trusted from the client.
+ *
+ * The audit row deliberately leaves `cohort_id` null: audit_log's own
+ * `cohort_id` column cascades on cohort delete (0022_audit_log_cohort.sql),
+ * so a row that referenced the very cohort being deleted would vanish
+ * along with it — the one entry that most needs to survive.
+ */
+export async function deleteCohort(input: { cohortId: string; confirmName: string }): Promise<void> {
+  const user = await requireRole("admin");
+  const admin = createAdminClient();
+
+  const { data: cohort, error: cohortErr } = await admin
+    .from("cohort")
+    .select("name")
+    .eq("id", input.cohortId)
+    .single();
+  if (cohortErr) throw new Error("Couldn't find that cohort.");
+  if (input.confirmName.trim() !== cohort.name) {
+    throw new Error("That doesn't match the cohort's name — nothing was deleted.");
+  }
+
+  const [{ count: studentsCount }, { count: eventsCount }, { data: members }] = await Promise.all([
+    admin.from("student").select("*", { count: "exact", head: true }).eq("cohort_id", input.cohortId),
+    admin.from("event").select("*", { count: "exact", head: true }).eq("cohort_id", input.cohortId),
+    admin.from("cohort_member").select("user_id").eq("cohort_id", input.cohortId).neq("user_id", user.id),
+  ]);
+
+  const { error: deleteErr } = await admin.from("cohort").delete().eq("id", input.cohortId);
+  if (deleteErr) throw new Error("Couldn't delete this cohort. Please try again.");
+
+  await admin.from("audit_log").insert({
+    actor_id: user.id,
+    entity: "cohort",
+    entity_id: input.cohortId,
+    cohort_id: null,
+    action: "delete",
+    before: { name: cohort.name, students: studentsCount ?? 0, events: eventsCount ?? 0 },
+  });
+
+  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
+  if (recipientIds.length) {
+    await createNotifications(
+      admin,
+      recipientIds.map((userId) => ({
+        userId,
+        kind: "student_updated",
+        title: `${cohort.name} was deleted`,
+        body: "An admin permanently removed this cohort and all of its data.",
+        href: "/cohorts",
+      }))
+    );
+  }
+
+  revalidatePath("/cohorts");
 }

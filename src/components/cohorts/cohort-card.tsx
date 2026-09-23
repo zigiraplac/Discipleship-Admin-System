@@ -5,6 +5,7 @@ import { CompletionRing } from "@/components/ui/completion-ring";
 import { buttonVariants } from "@/components/ui/button";
 import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
+import { DeleteCohortDialog } from "./delete-cohort-dialog";
 import type { Cohort } from "@/lib/domain/types";
 import type { CohortAggregate } from "@/lib/domain/metrics";
 
@@ -17,10 +18,12 @@ export function CohortCard({
   cohort,
   agg,
   paceGap,
+  canDelete,
 }: {
   cohort: Cohort;
   agg: CohortAggregate;
   paceGap: number;
+  canDelete?: boolean;
 }) {
   const pct = (agg.recordedCount / TOTAL_LESSONS) * 100;
   const current = agg.recordedCount < TOTAL_LESSONS ? lessonAt(agg.recordedCount) : null;
@@ -34,7 +37,10 @@ export function CohortCard({
             {cohort.city ?? "—"} · {cohort.facilitatorName ?? "Unassigned"}
           </div>
         </div>
-        <HealthPill health={agg.health} className="flex-none" />
+        <div className="flex flex-none items-center gap-1.5">
+          <HealthPill health={agg.health} />
+          {canDelete && <DeleteCohortDialog cohortId={cohort.id} cohortName={cohort.name} triggerVariant="icon" />}
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-2">

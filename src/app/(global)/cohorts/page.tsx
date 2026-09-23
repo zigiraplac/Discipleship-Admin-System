@@ -43,7 +43,7 @@ export default async function CohortsPage() {
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Cohorts" subtitle="Switch between cohorts, or start a new one." />
       <ExecutiveOverview rows={cards} bands={bands} />
-      <CohortsBoard rows={cards} bands={bands} canCreateCohort={user.role === "admin"} />
+      <CohortsBoard rows={cards} bands={bands} canCreateCohort={user.role === "admin"} canDeleteCohort={user.role === "admin"} />
     </div>
   );
 }

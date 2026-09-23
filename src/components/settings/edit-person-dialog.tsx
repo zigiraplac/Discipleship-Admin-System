@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { PencilSimple, Prohibit, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { PencilSimple } from "@phosphor-icons/react";
 import {
   Dialog,
   DialogTrigger,
@@ -15,41 +15,39 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
-import { updatePerson, deactivatePerson, reactivatePerson } from "@/lib/actions/people";
+import { updatePerson } from "@/lib/actions/people";
 import { roleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { AppUser, Role } from "@/lib/domain/types";
 
 const ROLES: Role[] = ["facilitator", "teacher", "leadership", "admin"];
 
-/** Edit an existing person's name/role/cohort assignment, and
- * deactivate/reactivate their access — everything invitePerson sets up
- * front, editable after the fact. This is also how a cohort gets handed
- * from one facilitator to another: deactivate the old one, then add the
- * cohort to the new one's list here. */
+/** Edit an existing person's name/role/cohort assignment — everything
+ * invitePerson sets up front, editable after the fact. This is also how a
+ * cohort gets handed from one facilitator to another: deactivate the old
+ * one (via `RemovePersonDialog`), then add the cohort to the new one's
+ * list here. Turning access off or deleting the account entirely lives in
+ * that separate dialog, not this one — different enough consequences to
+ * not share a single "Edit" action. */
 export function EditPersonDialog({
   person,
   cohorts,
   currentCohortIds,
-  isSelf,
 }: {
   person: AppUser;
   cohorts: { id: string; name: string }[];
   currentCohortIds: string[];
-  isSelf: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(person.name);
   const [role, setRole] = useState<Role>(person.role);
   const [cohortIds, setCohortIds] = useState<Set<string>>(new Set(currentCohortIds));
   const [pending, setPending] = useState(false);
-  const [statusPending, setStatusPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { show } = useToast();
   const router = useRouter();
 
   const needsCohorts = role === "facilitator" || role === "teacher";
-  const isDeactivated = person.state === "deactivated";
 
   function reset() {
     setName(person.name);
@@ -82,26 +80,6 @@ export function EditPersonDialog({
     }
   }
 
-  async function handleToggleStatus() {
-    setStatusPending(true);
-    setError(null);
-    try {
-      if (isDeactivated) {
-        await reactivatePerson(person.id);
-        show(`${person.name} can sign in again.`);
-      } else {
-        await deactivatePerson(person.id);
-        show(`${person.name}'s access has been turned off.`);
-      }
-      setOpen(false);
-      router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
-    } finally {
-      setStatusPending(false);
-    }
-  }
-
   return (
     <Dialog
       open={open}
@@ -120,7 +98,7 @@ export function EditPersonDialog({
         <div className="px-5 pt-5">
           <DialogTitle className="text-[15px] font-bold text-ink">Edit person</DialogTitle>
           <DialogDescription className="mt-1 text-xs text-ink-muted">
-            Change their role or which cohorts they can see, or turn their access off.
+            Change their role or which cohorts they can see.
           </DialogDescription>
         </div>
 
@@ -170,38 +148,6 @@ export function EditPersonDialog({
               )}
             </div>
           )}
-
-          <div className="rounded-[10px] border border-border-soft bg-subtle p-3.5">
-            <div className="text-xs font-semibold text-ink">
-              {isDeactivated ? "This person is deactivated" : "Access"}
-            </div>
-            <div className="mt-0.5 text-[11px] text-ink-muted">
-              {isDeactivated
-                ? "They can't sign in until reactivated. Nothing they recorded before was affected."
-                : "Turning this off signs them out and blocks sign-in, without deleting anything they've recorded."}
-            </div>
-            {isSelf ? (
-              <div className="mt-2.5 text-[11px] text-ink-faint">You can&rsquo;t deactivate your own account.</div>
-            ) : (
-              <Button
-                type="button"
-                variant={isDeactivated ? "secondary" : "outlineAccent"}
-                size="sm"
-                disabled={statusPending}
-                onClick={handleToggleStatus}
-                className={cn("mt-2.5", !isDeactivated && "border-accent-2-200 text-accent-2-700 hover:border-accent-2-700")}
-              >
-                {statusPending ? (
-                  <Spinner />
-                ) : isDeactivated ? (
-                  <ArrowCounterClockwise size={13} weight="bold" />
-                ) : (
-                  <Prohibit size={13} weight="bold" />
-                )}
-                {statusPending ? "Working…" : isDeactivated ? "Reactivate" : "Deactivate access"}
-              </Button>
-            )}
-          </div>
         </div>
 
         {error && <div className="px-5 pb-1 text-xs font-medium text-accent-2-700">{error}</div>}

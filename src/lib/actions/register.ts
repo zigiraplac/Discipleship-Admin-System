@@ -94,6 +94,7 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
       actor_id: user.id,
       entity: "register",
       entity_id: input.eventId,
+      cohort_id: input.cohortId,
       action: "correct",
       before: existing as unknown as Json,
       after: patch as unknown as Json,

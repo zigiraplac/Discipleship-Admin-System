@@ -17,10 +17,12 @@ export function CohortsBoard({
   rows,
   bands,
   canCreateCohort,
+  canDeleteCohort,
 }: {
   rows: CohortListRow[];
   bands: Bands;
   canCreateCohort: boolean;
+  canDeleteCohort?: boolean;
 }) {
   const [view, setView] = useState<ViewMode>("list");
 
@@ -39,11 +41,11 @@ export function CohortsBoard({
       )}
 
       {view === "list" ? (
-        <CohortList rows={rows} bands={bands} />
+        <CohortList rows={rows} bands={bands} canDelete={canDeleteCohort} />
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
           {rows.map(({ cohort, agg, pace }) => (
-            <CohortCard key={cohort.id} cohort={cohort} agg={agg} paceGap={pace.gap} />
+            <CohortCard key={cohort.id} cohort={cohort} agg={agg} paceGap={pace.gap} canDelete={canDeleteCohort} />
           ))}
           {canCreateCohort && <NewCohortTile />}
         </div>
