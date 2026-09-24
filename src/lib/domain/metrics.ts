@@ -40,9 +40,16 @@ export function aggregateCohort(
   bands: Bands,
   todayISO: string
 ): CohortAggregate {
-  const recorded = lessonEvents.filter(isRecorded);
-  const recordedCount = recorded.length;
+  const recordedCount = lessonEvents.filter(isRecorded).length;
   const enrolled = students.length;
+
+  // A lesson that's happened but whose register nobody's saved yet is
+  // still *due* — it doesn't get to quietly disappear from the math just
+  // because the data-entry hasn't caught up. Missing a recording is a gap
+  // to go fix (record it), not something the numbers should paper over:
+  // an unrecorded due lesson counts here exactly like a recorded absence,
+  // until someone actually records it.
+  const due = lessonEvents.filter((e) => e.date <= todayISO);
 
   const tally = new Map<
     string,
@@ -51,27 +58,28 @@ export function aggregateCohort(
   for (const s of students) tally.set(s.id, { attended: 0, expected: 0, lastAttendedGlobalIndex: null, streak: 0 });
 
   let totalPresent = 0;
-  for (const ev of recorded) {
-    const reg = ev.register;
+  for (const ev of due) {
+    const evIsRecorded = isRecorded(ev);
     for (const s of students) {
       const t = tally.get(s.id)!;
+      const wasPresent = evIsRecorded && ev.register.attendance[s.id] === "present";
       // "Last attended" is real history regardless of the enrollment
       // window below — a backfilled present mark from before a
       // late-added student's system-entry date still counts as something
       // they actually attended.
-      if (reg.attendance[s.id] === "present") {
+      if (wasPresent) {
         if (t.lastAttendedGlobalIndex == null || ev.globalIndex > t.lastAttendedGlobalIndex) {
           t.lastAttendedGlobalIndex = ev.globalIndex;
         }
       }
       // A student added mid-cohort (src/lib/actions/students.ts:addStudent)
-      // wasn't around for lessons recorded before they enrolled — counting
-      // those against them would show someone brand new as having missed
+      // wasn't around for lessons before they enrolled — counting those
+      // against them would show someone brand new as having missed
       // everything taught so far. Only lessons on/after their own
       // enrollment date count toward their personal expected/attended.
       if (ev.date < s.enrolledAt.slice(0, 10)) continue;
       t.expected++;
-      if (reg.attendance[s.id] !== "present") {
+      if (!wasPresent) {
         t.streak++;
         continue;
       }
@@ -85,13 +93,15 @@ export function aggregateCohort(
     const t = tally.get(s.id)!;
     const rate = t.expected ? Math.round((t.attended / t.expected) * 100) : 0;
     // A brand-new cohort (or a student who just joined) has nothing to
-    // judge them by yet — don't flag them "At risk" just because no
-    // register has been saved since they enrolled
+    // judge them by yet — no lesson has even happened for them since they
+    // enrolled — don't flag them "At risk" for that
     // (04-interactions-and-state.md: "0 and — are not interchangeable").
     // This is *not* the same as a real "On track" — callers that display
     // status should treat `expected === 0` as its own "not started yet"
     // case rather than showing it as if it were a judged, healthy rate
-    // (see students-table.tsx).
+    // (see students-table.tsx). Once `expected > 0`, though, an
+    // unrecorded lesson is a real, counted miss — there's no other
+    // "incomplete data" special-casing past this point.
     const status = t.expected === 0 ? "On track" : statusOf(rate, bands);
     return {
       ...s,
