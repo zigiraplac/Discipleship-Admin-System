@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { StatGrid } from "@/components/ui/stat-card";
 import { Pill } from "@/components/ui/pill";
 import { cn, formatShortDate, todayISO } from "@/lib/utils";
-import { CSV_COLUMN_GUIDE, buildTemplateCsv, type DedupeResult } from "@/lib/domain/registrations";
+import { buildTemplateCsv, type DedupeResult } from "@/lib/domain/registrations";
 import { StepCard } from "./step-card";
 import { Tile } from "./stat-tile";
 
@@ -80,29 +80,12 @@ export function StepStudents({
           </p>
         </div>
 
-        <div className="rounded-control border border-border-soft px-3.5 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[13px] font-semibold text-ink">Columns this system recognizes</span>
-            <Button type="button" variant="secondary" size="sm" onClick={downloadTemplateCsv}>
-              <DownloadSimple size={13} />
-              Download template
-            </Button>
-          </div>
-          <p className="mt-1 text-xs text-ink-muted">
-            Column order doesn&rsquo;t matter, and any extra column is kept, not rejected — only the
-            header <em>names</em> below are matched (not case-sensitive).
-          </p>
-          <div className="mt-2.5 flex flex-col gap-1.5">
-            {CSV_COLUMN_GUIDE.map((col) => (
-              <div key={col.label} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
-                <span className={cn("flex-none font-semibold", col.required ? "text-ink" : "text-ink-secondary")}>
-                  {col.label}
-                  {col.required && <span className="text-accent-2-700"> *</span>}
-                </span>
-                <span className="text-ink-faint">{col.aliases.join(" · ")}</span>
-              </div>
-            ))}
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-ink-muted">Not sure how to format it?</span>
+          <Button type="button" variant="secondary" size="sm" onClick={downloadTemplateCsv}>
+            <DownloadSimple size={13} />
+            Download template
+          </Button>
         </div>
 
         <button

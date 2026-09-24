@@ -166,9 +166,7 @@ export function ImportMeetAttendanceDialog({
         <div className="px-5 pt-5">
           <DialogTitle className="text-[15px] font-bold text-ink">Import attendance from Google Meet</DialogTitle>
           <DialogDescription className="mt-1 text-xs text-ink-muted">
-            Upload the attendance report Google emails the meeting organizer — a CSV export, or a PDF from a
-            report tool like Meet Attendance Tracker. This only pre-fills the tiles on the register screen,
-            nothing saves until you do.
+            Upload the attendance report (CSV or PDF) — nothing saves until you do.
           </DialogDescription>
         </div>
 

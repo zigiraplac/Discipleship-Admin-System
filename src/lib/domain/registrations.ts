@@ -31,21 +31,6 @@ const HEADER_ALIASES: Record<string, string[]> = {
   dobRaw: ["dob", "date of birth", "birthday", "birth date"],
 };
 
-/** The same recognized-column info `parseRegistrationsCsv` matches
- * against, reshaped for display (the upload step's "accepted columns"
- * guide) — one source of truth, so that list can never drift out of sync
- * with what the parser actually accepts. */
-export const CSV_COLUMN_GUIDE: { label: string; required: boolean; aliases: string[] }[] = [
-  { label: "Full name", required: true, aliases: HEADER_ALIASES.fullName },
-  { label: "— or First name + Last name", required: false, aliases: [...HEADER_ALIASES.firstName, ...HEADER_ALIASES.lastName] },
-  { label: "Email", required: false, aliases: HEADER_ALIASES.email },
-  { label: "WhatsApp / phone", required: false, aliases: HEADER_ALIASES.whatsapp },
-  { label: "Country", required: false, aliases: HEADER_ALIASES.countryRaw },
-  { label: "City", required: false, aliases: HEADER_ALIASES.city },
-  { label: "Date of birth", required: false, aliases: HEADER_ALIASES.dobRaw },
-  { label: "Submission time", required: false, aliases: HEADER_ALIASES.timestamp },
-];
-
 /** A starter CSV, matching this system's own recognized headers, for
  * whoever's building the actual sign-up form — a real column-name
  * mismatch is much easier to avoid up front than to debug after an
