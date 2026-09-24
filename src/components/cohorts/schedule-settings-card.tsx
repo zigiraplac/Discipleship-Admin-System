@@ -8,17 +8,9 @@ import { Label, Textarea } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { cn, formatShortDate } from "@/lib/utils";
-import { DAY_DEFS, formatTeachingDays } from "@/components/wizard/day-defs";
+import { DAY_DEFS, formatTeachingDays, LESSONS_PER_SESSION_OPTIONS, INTERVAL_OPTIONS } from "@/components/wizard/day-defs";
 import { changeCohortSchedule } from "@/lib/actions/schedule";
 import { buildIdealSchedule, curriculumScheduleItems, lastLessonDate, type ScheduleSegment } from "@/lib/domain/generator";
-
-const LESSONS_PER_SESSION_OPTIONS = [1, 2] as const;
-const INTERVAL_OPTIONS = [
-  { value: 1, label: "Every week" },
-  { value: 2, label: "Every 2 weeks" },
-  { value: 3, label: "Every 3 weeks" },
-  { value: 4, label: "Every 4 weeks" },
-];
 
 interface BaseCadence {
   startDate: string;

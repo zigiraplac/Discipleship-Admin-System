@@ -14,6 +14,7 @@ export function StepReview({
   startDate,
   teachingDays,
   lessonsPerSession,
+  intervalWeeks,
   events,
   enrolledCount,
   creating,
@@ -26,6 +27,7 @@ export function StepReview({
   startDate: string;
   teachingDays: number[];
   lessonsPerSession: number;
+  intervalWeeks: number;
   events: GeneratedEvent[];
   enrolledCount: number;
   creating: boolean;
@@ -46,6 +48,7 @@ export function StepReview({
     ["Last lesson", last ? `${formatShortDate(last)} ${lastYear}` : "—"],
     ["Teaching days", daysLabel || "—"],
     ["Lessons per session", lessonsPerSession],
+    ...(intervalWeeks !== 1 ? ([["Frequency", `Every ${intervalWeeks} weeks`]] as [string, React.ReactNode][]) : []),
     ["Students", enrolledCount],
     ["Events created", eventsCreated],
   ];

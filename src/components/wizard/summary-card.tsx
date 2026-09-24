@@ -10,12 +10,14 @@ export function SummaryCard({
   name,
   teachingDays,
   lessonsPerSession,
+  intervalWeeks,
   studentsCount,
   events,
 }: {
   name: string;
   teachingDays: number[];
   lessonsPerSession: number;
+  intervalWeeks: number;
   studentsCount: number;
   events: GeneratedEvent[];
 }) {
@@ -27,6 +29,7 @@ export function SummaryCard({
     ["Name", name || "—"],
     ["Days", daysLabel || "—"],
     ["Pace", `${lessonsPerSession}/session`],
+    ...(intervalWeeks !== 1 ? ([["Frequency", `Every ${intervalWeeks}w`]] as [string, React.ReactNode][]) : []),
     ["Students", studentsCount],
     ["Lessons", lessonsCount],
     ["Crusades", crusadesCount],

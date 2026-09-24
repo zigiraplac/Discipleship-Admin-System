@@ -38,6 +38,7 @@ export function NewCohortWizard() {
   const [startDate, setStartDate] = useState(() => todayISO());
   const [teachingDays, setTeachingDays] = useState<number[]>([]);
   const [lessonsPerSession, setLessonsPerSession] = useState(2);
+  const [intervalWeeks, setIntervalWeeks] = useState(1);
   const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,8 +50,8 @@ export function NewCohortWizard() {
   const [parseError, setParseError] = useState<string | null>(null);
 
   const events = useMemo(
-    () => buildEvents(startDate, teachingDays, lessonsPerSession),
-    [startDate, teachingDays, lessonsPerSession]
+    () => buildEvents(startDate, teachingDays, lessonsPerSession, intervalWeeks),
+    [startDate, teachingDays, lessonsPerSession, intervalWeeks]
   );
   const enrolledCount = dedupe ? dedupe.registrants.length - excludedIds.size : 0;
 
@@ -109,6 +110,7 @@ export function NewCohortWizard() {
         startDate,
         teachingDays,
         lessonsPerSession,
+        intervalWeeks,
         csvText,
         includedRegistrantIds,
       });
@@ -151,6 +153,8 @@ export function NewCohortWizard() {
               toggleDay={toggleDay}
               lessonsPerSession={lessonsPerSession}
               setLessonsPerSession={setLessonsPerSession}
+              intervalWeeks={intervalWeeks}
+              setIntervalWeeks={setIntervalWeeks}
               events={events}
               onContinue={goNext}
             />
@@ -184,6 +188,7 @@ export function NewCohortWizard() {
               startDate={startDate}
               teachingDays={teachingDays}
               lessonsPerSession={lessonsPerSession}
+              intervalWeeks={intervalWeeks}
               events={events}
               enrolledCount={enrolledCount}
               creating={creating}
@@ -197,6 +202,7 @@ export function NewCohortWizard() {
           name={name}
           teachingDays={teachingDays}
           lessonsPerSession={lessonsPerSession}
+          intervalWeeks={intervalWeeks}
           studentsCount={enrolledCount}
           events={events}
         />

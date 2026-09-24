@@ -4,16 +4,17 @@ import { Input, Label } from "@/components/ui/input";
 import { formatShortDate, cn } from "@/lib/utils";
 import { lastLessonDate, type GeneratedEvent } from "@/lib/domain/generator";
 import { StepCard } from "./step-card";
-import { DAY_DEFS } from "./day-defs";
+import { DAY_DEFS, LESSONS_PER_SESSION_OPTIONS, INTERVAL_OPTIONS } from "./day-defs";
 
 /**
  * Step 1 — Cohort: name, first lesson date, base city, teaching days.
  * The "N lessons a week..." preview recomputes on every keystroke/toggle
  * via `buildEvents`, which is pure and cheap enough (<=80 iterations) to
- * call directly on every render.
+ * call directly on every render. Same cadence options (lessons/session,
+ * frequency) as the schedule-change panel a cohort gets later
+ * (`schedule-settings-card.tsx`) — set here once at creation, changeable
+ * there afterward.
  */
-const PACE_OPTIONS = [1, 2] as const;
-
 export function StepCohort({
   name,
   setName,
@@ -25,6 +26,8 @@ export function StepCohort({
   toggleDay,
   lessonsPerSession,
   setLessonsPerSession,
+  intervalWeeks,
+  setIntervalWeeks,
   events,
   onContinue,
 }: {
@@ -38,6 +41,8 @@ export function StepCohort({
   toggleDay: (day: number) => void;
   lessonsPerSession: number;
   setLessonsPerSession: (n: number) => void;
+  intervalWeeks: number;
+  setIntervalWeeks: (n: number) => void;
   events: GeneratedEvent[];
   onContinue: () => void;
 }) {
@@ -106,7 +111,7 @@ export function StepCohort({
       <div>
         <Label>Lessons per session</Label>
         <div className="flex flex-wrap gap-2">
-          {PACE_OPTIONS.map((n) => {
+          {LESSONS_PER_SESSION_OPTIONS.map((n) => {
             const active = lessonsPerSession === n;
             return (
               <button
@@ -131,10 +136,34 @@ export function StepCohort({
         </p>
       </div>
 
+      <div>
+        <Label>Frequency</Label>
+        <div className="flex flex-wrap gap-2">
+          {INTERVAL_OPTIONS.map((o) => {
+            const active = intervalWeeks === o.value;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => setIntervalWeeks(o.value)}
+                className={cn(
+                  "rounded-control border px-3.5 py-2 text-xs font-semibold transition-colors",
+                  active
+                    ? "border-accent bg-accent text-white"
+                    : "border-border bg-card text-ink-secondary hover:bg-hover"
+                )}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <p className="text-xs text-ink-muted">
         {teachingDays.length === 0
           ? "Pick at least one day."
-          : `${teachingDays.length * lessonsPerSession} lessons a week. 80 lessons finish ${last ? formatShortDate(last) : "—"} ${year}.`}
+          : `${teachingDays.length * lessonsPerSession} lessons ${intervalWeeks === 1 ? "a week" : `every ${intervalWeeks} weeks`}. 80 lessons finish ${last ? formatShortDate(last) : "—"} ${year}.`}
       </p>
     </StepCard>
   );

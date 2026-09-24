@@ -58,6 +58,8 @@ export interface CreateCohortInput {
   teachingDays: number[];
   /** Lessons covered per study session — the target pace (1-5). */
   lessonsPerSession: number;
+  /** How many weeks between teaching weeks — 1 means every week (1-8). */
+  intervalWeeks: number;
   csvText: string;
   includedRegistrantIds: string[];
 }
@@ -96,12 +98,15 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
   if (input.lessonsPerSession < 1 || input.lessonsPerSession > 5) {
     throw new Error("Lessons per session must be between 1 and 5.");
   }
+  if (input.intervalWeeks < 1 || input.intervalWeeks > 8) {
+    throw new Error("Frequency must be between every 1 and every 8 weeks.");
+  }
 
   const { registrants } = dedupeRegistrations(parseRegistrationsCsv(input.csvText));
   const included = new Set(input.includedRegistrantIds);
   const enrol = registrants.filter((r) => included.has(r.id));
 
-  const events = buildEvents(input.startDate, input.teachingDays, input.lessonsPerSession);
+  const events = buildEvents(input.startDate, input.teachingDays, input.lessonsPerSession, input.intervalWeeks);
   const admin = createAdminClient();
 
   await ensureCurriculumSeeded(admin);
@@ -155,6 +160,18 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
     p_events: eventPayload,
   });
   if (rpcErr) throw rpcErr;
+
+  // Not part of `create_cohort_with_schedule` (that RPC predates this
+  // column) — a plain follow-up update rather than extending the RPC,
+  // since the column already defaults to 1 and this is the one cohort row
+  // that needs it, not a batch write.
+  if (input.intervalWeeks !== 1) {
+    const { error: intervalErr } = await admin
+      .from("cohort")
+      .update({ interval_weeks: input.intervalWeeks })
+      .eq("id", cohortId);
+    if (intervalErr) throw intervalErr;
+  }
 
   await admin.from("audit_log").insert({
     actor_id: user.id,

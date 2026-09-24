@@ -23,3 +23,15 @@ export function formatTeachingDays(teachingDays: number[]): string {
     .map((d) => d.label)
     .join(" · ");
 }
+
+/** Shared with the cohort-creation wizard (`step-cohort.tsx`) and the
+ * schedule-change panel (`schedule-settings-card.tsx`) — same options
+ * either place a cadence gets set, so the two never drift apart. */
+export const LESSONS_PER_SESSION_OPTIONS = [1, 2] as const;
+
+export const INTERVAL_OPTIONS = [
+  { value: 1, label: "Every week" },
+  { value: 2, label: "Every 2 weeks" },
+  { value: 3, label: "Every 3 weeks" },
+  { value: 4, label: "Every 4 weeks" },
+];
