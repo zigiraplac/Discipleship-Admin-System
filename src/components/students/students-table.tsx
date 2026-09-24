@@ -147,13 +147,22 @@ export function StudentsTable({
                 <TD>
                   {left ? (
                     <Pill tone="grey">No longer with us</Pill>
-                  ) : outcome ? (
+                  ) : outcome === "resolved" && s.status !== "On track" ? (
+                    // A "resolved" decision only holds while it's still
+                    // true. The moment live attendance disagrees (they've
+                    // fallen behind again since being marked back on
+                    // track), this record is stale — show the current band
+                    // instead of a frozen "Back on track" pill. Matches
+                    // followup/page.tsx's existing handling of the same
+                    // relapse case.
+                    <StatusPill status={s.status} />
+                  ) : outcome === "catchup" && s.missed === 0 ? (
                     <span className="flex flex-col items-start gap-1">
-                      <Pill tone={outcomeTone(outcome)}>{outcomeShortLabel(outcome)}</Pill>
-                      {outcome === "catchup" && s.missed === 0 && (
-                        <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
-                      )}
+                      <Pill tone="yellow">Ready to update</Pill>
+                      <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
                     </span>
+                  ) : outcome ? (
+                    <Pill tone={outcomeTone(outcome)}>{outcomeShortLabel(outcome)}</Pill>
                   ) : s.expected === 0 ? (
                     // `status` defaults to "On track" here purely so a
                     // just-enrolled student isn't flagged "At risk" with

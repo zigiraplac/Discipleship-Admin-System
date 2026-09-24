@@ -6,9 +6,11 @@ import type { OutcomeKind } from "@/lib/domain/types";
  * and the Attention cards — one source of truth so wording never drifts.
  * Each one actually resolves something: the missed lessons get made up
  * (catchup), the student's no longer continuing (left), or a catch-up plan
- * worked and they're genuinely back to normal (resolved) — kept as its own
- * recorded decision rather than silently reverting to a computed status,
- * so the append-only history still shows that it happened.
+ * worked and they're genuinely back to normal (resolved). The append-only
+ * history always keeps the record, but a "resolved" badge only displays
+ * while live attendance still agrees with it — see students-table.tsx and
+ * followup/page.tsx, which fall back to the live status the moment a
+ * student relapses instead of trusting a now-stale decision forever.
  *
  * Deliberately its own plain module (no "use client"): several Server
  * Components (attention-card.tsx, history-card.tsx, students-table.tsx)
