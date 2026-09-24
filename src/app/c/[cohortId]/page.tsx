@@ -91,10 +91,19 @@ function buildLessonBars(
 function classBarsFromCounts(
   counts: { present: number; catchup: number; enrolled: number; started: boolean }[]
 ): ChartBar[] {
-  return counts.map((c, ci) => {
-    const split = c.started ? splitBar(c.present, c.catchup, c.enrolled) : EMPTY_BAR;
-    return { label: `C${ci + 1}`, title: splitBarTitle(CURRICULUM[ci].title, split), ...split };
-  });
+  // Same rule buildLessonBars already applies to not-yet-due lessons: a
+  // class that hasn't been reached yet has nothing to show, so it's
+  // dropped from the array entirely rather than rendered as an empty
+  // reserved column — otherwise an early-stage cohort's chart is mostly
+  // dead space with one tiny bar, instead of reading like the compact
+  // bars the Lessons view already shows.
+  return counts
+    .map((c, ci) => ({ ...c, classNumber: ci + 1 }))
+    .filter((c) => c.started)
+    .map((c) => {
+      const split = splitBar(c.present, c.catchup, c.enrolled);
+      return { label: `C${c.classNumber}`, title: splitBarTitle(CURRICULUM[c.classNumber - 1].title, split), ...split };
+    });
 }
 
 /** Whole days between two ISO dates — used to interleave lessons/crusades
@@ -190,12 +199,16 @@ export default async function DashboardPage({
     );
     classBars = classBarsFromCounts(
       CURRICULUM.map((_, ci) => {
-        const inClass = pub.filter((p) => p.classIndex === ci && p.recorded);
+        // Due, not just recorded — same rule as buildLessonBars/aggregateCohort:
+        // a due lesson nobody's recorded yet is still owed a full 0-present
+        // headcount in this class's denominator, not silently left out of it
+        // (which would let unrecorded lessons quietly inflate the class %).
+        const dueInClass = pub.filter((p) => p.classIndex === ci && p.date <= today);
         return {
-          present: inClass.reduce((a, p) => a + (p.present ?? 0), 0),
+          present: dueInClass.reduce((a, p) => a + (p.recorded ? p.present ?? 0 : 0), 0),
           catchup: 0,
-          enrolled: inClass.reduce((a, p) => a + (p.enrolled ?? 0), 0),
-          started: inClass.length > 0,
+          enrolled: dueInClass.reduce((a, p) => a + (p.enrolled ?? 0), 0),
+          started: dueInClass.length > 0,
         };
       })
     );
@@ -262,15 +275,20 @@ export default async function DashboardPage({
     );
     classBars = classBarsFromCounts(
       CURRICULUM.map((_, ci) => {
-        const inClass = lessonEvents.filter((e) => e.classIndex === ci && isRecorded(e));
+        // Due, not just recorded — see the matching comment in the teacher
+        // branch above. An unrecorded due lesson still owes this class a
+        // full 0-present headcount, the same way it owes every enrolled
+        // student a real miss in aggregateCohort.
+        const dueInClass = lessonEvents.filter((e) => e.classIndex === ci && e.date <= today);
         let present = 0;
         let catchup = 0;
-        for (const e of inClass) {
+        for (const e of dueInClass) {
+          if (!isRecorded(e)) continue;
           const cu = catchupCounts.get(e.eventId) ?? 0;
           present += lessonStats(e, activeIds)!.present - cu;
           catchup += cu;
         }
-        return { present, catchup, enrolled: activeIds.size * inClass.length, started: inClass.length > 0 };
+        return { present, catchup, enrolled: activeIds.size * dueInClass.length, started: dueInClass.length > 0 };
       })
     );
 

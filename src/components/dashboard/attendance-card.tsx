@@ -16,24 +16,21 @@ export interface ChartBar {
   absentCount: number; // raw headcount
 }
 
-const SEGMENTS: { key: "presentPct" | "catchupPct" | "absentPct"; label: string; color: string }[] = [
-  { key: "presentPct", label: "Attended", color: "var(--color-accent)" },
-  { key: "catchupPct", label: "Caught up", color: "var(--color-yellow)" },
-  { key: "absentPct", label: "Absent", color: "var(--color-accent-2-400)" },
-];
+const PRESENT_COLOR = "var(--color-accent)";
+const ABSENT_COLOR = "var(--color-accent-2-500)";
 
-// The simpler two-segment Present/Absent stack used by "Lessons" — catch-ups
-// fold into "Present" there (still fully broken out in the native tooltip
-// text), since a raw per-lesson headcount reads clearer as two segments than
-// three.
-const LESSONS_LEGEND = [
-  { label: "Present", color: "var(--color-accent)" },
-  { label: "Absent", color: "var(--color-accent-2-500)" },
+// One shared two-segment Present/Absent scheme for both "Lessons" and
+// "Classes" — catch-ups fold into "Present" in both (still fully broken
+// out in the native tooltip text), so the two views read as the same
+// chart in a different grouping, not two different charts.
+const ATTENDANCE_LEGEND = [
+  { label: "Present", color: PRESENT_COLOR },
+  { label: "Absent", color: ABSENT_COLOR },
 ];
 
 const LESSON_SEGMENTS: { key: "presentCount" | "absentCount"; color: string }[] = [
-  { key: "presentCount", color: "var(--color-accent)" },
-  { key: "absentCount", color: "var(--color-accent-2-500)" },
+  { key: "presentCount", color: PRESENT_COLOR },
+  { key: "absentCount", color: ABSENT_COLOR },
 ];
 
 function niceCeil(n: number): number {
@@ -79,7 +76,7 @@ export function AttendanceCard({ lessonBars, classBars }: { lessonBars: ChartBar
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] font-semibold text-ink-muted">
-        {(isLessons ? LESSONS_LEGEND : SEGMENTS).map((seg) => (
+        {ATTENDANCE_LEGEND.map((seg) => (
           <span key={seg.label} className="flex items-center gap-1.5">
             <span className="size-2 flex-none rounded-full" style={{ background: seg.color }} />
             {seg.label}
@@ -151,7 +148,10 @@ export function AttendanceCard({ lessonBars, classBars }: { lessonBars: ChartBar
           ) : bars.length > 0 ? (
             <div className="relative flex items-end justify-center gap-2" style={{ height: PLOT_HEIGHT }}>
               {bars.map((b, i) => {
-                const total = b.presentPct + b.catchupPct + b.absentPct;
+                // Caught up folds into "Present" here too, matching the
+                // Lessons view — see ATTENDANCE_LEGEND.
+                const presentPct = b.presentPct + b.catchupPct;
+                const total = presentPct + b.absentPct;
                 const stackHeight = total > 0 ? Math.max(3, (total / 100) * PLOT_HEIGHT) : 0;
                 return (
                   <div
@@ -163,13 +163,14 @@ export function AttendanceCard({ lessonBars, classBars }: { lessonBars: ChartBar
                       className="flex w-4 flex-col-reverse overflow-hidden rounded-t-[3px] rounded-b-[1px]"
                       style={{ height: stackHeight }}
                     >
-                      {SEGMENTS.map((seg) => (
-                        <div
-                          key={seg.key}
-                          className="w-full"
-                          style={{ height: `${total > 0 ? (b[seg.key] / total) * 100 : 0}%`, background: seg.color }}
-                        />
-                      ))}
+                      <div
+                        className="w-full"
+                        style={{ height: `${total > 0 ? (presentPct / total) * 100 : 0}%`, background: PRESENT_COLOR }}
+                      />
+                      <div
+                        className="w-full"
+                        style={{ height: `${total > 0 ? (b.absentPct / total) * 100 : 0}%`, background: ABSENT_COLOR }}
+                      />
                     </div>
                   </div>
                 );
