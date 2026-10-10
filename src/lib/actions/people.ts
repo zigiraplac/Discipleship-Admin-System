@@ -2,10 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { SITE_URL } from "@/lib/supabase/env";
 import { requireRole } from "@/lib/auth";
-import { createNotification } from "@/lib/data/notifications";
 import { getPersonFootprint, type PersonFootprintItem } from "@/lib/data/people";
+import { inviteAccount } from "@/lib/data/invite";
+import { announceCohortRole } from "@/lib/notify/staffing";
+import { notify } from "@/lib/notify";
 import { roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
 
@@ -29,26 +30,6 @@ export interface InvitePersonResult {
   resendLink?: string;
 }
 
-const ALREADY_REGISTERED_CODES = new Set(["email_exists", "user_already_exists"]);
-
-/** `listUsers` pages at 200/request — past that many total logins
- * org-wide, an older orphaned account could sit on a later page and never
- * be found, surfacing as a confusing "already registered" dead end
- * instead of the intended re-link flow below. */
-async function findAuthUserByEmail(
-  admin: ReturnType<typeof createAdminClient>,
-  email: string
-): Promise<{ id: string } | null> {
-  for (let page = 1; page <= 50; page++) {
-    const { data: list, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw error;
-    const found = list.users.find((u) => u.email?.toLowerCase() === email);
-    if (found) return found;
-    if (list.users.length < 200) return null;
-  }
-  return null;
-}
-
 /**
  * Admin-only. Sends a real Supabase Auth invite (magic link) rather than
  * setting a password on the person's behalf — matches the "Invited" state
@@ -65,61 +46,7 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
   if (!email.includes("@")) throw new Error("Enter a valid email.");
 
   const admin = createAdminClient();
-  const redirectTo = `${SITE_URL()}/auth/set-password`;
-
-  const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { name },
-    redirectTo,
-  });
-
-  let userId: string;
-  let resendLink: string | undefined;
-
-  if (inviteErr) {
-    if (!ALREADY_REGISTERED_CODES.has(inviteErr.code ?? "")) throw inviteErr;
-
-    // The email already has an auth.users account. Either it's a real,
-    // still-linked person (don't touch it — surface a clear error), or
-    // it's orphaned: the app_user row was removed (by hand, or by a
-    // previous invite that failed partway through) while the auth
-    // account itself was left behind. Re-link the orphaned case instead
-    // of leaving this email permanently stuck.
-    const existing = await findAuthUserByEmail(admin, email);
-    if (!existing) throw inviteErr;
-
-    const { data: existingPerson } = await admin
-      .from("app_user")
-      .select("id")
-      .eq("id", existing.id)
-      .maybeSingle();
-    if (existingPerson) {
-      throw new Error("Someone is already registered with this email.");
-    }
-
-    userId = existing.id;
-    // "recovery" rather than "invite" — this account may or may not have
-    // ever completed setup, and a recovery link works either way, whereas
-    // `generateLink({type:'invite'})` can fail for an already-confirmed
-    // account. Our /auth/set-password page treats both types identically.
-    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo },
-    });
-    if (linkErr) throw linkErr;
-    resendLink = linkData.properties.action_link;
-  } else {
-    userId = invited.user.id;
-  }
-
-  const { error: userErr } = await admin.from("app_user").upsert({
-    id: userId,
-    name,
-    email,
-    role: input.role,
-    state: "invited",
-  });
-  if (userErr) throw userErr;
+  const { userId, resendLink } = await inviteAccount(admin, { name, email, role: input.role });
 
   const capacity = input.role === "teacher" ? "teacher" : "facilitator";
   if ((input.role === "facilitator" || input.role === "teacher") && input.cohortIds.length) {
@@ -140,12 +67,12 @@ export async function invitePerson(input: InvitePersonInput): Promise<InvitePers
   // Sitting there waiting the first time they actually sign in — inviting
   // someone doesn't give them a session yet, so there's nothing to notify
   // "now"; this just means they aren't greeted by an empty bell.
-  await createNotification(admin, {
-    userId,
+  await notify({ type: "person", personId: userId }, () => ({
     kind: "welcome",
     title: "Welcome to BCC Discipleship",
     body: `You've been added as ${roleLabel(input.role)}.`,
-  });
+    dedupeKey: `welcome:${userId}`,
+  }));
 
   revalidatePath("/settings");
   return { resendLink };
@@ -178,7 +105,9 @@ export async function updatePerson(input: UpdatePersonInput): Promise<void> {
   if (userErr) throw new Error("Couldn't update this person. Please try again.");
 
   // Full replace rather than a diff — simpler and just as correct, since
-  // the dialog always submits the complete intended set.
+  // the dialog always submits the complete intended set. (The before/after
+  // sets are compared afterwards to tell the person what changed.)
+  const { data: before } = await admin.from("cohort_member").select("cohort_id, capacity").eq("user_id", input.id);
   const { error: deleteErr } = await admin.from("cohort_member").delete().eq("user_id", input.id);
   if (deleteErr) throw new Error("Couldn't update this person's cohorts. Please try again.");
 
@@ -197,6 +126,18 @@ export async function updatePerson(input: UpdatePersonInput): Promise<void> {
     action: "update",
     after: { name, role: input.role, cohortIds: input.cohortIds },
   });
+
+  // Staffing notifications for the system (Accounts) route too.
+  const keep = (input.role === "facilitator" || input.role === "teacher") ? input.cohortIds : [];
+  const had = new Map((before ?? []).map((m) => [`${m.cohort_id}:${m.capacity}`, m]));
+  for (const cohortId of keep) {
+    if (!had.has(`${cohortId}:${capacity}`)) await announceCohortRole({ actorId: actor.id, cohortId, personId: input.id, capacity, change: "assigned" });
+  }
+  for (const m of before ?? []) {
+    if (!(keep.includes(m.cohort_id) && m.capacity === capacity)) {
+      await announceCohortRole({ actorId: actor.id, cohortId: m.cohort_id, personId: input.id, capacity: m.capacity as "facilitator" | "teacher", change: "ended" });
+    }
+  }
 
   revalidatePath("/settings");
 }

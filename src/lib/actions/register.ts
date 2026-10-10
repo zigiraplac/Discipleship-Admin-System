@@ -1,9 +1,11 @@
 "use server";
 
+import { cohortTarget, requireCapability } from "@/lib/authz";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth";
+import { catchupConflicts } from "@/lib/domain/metrics";
 import { getCohort } from "@/lib/data/cohorts";
 import { todayISO } from "@/lib/utils";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -27,7 +29,8 @@ export interface SaveRegisterInput {
  * audit_log either way so a correction is never silent.
  */
 export async function saveRegister(input: SaveRegisterInput): Promise<void> {
-  const user = await requireRole("facilitator", "admin");
+  // Facilitators and teachers of this cohort (and admin) — see authz/policy.
+  const user = await requireCapability("edit_attendance", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   const { data: eventRow, error: eventErr } = await supabase
@@ -55,6 +58,15 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
     if (mark !== "present" && mark !== "absent") throw new Error("Invalid attendance value.");
   }
 
+  const { data: catchups, error: catchupErr } = await supabase
+    .from("lesson_catchup")
+    .select("student_id")
+    .eq("event_id", input.eventId);
+  if (catchupErr) throw new Error("Couldn't load this lesson's catch-ups. Please try again.");
+  if (catchupConflicts(input.attendance, (catchups ?? []).map((c) => c.student_id)).length) {
+    throw new Error("A student who made this lesson up can't be marked present here. Undo their catch-up first.");
+  }
+
   const { data: existing, error: existingErr } = await supabase
     .from("register")
     .select("recorded_at, updated_at")
@@ -80,7 +92,13 @@ export async function saveRegister(input: SaveRegisterInput): Promise<void> {
     p_is_correction: isCorrection,
     p_expected_version: input.expectedVersion,
   });
-  if (error) throw new Error("Couldn't save this register. Please try again.");
+  if (error) {
+    // Database guard (0034): a caught-up absence can't be re-marked present.
+    if (error.message.includes("CATCHUP_CONFLICT")) {
+      throw new Error("A student who made this lesson up can't be marked present here. Undo their catch-up first.");
+    }
+    throw new Error("Couldn't save this register. Please try again.");
+  }
   if (!updatedRows || updatedRows.length === 0) {
     throw new Error("This register was changed by someone else since you loaded it. Reload and try again.");
   }

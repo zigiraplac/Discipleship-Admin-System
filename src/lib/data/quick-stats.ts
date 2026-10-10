@@ -2,7 +2,7 @@ import type { DB } from "./types";
 import type { Bands, Role, CohortHealth } from "@/lib/domain/types";
 import { getStudents } from "./students";
 import { getLessonEvents, getLessonEventsPublic } from "./lessons";
-import { aggregateCohort } from "@/lib/domain/metrics";
+import { aggregateCohort, seatTotals } from "@/lib/domain/metrics";
 import { cohortHealth } from "@/lib/domain/bands";
 
 export interface QuickStats {
@@ -33,9 +33,11 @@ export async function getQuickStats(
       getLessonEventsPublic(db, cohortId),
     ]);
     const enrolled = count ?? 0;
-    const recorded = pub.filter((p) => p.recorded);
-    const totalPresent = recorded.reduce((a, p) => a + (p.present ?? 0), 0);
-    const rate = enrolled && recorded.length ? Math.round((totalPresent / (enrolled * recorded.length)) * 100) : 0;
+    // Same seat rule as aggregateCohort: per-lesson expected comes from the
+    // public stats (students enrolled on that date), recorded lessons only.
+    const rate =
+      seatTotals(pub.map((p) => ({ due: p.date <= todayISO, expected: p.recorded ? p.enrolled : 0, present: p.recorded ? (p.present ?? 0) : 0 })))
+        .rate ?? 0;
     return { enrolled, rate, health: cohortHealth(rate, 0, enrolled) };
   }
 
@@ -43,9 +45,6 @@ export async function getQuickStats(
     getStudents(db, cohortId),
     getLessonEvents(db, cohortId),
   ]);
-  // A student marked "left" stops dragging the cohort's own numbers down —
-  // they still appear in the roster (Students screen), just not counted here.
-  const students = allStudents.filter((s) => !s.leftAt);
-  const agg = aggregateCohort(students, lessonEvents, bands, todayISO);
+  const agg = aggregateCohort(allStudents, lessonEvents, bands, todayISO);
   return { enrolled: agg.enrolled, rate: agg.rate, health: agg.health };
 }

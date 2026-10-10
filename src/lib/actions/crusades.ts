@@ -1,11 +1,12 @@
 "use server";
 
+import { cohortTarget, requireCapability } from "@/lib/authz";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth";
 import { getCohort } from "@/lib/data/cohorts";
-import { createNotifications } from "@/lib/data/notifications";
+import { notify } from "@/lib/notify";
 import {
   curriculumScheduleItems,
   placeSchedule,
@@ -31,7 +32,7 @@ export interface SaveCrusadeReportInput {
  * same as saveRegister.
  */
 export async function saveCrusadeReport(input: SaveCrusadeReportInput): Promise<void> {
-  const user = await requireRole("facilitator", "admin");
+  const user = await requireCapability("record_crusade", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   const { error } = await supabase.from("crusade_report").upsert(
@@ -57,7 +58,7 @@ export async function saveCrusadeReport(input: SaveCrusadeReportInput): Promise<
 
 /** Clears a weekend's report — the "undo" for a report saved by mistake. */
 export async function clearCrusadeReport(input: { cohortId: string; afterClass: number }): Promise<void> {
-  await requireRole("facilitator", "admin");
+  await requireCapability("record_crusade", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   const { error } = await supabase
@@ -93,19 +94,7 @@ export async function postponeCrusadeWeekend(input: {
   afterClass: number;
   reason?: string;
 }): Promise<PostponeCrusadeResult> {
-  const actor = await requireRole("facilitator", "admin");
-
-  if (actor.role !== "admin") {
-    const supabase = await createClient();
-    const { data: membership } = await supabase
-      .from("cohort_member")
-      .select("cohort_id")
-      .eq("cohort_id", input.cohortId)
-      .eq("user_id", actor.id)
-      .eq("capacity", "facilitator")
-      .maybeSingle();
-    if (!membership) throw new Error("You don't have access to this cohort.");
-  }
+  const actor = await requireCapability("postpone_lesson", await cohortTarget(input.cohortId));
 
   const admin = createAdminClient();
 
@@ -189,40 +178,34 @@ export async function postponeCrusadeWeekend(input: {
     if (error) throw error;
   }
 
-  await admin.from("audit_log").insert({
-    actor_id: actor.id,
-    entity: "event",
-    entity_id: fridayRow.id,
-    cohort_id: input.cohortId,
-    action: "postpone",
-    before: { date: fridayRow.date, crusadeAfterClass: input.afterClass },
-    after: { anchor, shiftedCount: updates.length, reason: input.reason?.trim() || null },
-  });
+  const { data: auditRow } = await admin
+    .from("audit_log")
+    .insert({
+      actor_id: actor.id,
+      entity: "event",
+      entity_id: fridayRow.id,
+      cohort_id: input.cohortId,
+      action: "postpone",
+      before: { date: fridayRow.date, crusadeAfterClass: input.afterClass },
+      after: { anchor, shiftedCount: updates.length, reason: input.reason?.trim() || null },
+    })
+    .select("id")
+    .single();
 
   const cohortForLinks = await getCohort(admin, input.cohortId);
   const cohortSlug = cohortForLinks?.slug ?? input.cohortId;
 
-  const { data: members } = await admin
-    .from("cohort_member")
-    .select("user_id")
-    .eq("cohort_id", input.cohortId)
-    .neq("user_id", actor.id);
-  const recipientIds = new Set((members ?? []).map((m) => m.user_id));
-  if (recipientIds.size) {
-    await createNotifications(
-      admin,
-      [...recipientIds].map((userId) => ({
-        userId,
-        kind: "crusade_postponed",
-        title: `The crusade weekend after Class ${input.afterClass} was postponed`,
-        body:
-          updates.length > 1
-            ? `${updates.length} lessons and crusade days shifted forward.`
-            : "It was shifted to the following weekend.",
-        href: `/c/${cohortSlug}/crusades`,
-      }))
-    );
-  }
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "crusade_postponed",
+      title: `The crusade weekend after Class ${input.afterClass} was postponed`,
+      body: updates.length > 1 ? `${updates.length} lessons and crusade days shifted forward.` : "It was shifted to the following weekend.",
+      href: `/c/${cohortSlug}/crusades`,
+      dedupeKey: auditRow ? `crusade_postponed:${auditRow.id}` : undefined,
+    }),
+    { exclude: [actor.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);

@@ -16,14 +16,21 @@ interface StudentRow {
   dob_month: number | null;
   city: string | null;
   extra: Json | null;
-  contacted_at: string | null;
+  /** Pastoral (RLS: facilitators/admin/leadership) — null for anyone else. */
+  student_follow_up: { contacted_at: string | null; assignee: string | null; next_on: string | null } | { contacted_at: string | null; assignee: string | null; next_on: string | null }[] | null;
   registered_at: string | null;
   enrolled_at: string;
   left_at: string | null;
+  student_enrolment_event?: { kind: "joined" | "left" | "returned"; effective_on: string; recorded_at: string }[] | null;
 }
 
 const STUDENT_SELECT =
-  "id, cohort_id, full_name, email, email_verified, whatsapp, country, country_raw, dob_day, dob_month, city, extra, contacted_at, registered_at, enrolled_at, left_at";
+  "id, cohort_id, full_name, email, email_verified, whatsapp, country, country_raw, dob_day, dob_month, city, extra, student_follow_up(contacted_at, assignee, next_on), registered_at, enrolled_at, left_at, student_enrolment_event(kind, effective_on, recorded_at)";
+
+function followUp(row: StudentRow) {
+  const f = row.student_follow_up;
+  return Array.isArray(f) ? (f[0] ?? null) : f;
+}
 
 function mapStudentRow(row: StudentRow): Student {
   return {
@@ -39,10 +46,16 @@ function mapStudentRow(row: StudentRow): Student {
     dobMonth: row.dob_month,
     city: row.city,
     extra: (row.extra as Record<string, string> | null) ?? null,
-    contactedAt: row.contacted_at,
+    contactedAt: followUp(row)?.contacted_at ?? null,
+    followUpAssignee: followUp(row)?.assignee ?? null,
+    followUpNextOn: followUp(row)?.next_on ?? null,
     registeredAt: row.registered_at,
     enrolledAt: row.enrolled_at,
     leftAt: row.left_at,
+    enrolment: (row.student_enrolment_event ?? [])
+      .slice()
+      .sort((a, b) => a.effective_on.localeCompare(b.effective_on) || a.recorded_at.localeCompare(b.recorded_at))
+      .map((e) => ({ kind: e.kind, on: e.effective_on })),
   };
 }
 

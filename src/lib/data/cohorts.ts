@@ -1,7 +1,6 @@
 import { cache } from "react";
 import type { DB } from "./types";
-import type { Bands, Cohort } from "@/lib/domain/types";
-import { DEFAULT_BANDS } from "@/lib/domain/types";
+import type { Cohort } from "@/lib/domain/types";
 import type { ScheduleSegment } from "@/lib/domain/generator";
 
 interface CohortRow {
@@ -14,11 +13,12 @@ interface CohortRow {
   status: "running" | "complete" | "archived";
   lessons_per_session: number;
   interval_weeks: number;
+  org_unit_id: string | null;
   created_at: string;
 }
 
 const COHORT_SELECT =
-  "id, slug, name, city, start_date, teaching_days, status, lessons_per_session, interval_weeks, created_at";
+  "id, slug, name, city, start_date, teaching_days, status, lessons_per_session, interval_weeks, org_unit_id, created_at";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -34,18 +34,13 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 async function getFacilitatorNamesByCohort(db: DB, cohortIds: string[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
   if (!cohortIds.length) return map;
-  const { data, error } = await db
-    .from("cohort_member")
-    .select("cohort_id, app_user:user_id(name)")
-    .eq("capacity", "facilitator")
-    .in("cohort_id", cohortIds);
+  // Names only, for cohorts this viewer can see (cohort_staff_names, 0037)
+  // — other people's account rows stay private.
+  const { data, error } = await db.rpc("cohort_staff_names", { p_cohorts: cohortIds });
   if (error) throw error;
   for (const row of data ?? []) {
-    const user = Array.isArray(row.app_user) ? row.app_user[0] : row.app_user;
-    if (!user) continue;
-    const list = map.get(row.cohort_id) ?? [];
-    list.push(user.name);
-    map.set(row.cohort_id, list);
+    if (row.capacity !== "facilitator") continue;
+    map.set(row.cohort_id, [...(map.get(row.cohort_id) ?? []), row.name]);
   }
   return map;
 }
@@ -62,6 +57,7 @@ function mapCohortRow(row: CohortRow, facilitatorNames: string[]): Cohort {
     status: row.status,
     lessonsPerSession: row.lessons_per_session,
     intervalWeeks: row.interval_weeks,
+    orgUnitId: row.org_unit_id,
     createdAt: row.created_at,
   };
 }
@@ -82,6 +78,29 @@ export const listCohorts = cache(async function listCohorts(db: DB): Promise<Coh
   );
   return rows.map((row) => mapCohortRow(row, facilitatorsByCohort.get(row.id) ?? []));
 });
+
+/**
+ * Cohorts placed in any of the given boxes (promotions or churches). For
+ * level pages: the caller must pass a service-role client and must have
+ * checked the viewer's access to those boxes first (lib/data/org.ts).
+ */
+export async function listCohortsInUnits(db: DB, unitIds: string[]): Promise<Cohort[]> {
+  if (!unitIds.length) return [];
+  const { data, error } = await db.from("cohort").select(COHORT_SELECT).in("org_unit_id", unitIds).order("created_at");
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as CohortRow[];
+  const facilitatorsByCohort = await getFacilitatorNamesByCohort(
+    db,
+    rows.map((r) => r.id)
+  );
+  return rows.map((row) => mapCohortRow(row, facilitatorsByCohort.get(row.id) ?? []));
+}
+
+/** The facilitator names per cohort, as a list (Cohort.facilitatorName is
+ * the same list joined for display). */
+export function facilitatorList(cohort: Cohort): string[] {
+  return cohort.facilitatorName ? cohort.facilitatorName.split(", ") : [];
+}
 
 /**
  * Cached per request — every cohort-scoped page calls this for the active
@@ -118,31 +137,8 @@ export const getCohort = cache(async function getCohort(db: DB, slugOrId: string
   return mapCohortRow(row as unknown as CohortRow, facilitatorsByCohort.get(row.id) ?? []);
 });
 
-/** Cached per request — nearly every page fetches the org's band
- * thresholds, and so does Shell. */
-export const getBands = cache(async function getBands(db: DB): Promise<Bands> {
-  const { data, error } = await db
-    .from("org_setting")
-    .select("key, value")
-    .in("key", ["band_active_threshold", "band_help_threshold"]);
-  if (error) throw error;
-  const map = new Map((data ?? []).map((r) => [r.key, Number(r.value)]));
-  return {
-    activeThreshold: map.get("band_active_threshold") ?? DEFAULT_BANDS.activeThreshold,
-    helpThreshold: map.get("band_help_threshold") ?? DEFAULT_BANDS.helpThreshold,
-  };
-});
-
-export async function setBands(db: DB, bands: Bands): Promise<void> {
-  const { error } = await db.from("org_setting").upsert([
-    { key: "band_active_threshold", value: bands.activeThreshold },
-    { key: "band_help_threshold", value: bands.helpThreshold },
-  ]);
-  if (error) throw error;
-}
-
-/** Every recorded cadence change for this cohort, ascending by
- * `startsAtPosition` — see `computePace`/`buildIdealSchedule`. Empty for
+/** Every recorded cadence change for this cohort, with the date each took
+ * effect — see `computePace`/`buildIdealSchedule`. Empty for
  * the (typical) cohort that's never changed cadence. */
 export const getScheduleSegments = cache(async function getScheduleSegments(
   db: DB,
@@ -150,12 +146,15 @@ export const getScheduleSegments = cache(async function getScheduleSegments(
 ): Promise<ScheduleSegment[]> {
   const { data, error } = await db
     .from("cohort_schedule_period")
-    .select("starts_at_position, teaching_days, lessons_per_session, interval_weeks")
+    .select("starts_at_position, teaching_days, lessons_per_session, interval_weeks, effective_date, created_at")
     .eq("cohort_id", cohortId)
     .order("starts_at_position");
   if (error) throw error;
   return (data ?? []).map((r) => ({
     startsAtPosition: r.starts_at_position,
+    // In force from the later of the day it was decided and its stated
+    // date — the stored date is the reflow anchor, which can be in the past.
+    effectiveFrom: [r.effective_date, r.created_at.slice(0, 10)].sort().at(-1)!,
     teachingDays: r.teaching_days,
     lessonsPerSession: r.lessons_per_session,
     intervalWeeks: r.interval_weeks,

@@ -10,6 +10,26 @@ export async function getPeople(db: DB): Promise<AppUser[]> {
   return (data ?? []) as AppUser[];
 }
 
+/** People a cohort's follow-ups can be assigned to: its facilitators and
+ * the administrators. Read with the service role (facilitators can't list
+ * each other through RLS) — the caller must already have access to the
+ * cohort. */
+export async function getCohortPeople(admin: DB, cohortId: string): Promise<{ id: string; name: string }[]> {
+  const [{ data: members, error: mErr }, { data: admins, error: aErr }] = await Promise.all([
+    admin.from("cohort_member").select("user_id, app_user:user_id(id, name, state)").eq("cohort_id", cohortId).eq("capacity", "facilitator"),
+    admin.from("app_user").select("id, name, state").eq("role", "admin"),
+  ]);
+  if (mErr) throw mErr;
+  if (aErr) throw aErr;
+  const people = new Map<string, string>();
+  for (const row of members ?? []) {
+    const u = Array.isArray(row.app_user) ? row.app_user[0] : row.app_user;
+    if (u && u.state !== "deactivated") people.set(u.id, u.name);
+  }
+  for (const u of admins ?? []) if (u.state !== "deactivated") people.set(u.id, u.name);
+  return [...people].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export interface PersonCohortScope {
   userId: string;
   cohortNames: string[];
@@ -17,7 +37,7 @@ export interface PersonCohortScope {
 }
 
 /** For Settings → People: what each person can see, as display text
- * ("Ghana, Kigali" / "All · read only" / "Unassigned") — and, via
+ * ("Ghana, Kigali" / "By level assignment" / "Unassigned") — and, via
  * `cohortId`, which cohorts to pre-check when editing that person's
  * assignment. */
 export async function getCohortScopesByUser(
@@ -41,7 +61,8 @@ export async function getCohortScopesByUser(
 
 export function describeScope(role: Role, scopes?: { cohortName: string }[]): string {
   if (role === "admin") return "All cohorts";
-  if (role === "leadership") return "All · read only";
+  // Programme leadership comes from a level assignment, not the account role.
+  if (role === "leadership") return "By level assignment";
   if (!scopes || !scopes.length) return "Unassigned";
   return scopes.map((s) => s.cohortName).join(", ");
 }
@@ -93,7 +114,7 @@ export async function getPersonFootprint(db: DB, userId: string): Promise<Person
     db.from("audit_log").select("cohort:cohort_id(name)").eq("actor_id", userId),
     db.from("lesson_catchup").select("event:event_id(cohort:cohort_id(name))").eq("recorded_by", userId),
     db.from("crusade_report").select("cohort:cohort_id(name)").eq("recorded_by", userId),
-    db.from("student").select("cohort:cohort_id(name)").eq("contacted_by", userId),
+    db.from("student_follow_up").select("cohort:cohort_id(name)").eq("contacted_by", userId),
   ]);
 
   for (const res of [facilitatorOf, registers, outcomes, auditEntries, catchups, crusadeReports, contactedMarks]) {

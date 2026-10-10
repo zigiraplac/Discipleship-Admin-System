@@ -2,35 +2,23 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { requireRole } from "@/lib/auth";
+import { cohortTarget, requireCapability } from "@/lib/authz";
 import type { AppUser } from "@/lib/domain/types";
 import { curriculumScheduleItems, placeSchedule, dayAfter, type ScheduleItem } from "@/lib/domain/generator";
 import { scheduleItemKey, one, type EventRow } from "@/lib/domain/schedule-position";
 import { lessonAt } from "@/lib/domain/curriculum";
-import { createNotifications } from "@/lib/data/notifications";
+import { notify } from "@/lib/notify";
 import { getCohort } from "@/lib/data/cohorts";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-/** Admin, or a facilitator who's actually a member of this cohort — the
- * same gate `postponeLesson` and `changeCohortSchedule` both need, checked
- * in application code since `event`/`cohort_schedule_period` are
- * admin-write-only by RLS (see 0003_pacing.sql, 0023_cohort_schedule_periods.sql). */
-async function requireScheduleAccess(cohortId: string): Promise<AppUser> {
-  const actor = await requireRole("facilitator", "admin");
-  if (actor.role !== "admin") {
-    const supabase = await createClient();
-    const { data: membership } = await supabase
-      .from("cohort_member")
-      .select("cohort_id")
-      .eq("cohort_id", cohortId)
-      .eq("user_id", actor.id)
-      .eq("capacity", "facilitator")
-      .maybeSingle();
-    if (!membership) throw new Error("You don't have access to this cohort.");
-  }
-  return actor;
+/** Postponing a lesson: the cohort's facilitators, or a leader of its
+ * level or any level above. Changing the cadence itself is a level
+ * decision (manage_schedule). Checked here since `event` /
+ * `cohort_schedule_period` are admin-write-only by RLS (writes below use
+ * the service role). See authz/policy. */
+async function requireScheduleAccess(cohortId: string, capability: "postpone_lesson" | "manage_schedule"): Promise<AppUser> {
+  return requireCapability(capability, await cohortTarget(cohortId));
 }
 
 interface EventInfo {
@@ -63,6 +51,8 @@ async function reflowFrom(
   items: ScheduleItem[];
   anchor: string;
   updates: { id: string; event_date: string }[];
+  /** Later lessons already recorded (out of order) — left on their dates. */
+  keptRecorded: number;
 }> {
   const { data: rows, error: rowsErr } = await admin
     .from("event")
@@ -95,9 +85,15 @@ async function reflowFrom(
   if (targetInfo.recorded) throw new Error("This lesson is already recorded — pick one that hasn't happened yet.");
 
   const pending: { position: number; item: ScheduleItem }[] = [];
+  let keptRecorded = 0;
   for (let pos = targetPosition; pos < items.length; pos++) {
     const row = byPosition.get(pos);
-    if (row?.recorded) continue; // defensive: shouldn't happen given strict ordering
+    // A later lesson already recorded out of order keeps its date — its
+    // register is history. Only unrecorded items move.
+    if (row?.recorded) {
+      keptRecorded++;
+      continue;
+    }
     pending.push({ position: pos, item: items[pos] });
   }
 
@@ -120,11 +116,13 @@ async function reflowFrom(
     if (error) throw error;
   }
 
-  return { targetPosition, targetInfo, items, anchor, updates };
+  return { targetPosition, targetInfo, items, anchor, updates, keptRecorded };
 }
 
 export interface PostponeLessonResult {
   shiftedCount: number;
+  /** Later lessons already recorded, which kept their dates. */
+  keptRecorded: number;
 }
 
 /**
@@ -147,7 +145,7 @@ export async function postponeLesson(input: {
    * record just falls back to a plain computed description there. */
   reason?: string;
 }): Promise<PostponeLessonResult> {
-  const actor = await requireScheduleAccess(input.cohortId);
+  const actor = await requireScheduleAccess(input.cohortId, "postpone_lesson");
   const admin = createAdminClient();
 
   const { data: cohort, error: cohortErr } = await admin
@@ -157,7 +155,7 @@ export async function postponeLesson(input: {
     .single();
   if (cohortErr) throw cohortErr;
 
-  const { targetPosition, targetInfo, items, anchor, updates } = await reflowFrom(
+  const { targetPosition, targetInfo, items, anchor, updates, keptRecorded } = await reflowFrom(
     admin,
     input.cohortId,
     input.eventId,
@@ -166,42 +164,36 @@ export async function postponeLesson(input: {
     cohort.interval_weeks
   );
 
-  await admin.from("audit_log").insert({
-    actor_id: actor.id,
-    entity: "event",
-    entity_id: input.eventId,
-    cohort_id: input.cohortId,
-    action: "postpone",
-    before: { date: targetInfo.date },
-    after: { anchor, shiftedCount: updates.length, reason: input.reason?.trim() || null },
-  });
+  const { data: auditRow } = await admin
+    .from("audit_log")
+    .insert({
+      actor_id: actor.id,
+      entity: "event",
+      entity_id: input.eventId,
+      cohort_id: input.cohortId,
+      action: "postpone",
+      before: { date: targetInfo.date },
+      after: { anchor, shiftedCount: updates.length, reason: input.reason?.trim() || null },
+    })
+    .select("id")
+    .single();
 
   const cohortForLinks = await getCohort(admin, input.cohortId);
   const cohortSlug = cohortForLinks?.slug ?? input.cohortId;
 
-  const { data: members } = await admin
-    .from("cohort_member")
-    .select("user_id")
-    .eq("cohort_id", input.cohortId)
-    .neq("user_id", actor.id);
-  const recipientIds = new Set((members ?? []).map((m) => m.user_id));
-  if (recipientIds.size) {
-    const targetItem = items[targetPosition];
-    const lessonRef = targetItem.kind === "lesson" ? lessonAt(targetItem.globalIndex).ref : "A lesson";
-    await createNotifications(
-      admin,
-      [...recipientIds].map((userId) => ({
-        userId,
-        kind: "lesson_postponed",
-        title: `${lessonRef} was postponed`,
-        body:
-          updates.length > 1
-            ? `${updates.length} lessons and crusade days shifted forward.`
-            : "It was shifted to the next study day.",
-        href: `/c/${cohortSlug}/lessons`,
-      }))
-    );
-  }
+  const targetItem = items[targetPosition];
+  const lessonRef = targetItem.kind === "lesson" ? lessonAt(targetItem.globalIndex).ref : "A lesson";
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "lesson_postponed",
+      title: `${lessonRef} was postponed`,
+      body: updates.length > 1 ? `${updates.length} lessons and crusade days shifted forward.` : "It was shifted to the next study day.",
+      href: `/c/${cohortSlug}/lessons`,
+      dedupeKey: auditRow ? `schedule:${auditRow.id}` : undefined,
+    }),
+    { exclude: [actor.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
@@ -209,11 +201,12 @@ export async function postponeLesson(input: {
   revalidatePath(`${base}/calendar`);
   revalidatePath(`${base}/reports`);
 
-  return { shiftedCount: updates.length };
+  return { shiftedCount: updates.length, keptRecorded };
 }
 
 export interface ChangeCohortScheduleResult {
   shiftedCount: number;
+  keptRecorded: number;
 }
 
 /**
@@ -237,10 +230,10 @@ export async function changeCohortSchedule(input: {
   reason?: string;
 }): Promise<ChangeCohortScheduleResult> {
   if (input.teachingDays.length === 0) throw new Error("Pick at least one teaching day.");
-  const actor = await requireScheduleAccess(input.cohortId);
+  const actor = await requireScheduleAccess(input.cohortId, "manage_schedule");
   const admin = createAdminClient();
 
-  const { targetPosition, targetInfo, updates, anchor } = await reflowFrom(
+  const { targetPosition, targetInfo, updates, anchor, keptRecorded } = await reflowFrom(
     admin,
     input.cohortId,
     input.fromEventId,
@@ -261,54 +254,48 @@ export async function changeCohortSchedule(input: {
   });
   if (periodErr) throw periodErr;
 
-  await admin.from("audit_log").insert({
-    actor_id: actor.id,
-    entity: "cohort",
-    entity_id: input.cohortId,
-    cohort_id: input.cohortId,
-    action: "schedule_change",
-    before: { date: targetInfo.date },
-    after: {
-      anchor,
-      shiftedCount: updates.length,
-      teachingDays: input.teachingDays,
-      lessonsPerSession: input.lessonsPerSession,
-      intervalWeeks: input.intervalWeeks,
-      reason: input.reason?.trim() || null,
-    },
-  });
+  const { data: auditRow } = await admin
+    .from("audit_log")
+    .insert({
+      actor_id: actor.id,
+      entity: "cohort",
+      entity_id: input.cohortId,
+      cohort_id: input.cohortId,
+      action: "schedule_change",
+      before: { date: targetInfo.date },
+      after: {
+        anchor,
+        shiftedCount: updates.length,
+        teachingDays: input.teachingDays,
+        lessonsPerSession: input.lessonsPerSession,
+        intervalWeeks: input.intervalWeeks,
+        reason: input.reason?.trim() || null,
+      },
+    })
+    .select("id")
+    .single();
 
   const cohortForLinks = await getCohort(admin, input.cohortId);
   const cohortSlug = cohortForLinks?.slug ?? input.cohortId;
 
-  const { data: members } = await admin
-    .from("cohort_member")
-    .select("user_id")
-    .eq("cohort_id", input.cohortId)
-    .neq("user_id", actor.id);
-  const recipientIds = new Set((members ?? []).map((m) => m.user_id));
-  if (recipientIds.size) {
-    await createNotifications(
-      admin,
-      [...recipientIds].map((userId) => ({
-        userId,
-        kind: "lesson_postponed",
-        title: "This cohort's schedule changed",
-        body:
-          updates.length > 0
-            ? `${updates.length} upcoming lessons and crusade days were rescheduled.`
-            : "The teaching cadence changed going forward.",
-        href: `/settings`,
-      }))
-    );
-  }
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "lesson_postponed",
+      title: "This cohort's schedule changed",
+      body: updates.length > 0 ? `${updates.length} upcoming lessons and crusade days were rescheduled.` : "The teaching cadence changed going forward.",
+      href: `/c/${cohortSlug}/lessons`,
+      dedupeKey: auditRow ? `schedule:${auditRow.id}` : undefined,
+    }),
+    { exclude: [actor.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
   revalidatePath(`${base}/lessons`);
   revalidatePath(`${base}/calendar`);
   revalidatePath(`${base}/reports`);
-  revalidatePath("/settings");
+  revalidatePath("/u", "layout");
 
-  return { shiftedCount: updates.length };
+  return { shiftedCount: updates.length, keptRecorded };
 }

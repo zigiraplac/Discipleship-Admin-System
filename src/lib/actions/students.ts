@@ -1,10 +1,12 @@
 "use server";
 
+import { createHash } from "node:crypto";
+import { cohortTarget, requireCapability } from "@/lib/authz";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/auth";
-import { createNotifications } from "@/lib/data/notifications";
+import { notify } from "@/lib/notify";
 import { getCohort } from "@/lib/data/cohorts";
 
 export interface AddStudentInput {
@@ -113,27 +115,19 @@ export async function addStudent(input: AddStudentInput): Promise<{ studentId: s
     if (markErr) throw new Error("Student was added, but couldn't backfill their attendance. Please try again.");
   }
 
-  const admin = createAdminClient();
   const cohort = await getCohort(supabase, input.cohortId);
   const cohortSlug = cohort?.slug ?? input.cohortId;
-  const { data: members } = await admin
-    .from("cohort_member")
-    .select("user_id")
-    .eq("cohort_id", input.cohortId)
-    .neq("user_id", actor.id);
-  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
-  if (recipientIds.length) {
-    await createNotifications(
-      admin,
-      recipientIds.map((userId) => ({
-        userId,
-        kind: "student_updated",
-        title: `${fullName} joined the cohort`,
-        body: "Added after the initial import.",
-        href: `/c/${cohortSlug}/students/${data.id}`,
-      }))
-    );
-  }
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "student_updated",
+      title: `${fullName} joined the cohort`,
+      body: "Added after the initial import.",
+      href: `/c/${cohortSlug}/students/${data.id}`,
+      dedupeKey: `student_added:${data.id}`,
+    }),
+    { exclude: [actor.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
@@ -208,27 +202,20 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
   // day otherwise has no way to know their record changed underneath
   // them — an admin edit here is exactly the kind of "something changed
   // that I share access to" event worth surfacing, not a routine save.
-  const admin = createAdminClient();
   const cohort = await getCohort(supabase, input.cohortId);
   const cohortSlug = cohort?.slug ?? input.cohortId;
-  const { data: members } = await admin
-    .from("cohort_member")
-    .select("user_id")
-    .eq("cohort_id", input.cohortId)
-    .neq("user_id", actor.id);
-  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
-  if (recipientIds.length) {
-    await createNotifications(
-      admin,
-      recipientIds.map((userId) => ({
-        userId,
-        kind: "student_updated",
-        title: `${fullName}'s details were updated`,
-        body: "An admin updated their profile.",
-        href: `/c/${cohortSlug}/students/${input.studentId}`,
-      }))
-    );
-  }
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "student_updated",
+      title: `${fullName}'s details were updated`,
+      body: "An admin updated their profile.",
+      href: `/c/${cohortSlug}/students/${input.studentId}`,
+      // The same values saved again is the same update — no second notice.
+      dedupeKey: `student_updated:${input.studentId}:${createHash("sha1").update(JSON.stringify(input)).digest("hex").slice(0, 16)}`,
+    }),
+    { exclude: [actor.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(`${base}/students`);
@@ -243,18 +230,53 @@ export async function updateStudent(input: UpdateStudentInput): Promise<void> {
  * closes this back to null again once a real decision is made).
  */
 export async function markStudentContacted(input: { studentId: string; cohortId: string }): Promise<void> {
-  const actor = await requireRole("facilitator", "admin");
+  const actor = await requireCapability("manage_followups", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   const { error } = await supabase
-    .from("student")
-    .update({ contacted_at: new Date().toISOString(), contacted_by: actor.id })
-    .eq("id", input.studentId)
-    .eq("cohort_id", input.cohortId);
-  if (error) throw error;
+    .from("student_follow_up")
+    .upsert(
+      { student_id: input.studentId, cohort_id: input.cohortId, contacted_at: new Date().toISOString(), contacted_by: actor.id, updated_at: new Date().toISOString() },
+      { onConflict: "student_id" }
+    );
+  if (error) throw new Error("Couldn't mark this student as contacted. Please try again.");
 
   const cohort = await getCohort(supabase, input.cohortId);
   const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(`${base}/followup`);
+  revalidatePath(`${base}/students/${input.studentId}`);
+}
+
+/**
+ * The follow-up plan for a struggling student: who follows up, and when to
+ * check on them again. Past that date while they still need attention, the
+ * follow-up shows as overdue here and on the levels above. Facilitator/
+ * admin only; RLS (student_update) confirms they can write to this cohort.
+ */
+export async function setFollowUpPlan(input: {
+  studentId: string;
+  cohortId: string;
+  assigneeId: string | null;
+  nextOn: string | null;
+}): Promise<void> {
+  await requireCapability("manage_followups", await cohortTarget(input.cohortId));
+  if (input.nextOn && !/^\d{4}-\d{2}-\d{2}$/.test(input.nextOn)) throw new Error("Pick a valid date.");
+  const supabase = await createClient();
+  const { data: student } = await supabase.from("student").select("id").eq("id", input.studentId).eq("cohort_id", input.cohortId).maybeSingle();
+  if (!student) throw new Error("This student does not belong to that cohort.");
+  const { data, error } = await supabase
+    .from("student_follow_up")
+    .upsert(
+      { student_id: input.studentId, cohort_id: input.cohortId, assignee: input.assigneeId, next_on: input.nextOn, updated_at: new Date().toISOString() },
+      { onConflict: "student_id" }
+    )
+    .select("student_id");
+  if (error) throw new Error("Couldn't save the follow-up plan. Please try again.");
+  if (!data?.length) throw new Error("You can't change this student's follow-up.");
+
+  const cohort = await getCohort(supabase, input.cohortId);
+  const base = `/c/${cohort?.slug ?? input.cohortId}`;
+  revalidatePath(`${base}/followup`);
+  revalidatePath(`${base}/catchup`);
   revalidatePath(`${base}/students/${input.studentId}`);
 }

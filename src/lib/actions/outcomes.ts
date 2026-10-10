@@ -1,25 +1,30 @@
 "use server";
 
+import { cohortTarget, requireCapability } from "@/lib/authz";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth";
-import { createNotifications } from "@/lib/data/notifications";
+import { notify } from "@/lib/notify";
+import { outcomeRecordedNotice } from "@/lib/domain/notification-messages";
 import { getCohort } from "@/lib/data/cohorts";
-import { outcomeShortLabel } from "@/components/outcome/outcome-copy";
 import type { Json } from "@/lib/supabase/database.types";
 import type { OutcomeKind } from "@/lib/domain/types";
+import { todayISO } from "@/lib/utils";
 
 export interface RecordOutcomeInput {
   studentId: string;
   cohortId: string;
   kind: OutcomeKind;
+  /** For "left": the day they actually left (YYYY-MM-DD, not in the
+   * future). Lessons from that day on are no longer owed. Default today. */
+  leftOn?: string;
 }
 
 /** Append-only — a new row every time, never an update. A student's stage
  * on screen is simply the most recent row. */
 export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
-  const user = await requireRole("facilitator", "admin");
+  const user = await requireCapability("manage_followups", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   // The RLS check on `outcome` only verifies the caller has pastoral
@@ -38,18 +43,18 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
     throw new Error("This student does not belong to that cohort.");
   }
 
-  // Inserts the outcome row and sets the departure flag from the *actual*
-  // latest outcome row in one locked transaction — two outcomes recorded
-  // for the same student in close succession (e.g. two facilitators)
-  // can no longer complete out of order and leave left_at reflecting the
-  // wrong one (0014_atomic_outcome_left_sync.sql). Recording "left" marks
-  // them departed; anything else (currently just "catchup"/"resolved")
-  // reinstates them, in case they'd previously left and are now being
-  // given another chance.
+  // One locked transaction (record_outcome_and_sync_left, 0033): inserts
+  // the outcome and, only for a leaving or returning decision, records the
+  // enrolment change with its date — so history is kept and a later
+  // follow-up result never silently re-enrols or un-enrols anyone.
+  if (input.leftOn && (!/^\d{4}-\d{2}-\d{2}$/.test(input.leftOn) || input.leftOn > todayISO())) {
+    throw new Error("Pick the day they left — today or earlier.");
+  }
   const { error } = await supabase.rpc("record_outcome_and_sync_left", {
     p_student_id: input.studentId,
     p_cohort_id: input.cohortId,
     p_kind: input.kind,
+    p_effective_on: input.kind === "left" ? (input.leftOn ?? null) : null,
     p_actor: user.id,
   });
   if (error) throw new Error("Couldn't record this outcome. Please try again.");
@@ -58,43 +63,45 @@ export async function recordOutcome(input: RecordOutcomeInput): Promise<void> {
   // `markStudentContacted` (src/lib/actions/students.ts) opened — if this
   // student ever falls below the band again later, Follow Up should treat
   // them as freshly flagged, not still "contacted" from a previous round.
+  // The follow-up plan (who, and when to check again) ends with the same
+  // decision — except a catch-up plan, where "check again on" is exactly
+  // how someone keeps an eye on whether the catch-up is working.
   await supabase
-    .from("student")
-    .update({ contacted_at: null, contacted_by: null })
-    .eq("id", input.studentId)
+    .from("student_follow_up")
+    .update(
+      input.kind === "catchup"
+        ? { contacted_at: null, contacted_by: null, updated_at: new Date().toISOString() }
+        : { contacted_at: null, contacted_by: null, assignee: null, next_on: null, updated_at: new Date().toISOString() }
+    )
+    .eq("student_id", input.studentId)
     .eq("cohort_id", input.cohortId);
 
   // audit_log is admin-write-only by RLS — go through the admin client so
   // a facilitator recording an outcome doesn't get an RLS error here, the
   // one pastoral decision most worth having a trail for.
   const admin = createAdminClient();
-  await admin.from("audit_log").insert({
-    actor_id: user.id,
-    entity: "outcome",
-    entity_id: input.studentId,
-    action: "record",
-    after: { kind: input.kind, cohortId: input.cohortId } as unknown as Json,
-  });
+  const { data: auditRow } = await admin
+    .from("audit_log")
+    .insert({
+      actor_id: user.id,
+      entity: "outcome",
+      entity_id: input.studentId,
+      action: "record",
+      after: { kind: input.kind, cohortId: input.cohortId } as unknown as Json,
+    })
+    .select("id")
+    .single();
 
   const cohort = await getCohort(supabase, input.cohortId);
   const cohortSlug = cohort?.slug ?? input.cohortId;
 
-  const [{ data: members }] = await Promise.all([
-    admin.from("cohort_member").select("user_id").eq("cohort_id", input.cohortId).neq("user_id", user.id),
-  ]);
-  const recipientIds = new Set((members ?? []).map((m) => m.user_id));
-  if (recipientIds.size) {
-    await createNotifications(
-      admin,
-      [...recipientIds].map((userId) => ({
-        userId,
-        kind: "outcome_recorded",
-        title: `${student.full_name}: ${outcomeShortLabel(input.kind)}`,
-        body: "An outcome was just recorded for them.",
-        href: `/c/${cohortSlug}/students/${input.studentId}`,
-      }))
-    );
-  }
+  // Pastoral: the cohort's facilitators only, and nothing in the text
+  // says who or what — Follow Up shows that to those allowed to see it.
+  await notify(
+    { type: "cohort_pastoral", cohortId: input.cohortId },
+    () => outcomeRecordedNotice({ cohortName: cohort?.name ?? "this cohort", cohortSlug, auditId: auditRow?.id ?? null }),
+    { exclude: [user.id] }
+  );
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);

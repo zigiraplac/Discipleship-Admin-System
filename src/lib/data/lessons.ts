@@ -12,6 +12,7 @@ interface LessonEventRow {
     | { attendance: Record<string, "present" | "absent">; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }
     | { attendance: Record<string, "present" | "absent">; recorded_by: string | null; recorded_at: string | null; updated_by: string | null; updated_at: string | null }[]
     | null;
+  lesson_catchup?: { student_id: string }[] | null;
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -44,7 +45,7 @@ export const getLessonEvents = cache(async function getLessonEvents(db: DB, coho
   const { data, error } = await db
     .from("event")
     .select(
-      "id, event_date, edited, lesson:lesson_id(global_index, title), register(attendance, recorded_by, recorded_at, updated_by, updated_at)"
+      "id, event_date, edited, lesson:lesson_id(global_index, title), register(attendance, recorded_by, recorded_at, updated_by, updated_at), lesson_catchup(student_id)"
     )
     .eq("cohort_id", cohortId)
     .eq("kind", "lesson")
@@ -75,6 +76,7 @@ export const getLessonEvents = cache(async function getLessonEvents(db: DB, coho
           recordedAt: reg.recorded_at ?? null,
           updatedBy: reg.updated_by ?? null,
           updatedAt: reg.updated_at ?? null,
+          caughtUp: (row.lesson_catchup ?? []).map((c) => c.student_id),
         },
       };
       return view;

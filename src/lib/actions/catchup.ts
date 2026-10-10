@@ -1,9 +1,10 @@
 "use server";
 
+import { cohortTarget, requireCapability } from "@/lib/authz";
+
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/auth";
 import { getCohort } from "@/lib/data/cohorts";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -15,23 +16,19 @@ export interface ToggleLessonCatchupInput {
 }
 
 /**
- * Marks (or unmarks) one specific missed lesson as made up outside the
- * original class session. This is the same correction path `saveRegister`
- * uses (register.ts) — the actual attendance record is flipped to present,
- * so every page that reads attendance sees it automatically, with no
- * parallel bookkeeping to keep in sync. `lesson_catchup` stays alongside
- * purely as a note that *this particular* present mark came from a
- * catch-up rather than being there on the day — used only so the
- * attendance grid can still color it differently.
+ * Records (or undoes) that one specific missed lesson was made up outside
+ * the original class session.
  *
- * The actual attendance write goes through `set_attendance_mark`
- * (0009_atomic_writes.sql), a single atomic UPDATE, rather than reading
- * the whole attendance blob, editing it in JS, and writing it all back —
- * two students on the same lesson toggled close together used to be able
- * to race and silently revert each other.
+ * The register is never touched: it keeps what happened on the day
+ * ("absent"), and `lesson_catchup` is the separate record of the recovery.
+ * Attendance counts the original absence; a student's effective rate and
+ * status count the recovery too (aggregateCohort). The database refuses a
+ * catch-up for a lesson without a register or where the student was
+ * present, and refuses a register edit that would mark a caught-up
+ * student present (0034_catchup_keeps_original_absence.sql).
  */
 export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Promise<void> {
-  const user = await requireRole("facilitator", "admin");
+  const user = await requireCapability("manage_followups", await cohortTarget(input.cohortId));
   const supabase = await createClient();
 
   const { data: eventRow, error: eventErr } = await supabase
@@ -93,14 +90,6 @@ export async function toggleLessonCatchup(input: ToggleLessonCatchupInput): Prom
       .eq("event_id", input.eventId);
     if (error) throw new Error("Couldn't undo this catch-up. Please try again.");
   }
-
-  const { error: markErr } = await supabase.rpc("set_attendance_mark", {
-    p_event_id: input.eventId,
-    p_student_id: input.studentId,
-    p_present: input.caughtUp,
-    p_actor: user.id,
-  });
-  if (markErr) throw new Error("Couldn't update attendance for this lesson. Please try again.");
 
   // audit_log is admin-write-only by RLS — go through the admin client so
   // a facilitator's toggle doesn't throw here even though the mark above

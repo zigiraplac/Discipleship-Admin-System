@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canSitInside } from "@/lib/domain/levels";
 import { requireRole, requireUser } from "@/lib/auth";
 import {
   parseRegistrationsCsv,
@@ -11,9 +12,12 @@ import {
 } from "@/lib/domain/registrations";
 import { buildEvents } from "@/lib/domain/generator";
 import { ensureCurriculumSeeded } from "@/lib/data/curriculum-admin";
-import { getBands } from "@/lib/data/cohorts";
+import { getAllUnits, getCohortWithBands } from "@/lib/data/org";
+import type { AppUser } from "@/lib/domain/types";
+import { authorize, getResponsibilities, unitTarget } from "@/lib/authz";
+import { decide } from "@/lib/authz/policy";
 import { getQuickStats, type QuickStats } from "@/lib/data/quick-stats";
-import { createNotifications } from "@/lib/data/notifications";
+import { notify, resolveRecipients } from "@/lib/notify";
 import { todayISO } from "@/lib/utils";
 
 /**
@@ -29,11 +33,14 @@ import { todayISO } from "@/lib/utils";
 export async function getCohortQuickStats(cohortIds: string[]): Promise<Record<string, QuickStats>> {
   const user = await requireUser();
   const supabase = await createClient();
-  const bands = await getBands(supabase);
   const today = todayISO();
 
   const entries = await Promise.all(
-    cohortIds.map(async (id) => [id, await getQuickStats(supabase, id, bands, today, user.role)] as const)
+    cohortIds.map(async (id) => {
+      // Today's policy while it runs; the one in force when it finished after.
+      const [, bands] = await getCohortWithBands(supabase, id);
+      return [id, await getQuickStats(supabase, id, bands, today, user.role)] as const;
+    })
   );
   return Object.fromEntries(entries);
 }
@@ -47,7 +54,16 @@ export async function getCohortQuickStats(cohortIds: string[]): Promise<Record<s
  * looking at the same data.
  */
 export async function getRegistrationPreview(csvText: string): Promise<DedupeResult> {
-  await requireRole("admin");
+  // Same people who may create a cohort: admin, or anyone leading a
+  // promotion or church (createCohort checks the exact promotion). This
+  // only parses the text the person uploaded themselves — it reads nothing
+  // from the database.
+  const user = await requireUser();
+  const units = await getAllUnits();
+  const responsibilities = await getResponsibilities(user);
+  if (!units.some((u) => decide(responsibilities, "create_cohort", unitTarget(u)).allowed)) {
+    throw new Error("Only an administrator, a promotion manager or a church leader can create cohorts.");
+  }
   return dedupeRegistrations(parseRegistrationsCsv(csvText));
 }
 
@@ -60,8 +76,30 @@ export interface CreateCohortInput {
   lessonsPerSession: number;
   /** How many weeks between teaching weeks — 1 means every week (1-8). */
   intervalWeeks: number;
+  /** The promotion the cohort belongs to. Required for anyone
+   * but admin. */
+  orgUnitId: string | null;
   csvText: string;
   includedRegistrantIds: string[];
+}
+
+/**
+ * Who may create a cohort in a given promotion: admin anywhere;
+ * otherwise the leader of that promotion, or of the church it sits in
+ * (checked by the database as the signed-in user).
+ */
+async function assertCanCreateIn(user: AppUser, orgUnitId: string | null): Promise<void> {
+  if (!orgUnitId) {
+    if (decide(await getResponsibilities(user), "manage_accounts", { kind: "system" }).allowed) return; // admin
+    throw new Error("Choose the promotion this cohort belongs to.");
+  }
+  const units = await getAllUnits();
+  const target = units.find((u) => u.id === orgUnitId);
+  if (!target || !canSitInside("cohort", target.type)) {
+    throw new Error("A cohort must belong to a promotion.");
+  }
+  const d = await authorize("create_cohort", unitTarget(target), user);
+  if (!d.allowed) throw new Error("Only this promotion's manager or its church leader can add cohorts here.");
 }
 
 export interface CreateCohortResult {
@@ -88,7 +126,8 @@ export interface CreateCohortResult {
  * atomicity.
  */
 export async function createCohort(input: CreateCohortInput): Promise<CreateCohortResult> {
-  const user = await requireRole("admin");
+  const user = await requireUser();
+  await assertCanCreateIn(user, input.orgUnitId);
   if (!input.name.trim()) {
     throw new Error("Name the cohort.");
   }
@@ -165,12 +204,12 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
   // column) — a plain follow-up update rather than extending the RPC,
   // since the column already defaults to 1 and this is the one cohort row
   // that needs it, not a batch write.
-  if (input.intervalWeeks !== 1) {
-    const { error: intervalErr } = await admin
+  if (input.intervalWeeks !== 1 || input.orgUnitId) {
+    const { error: followErr } = await admin
       .from("cohort")
-      .update({ interval_weeks: input.intervalWeeks })
+      .update({ interval_weeks: input.intervalWeeks, org_unit_id: input.orgUnitId })
       .eq("id", cohortId);
-    if (intervalErr) throw intervalErr;
+    if (followErr) throw followErr;
   }
 
   await admin.from("audit_log").insert({
@@ -183,6 +222,7 @@ export async function createCohort(input: CreateCohortInput): Promise<CreateCoho
   });
 
   revalidatePath("/cohorts");
+  revalidatePath("/u", "layout");
   return { cohortId, studentsCount: enrol.length, eventsCount: eventPayload.length };
 }
 
@@ -214,10 +254,11 @@ export async function deleteCohort(input: { cohortId: string; confirmName: strin
     throw new Error("That doesn't match the cohort's name — nothing was deleted.");
   }
 
-  const [{ count: studentsCount }, { count: eventsCount }, { data: members }] = await Promise.all([
+  // Recipients are resolved before the cohort (and its team) is gone.
+  const [{ count: studentsCount }, { count: eventsCount }, recipients] = await Promise.all([
     admin.from("student").select("*", { count: "exact", head: true }).eq("cohort_id", input.cohortId),
     admin.from("event").select("*", { count: "exact", head: true }).eq("cohort_id", input.cohortId),
-    admin.from("cohort_member").select("user_id").eq("cohort_id", input.cohortId).neq("user_id", user.id),
+    resolveRecipients({ type: "cohort_operational", cohortId: input.cohortId }, [user.id]),
   ]);
 
   const { error: deleteErr } = await admin.from("cohort").delete().eq("id", input.cohortId);
@@ -232,19 +273,17 @@ export async function deleteCohort(input: { cohortId: string; confirmName: strin
     before: { name: cohort.name, students: studentsCount ?? 0, events: eventsCount ?? 0 },
   });
 
-  const recipientIds = [...new Set((members ?? []).map((m) => m.user_id))];
-  if (recipientIds.length) {
-    await createNotifications(
-      admin,
-      recipientIds.map((userId) => ({
-        userId,
-        kind: "student_updated",
-        title: `${cohort.name} was deleted`,
-        body: "An admin permanently removed this cohort and all of its data.",
-        href: "/cohorts",
-      }))
-    );
-  }
+  await notify(
+    { type: "cohort_operational", cohortId: input.cohortId },
+    () => ({
+      kind: "student_updated",
+      title: `${cohort.name} was deleted`,
+      body: "An admin permanently removed this cohort and all of its data.",
+      href: "/cohorts",
+      dedupeKey: `cohort_deleted:${input.cohortId}`,
+    }),
+    { recipients }
+  );
 
   revalidatePath("/cohorts");
 }
