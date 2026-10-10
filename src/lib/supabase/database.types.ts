@@ -64,6 +64,7 @@ export interface Database {
           status: "running" | "complete" | "archived";
           lessons_per_session: number;
           interval_weeks: number;
+          org_unit_id: string | null;
           created_at: string;
         };
         Insert: Partial<Database["public"]["Tables"]["cohort"]["Row"]> & {
@@ -122,8 +123,6 @@ export interface Database {
           dob_month: number | null;
           city: string | null;
           extra: Json | null;
-          contacted_at: string | null;
-          contacted_by: string | null;
           registered_at: string | null;
           enrolled_at: string;
           left_at: string | null;
@@ -361,6 +360,152 @@ export interface Database {
           },
         ];
       };
+      org_unit: {
+        Row: {
+          id: string;
+          parent_id: string | null;
+          type: "hq" | "continent" | "country" | "region" | "site" | "promotion";
+          name: string;
+          slug: string;
+          path: string;
+          details: Json;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Omit<Database["public"]["Tables"]["org_unit"]["Row"], "path">> & {
+          type: Database["public"]["Tables"]["org_unit"]["Row"]["type"];
+          name: string;
+          slug: string;
+        };
+        Update: Partial<Omit<Database["public"]["Tables"]["org_unit"]["Row"], "path">>;
+        Relationships: [
+          {
+            foreignKeyName: "org_unit_parent_id_fkey";
+            columns: ["parent_id"];
+            isOneToOne: false;
+            referencedRelation: "org_unit";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      student_follow_up: {
+        Row: {
+          student_id: string;
+          cohort_id: string;
+          contacted_at: string | null;
+          contacted_by: string | null;
+          assignee: string | null;
+          next_on: string | null;
+          updated_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["student_follow_up"]["Row"]> & { student_id: string; cohort_id: string };
+        Update: Partial<Database["public"]["Tables"]["student_follow_up"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "student_follow_up_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: true;
+            referencedRelation: "student";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      status_alert_state: {
+        Row: {
+          subject_type: "unit" | "cohort";
+          subject_id: string;
+          status: "good" | "attention" | "critical" | "quiet";
+          pending_status: "good" | "attention" | "critical" | "quiet" | null;
+          pending_since: string | null;
+          last_notified_status: "good" | "attention" | "critical" | "quiet" | null;
+          last_notified_at: string | null;
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["status_alert_state"]["Row"], "updated_at"> & { updated_at?: string };
+        Update: Partial<Database["public"]["Tables"]["status_alert_state"]["Row"]>;
+        Relationships: [];
+      };
+      student_enrolment_event: {
+        Row: {
+          id: string;
+          student_id: string;
+          cohort_id: string;
+          kind: "joined" | "left" | "returned";
+          effective_on: string;
+          reason: string | null;
+          recorded_by: string | null;
+          recorded_at: string;
+        };
+        Insert: Partial<Database["public"]["Tables"]["student_enrolment_event"]["Row"]> & {
+          student_id: string;
+          cohort_id: string;
+          kind: "joined" | "left" | "returned";
+          effective_on: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["student_enrolment_event"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "student_enrolment_event_student_id_fkey";
+            columns: ["student_id"];
+            isOneToOne: false;
+            referencedRelation: "student";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      programme_policy: {
+        Row: {
+          version: number;
+          effective_from: string;
+          on_track_threshold: number;
+          needs_help_threshold: number;
+          inactive_streak: number;
+          graduation_attendance_threshold: number;
+          note: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["programme_policy"]["Row"], "created_at" | "created_by" | "note"> & {
+          note?: string | null;
+          created_by?: string | null;
+        };
+        Update: never;
+        Relationships: [
+          {
+            foreignKeyName: "programme_policy_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "app_user";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      org_unit_member: {
+        Row: {
+          org_unit_id: string;
+          user_id: string;
+          role: "leader" | "viewer";
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["org_unit_member"]["Row"], "created_at"> & { created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["org_unit_member"]["Row"]>;
+        Relationships: [
+          {
+            foreignKeyName: "org_unit_member_org_unit_id_fkey";
+            columns: ["org_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "org_unit";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "org_unit_member_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "app_user";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -376,6 +521,10 @@ export interface Database {
         }[];
       };
       is_admin: { Args: Record<string, never>; Returns: boolean };
+      can_view_unit: { Args: { p_unit: string }; Returns: boolean };
+      can_lead_unit: { Args: { p_unit: string }; Returns: boolean };
+      can_manage_unit: { Args: { p_unit: string }; Returns: boolean };
+      is_unit_above_mine: { Args: { p_unit: string }; Returns: boolean };
       activate_self: { Args: Record<string, never>; Returns: undefined };
       update_own_name: { Args: { new_name: string }; Returns: undefined };
       create_cohort_with_schedule: {
@@ -408,8 +557,12 @@ export interface Database {
         };
         Returns: { event_id: string }[];
       };
+      cohort_staff_names: {
+        Args: { p_cohorts: string[] };
+        Returns: { cohort_id: string; capacity: string; name: string }[];
+      };
       record_outcome_and_sync_left: {
-        Args: { p_student_id: string; p_cohort_id: string; p_kind: string; p_actor: string };
+        Args: { p_student_id: string; p_cohort_id: string; p_kind: string; p_actor: string; p_effective_on?: string | null };
         Returns: undefined;
       };
     };
