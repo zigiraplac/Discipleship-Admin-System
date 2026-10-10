@@ -169,7 +169,14 @@ export function buildEvents(
  * position 0.
  */
 export interface ScheduleSegment {
+  /** The first not-yet-taught curriculum position when the change was made
+   * (where the live schedule was reflowed from). Kept for the record. */
   startsAtPosition: number;
+  /** When the change took effect (YYYY-MM-DD): the later of the day it was
+   * made and its stated effective date. The *plan* follows the earlier
+   * cadence for every date before this — a change never rewrites what the
+   * cohort was expected to have done before it existed. */
+  effectiveFrom: string;
   teachingDays: number[];
   lessonsPerSession: number;
   intervalWeeks: number;
@@ -183,31 +190,28 @@ export interface BaseCadence {
 }
 
 /**
- * The cohort's full ideal schedule, replayed segment by segment: the base
- * cadence from position 0 up to the first change, then each recorded
- * change's own cadence for its own range — each segment's dates chained
- * onto the day right after the previous segment's last placed date, so a
- * cadence change never retroactively rewrites what already happened.
- * `segments` must be sorted ascending by `startsAtPosition`.
+ * The cohort's plan — what it was expected to have taught by any date —
+ * replayed through time:
+ *  1. the original cadence from the start date;
+ *  2. at each change's `effectiveFrom`, everything the plan had placed
+ *     *before* that date stands, and the remaining items are re-placed
+ *     with the new cadence from that date on.
+ * So a change made on 20 March leaves February's plan exactly as it was,
+ * and a cohort that was behind before the change is still behind by the
+ * same amount right after it. Segments are applied in `effectiveFrom`
+ * order. (The live, dated events are a separate thing — see
+ * actions/schedule.ts — and are never rewritten for recorded lessons.)
  */
 export function buildIdealSchedule(base: BaseCadence, segments: ScheduleSegment[]): GeneratedEvent[] {
   const items = curriculumScheduleItems();
-  const boundaries = [0, ...segments.map((s) => s.startsAtPosition), items.length];
-  const cadences = [
-    { teachingDays: base.teachingDays, lessonsPerSession: base.lessonsPerSession, intervalWeeks: base.intervalWeeks },
-    ...segments,
-  ];
-
-  let cursorISO = base.startDate;
-  const events: GeneratedEvent[] = [];
-  for (let i = 0; i < cadences.length; i++) {
-    const slice = items.slice(boundaries[i], boundaries[i + 1]);
-    if (!slice.length) continue;
-    const c = cadences[i];
-    const placed = placeSchedule(slice, cursorISO, c.teachingDays, c.lessonsPerSession, c.intervalWeeks);
-    events.push(...placed);
-    const last = placed[placed.length - 1];
-    if (last) cursorISO = dayAfter(last.date);
+  let events = placeSchedule(items, base.startDate, base.teachingDays, base.lessonsPerSession, base.intervalWeeks);
+  const ordered = [...segments].sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom));
+  for (const seg of ordered) {
+    // placeSchedule yields one event per item, in item order.
+    const kept = events.filter((e) => e.date < seg.effectiveFrom);
+    const rest = items.slice(kept.length);
+    if (!rest.length) continue;
+    events = [...kept, ...placeSchedule(rest, seg.effectiveFrom, seg.teachingDays, seg.lessonsPerSession, seg.intervalWeeks)];
   }
   return events;
 }

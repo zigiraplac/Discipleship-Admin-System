@@ -16,6 +16,39 @@ export type Status = "On track" | "Needs help" | "At risk";
 
 export type CohortHealth = "Healthy" | "Watch" | "Needs work";
 
+/** Levels above the cohort, top to bottom. "site" is shown as "Church". */
+export type OrgUnitType = "hq" | "continent" | "country" | "region" | "site" | "promotion";
+
+/** leader: sees progress and manages the box; viewer: sees progress only. */
+export type OrgRole = "leader" | "viewer";
+
+export interface OrgUnit {
+  id: string;
+  parentId: string | null;
+  type: OrgUnitType;
+  name: string;
+  slug: string;
+  /** Ancestry as dot-separated ids (ltree) — a box's descendants are the
+   * boxes whose path starts with `${path}.`. */
+  path: string;
+  details: OrgUnitDetails;
+}
+
+/** A level's own details (see domain/unit-details.ts for which apply where). */
+export interface OrgUnitDetails {
+  /** General contact for the level itself — not its leader's. */
+  email?: string;
+  description?: string;
+  timeZone?: string;
+  languages?: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  area?: string;
+  startYear?: number;
+  endYear?: number;
+}
+
 export interface ClassRef {
   id: number; // 1..7
   title: string;
@@ -46,6 +79,8 @@ export interface Cohort {
    * *original* (creation-time) cadence, never overwritten by a later
    * change — see `ScheduleSegment` in `src/lib/domain/generator.ts`. */
   intervalWeeks: number;
+  /** The promotion (or church) this cohort belongs to; null if not placed yet. */
+  orgUnitId: string | null;
   createdAt: string;
 }
 
@@ -69,9 +104,16 @@ export interface Student {
    * flagged and awaiting an outcome — cleared by recordOutcome. Null means
    * either never flagged, or flagged and not yet reached out to. */
   contactedAt: string | null;
+  /** Who follows up with this student while they need attention. */
+  followUpAssignee: string | null;
+  /** When to check on them again (YYYY-MM-DD); in the past = overdue. */
+  followUpNextOn: string | null;
   registeredAt: string | null;
   enrolledAt: string;
   leftAt: string | null;
+  /** Enrolment history (joined / left / returned), oldest first — decides
+   * which lessons the student owed. See domain/enrolment.ts. */
+  enrolment?: { kind: "joined" | "left" | "returned"; on: string }[];
 }
 
 export interface CohortEvent {
@@ -92,6 +134,10 @@ export interface Register {
   recordedAt: string | null;
   updatedBy: string | null;
   updatedAt: string | null;
+  /** Students whose absence at this lesson was later made up
+   * (lesson_catchup). Their mark here stays "absent" — what happened on
+   * the day — and the recovery is counted separately. */
+  caughtUp?: string[];
 }
 
 export interface Outcome {
@@ -162,11 +208,25 @@ export interface CrusadeEventView {
 
 export interface StudentAggregate extends Student {
   idx: number; // position in cohort roster, used for deterministic seeding only
+  /** Recorded lessons this student was present at. */
   attended: number;
-  expected: number; // lessons recorded so far
+  /** Recorded lessons this student was enrolled for (owed). */
+  expected: number;
+  /** Recorded absences, as marked on the day. */
+  absences: number;
+  /** Of those absences, how many were made up (catch-up). */
+  recovered: number;
+  /** Absences still to make up (absences − recovered). */
   missed: number;
-  rate: number; // 0..100
+  /** Attendance as it happened: attended ÷ expected, 0..100. */
+  rate: number;
+  /** Counting made-up lessons: (attended + recovered) ÷ expected. */
+  effectiveRate: number;
+  /** Performance band, from `effectiveRate`. Meaningless while
+   * `expected === 0` — see `performance`. */
   status: Status;
+  /** `status`, or "Not started" when no recorded lesson is owed yet. */
+  performance: Status | "Not started";
   /** The highest curriculum position (0-based, see curriculum.ts) this
    * student was actually marked present for — their own real progress,
    * not the cohort's. Null if they've never been marked present. */
