@@ -28,10 +28,21 @@ const STEPS: WizardStepDef[] = [
  * cohort" calls the `createCohort` server action — every earlier step only
  * ever reads/derives from client state.
  */
-export function NewCohortWizard() {
+export function NewCohortWizard({
+  placements,
+  initialPlacementId,
+  requirePlacement,
+}: {
+  /** Promotions (or churches) this person may create a cohort in. */
+  placements: { id: string; label: string }[];
+  initialPlacementId: string | null;
+  /** Everyone but admin must choose where the cohort belongs. */
+  requirePlacement: boolean;
+}) {
   const router = useRouter();
   const { show } = useToast();
 
+  const [orgUnitId, setOrgUnitId] = useState<string>(initialPlacementId ?? "");
   const [step, setStep] = useState(1);
   const [name, setName] = useState("");
   const [city, setCity] = useState("");
@@ -111,6 +122,7 @@ export function NewCohortWizard() {
         teachingDays,
         lessonsPerSession,
         intervalWeeks,
+        orgUnitId: orgUnitId || null,
         csvText,
         includedRegistrantIds,
       });
@@ -155,6 +167,10 @@ export function NewCohortWizard() {
               setLessonsPerSession={setLessonsPerSession}
               intervalWeeks={intervalWeeks}
               setIntervalWeeks={setIntervalWeeks}
+              placements={placements}
+              orgUnitId={orgUnitId}
+              setOrgUnitId={setOrgUnitId}
+              requirePlacement={requirePlacement}
               events={events}
               onContinue={goNext}
             />

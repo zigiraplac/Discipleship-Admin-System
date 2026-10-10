@@ -3,8 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus, GlobeHemisphereEast, UsersThree } from "@phosphor-icons/react";
+import type { Icon } from "@phosphor-icons/react";
 import { NAV_ITEMS, NAV_GROUP_LABELS, NAV_GROUP_ORDER, type NavItem } from "./nav-items";
+import { UNIT_SECTIONS, unitHref, type OrgNav } from "./org-nav";
 import { SearchTrigger } from "./search-palette";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
@@ -29,21 +31,23 @@ function isActive(id: string, pathname: string, cohortSlug: string | null): bool
 }
 
 function SidebarNavItem({
-  item,
+  icon: Icon,
   label,
   href,
   active,
   badge,
+  badgeTone = "alert",
   onNavigate,
 }: {
-  item: NavItem;
+  icon: Icon;
   label: string;
   href: string;
   active: boolean;
   badge?: number;
+  /** "alert" = red (something urgent), "quiet" = grey count. */
+  badgeTone?: "alert" | "quiet";
   onNavigate?: () => void;
 }) {
-  const Icon = item.icon;
   return (
     <Link
       href={href}
@@ -56,7 +60,12 @@ function SidebarNavItem({
       <Icon size={17} />
       <span className="flex-1 text-left">{label}</span>
       {!!badge && (
-        <span className="grid h-[17px] min-w-[17px] flex-none place-items-center rounded-full bg-accent-2-500 px-1 text-[10px] font-bold leading-none text-white">
+        <span
+          className={cn(
+            "grid h-[17px] min-w-[17px] flex-none place-items-center rounded-full px-1 text-[10px] font-bold leading-none",
+            badgeTone === "alert" ? "bg-accent-2-500 text-white" : "bg-hover text-ink-tertiary"
+          )}
+        >
           {badge > 9 ? "9+" : badge}
         </span>
       )}
@@ -64,16 +73,28 @@ function SidebarNavItem({
   );
 }
 
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">{children}</div>;
+}
+
 export function Sidebar({
   role,
   activeCohortSlug,
   badges,
+  org,
+  roleText,
   className,
   onNavigate,
 }: {
   role: Role;
   activeCohortSlug: string | null;
   badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
+  /** Organization levels this person has a role on, and — on a level
+   * page — the level being shown. Null/empty for cohort-only users, who
+   * see exactly the sidebar they always had. */
+  org?: OrgNav | null;
+  /** Overrides the role line under the logo (e.g. "Country leader"). */
+  roleText?: string;
   /** Lets the desktop instance stay hidden below `lg` while the mobile
    * drawer's copy (always visible once opened) uses the default. */
   className?: string;
@@ -82,14 +103,20 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const allowed = new Set(NAV_BY_ROLE[role]);
+  // What this person may open here comes from their capabilities in the
+  // current context (Shell → authz), not from their account role.
+  const allowed = new Set(org?.allowedNav ?? NAV_BY_ROLE[role]);
+  // A level page shows that level's sections; a cohort page that cohort's.
+  const levelPortal = org?.context === "unit";
 
   // Cohort-scoped items need a cohort to link to. `activeCohortSlug`
   // already falls back to the user's first visible cohort when they're on
   // a global page (Shell resolves that) — it's only still null when
   // there genuinely isn't one yet, in which case those items would point
   // nowhere (`/c/null`) and are hidden instead of shown broken.
-  const primary = NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
+  const primary = levelPortal
+    ? []
+    : NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
   // Dashboard has no group — stays standalone above every section, the way
   // a "home" item usually does. Everything else is grouped by function
   // (Schedule / Students / Reports) so the sidebar reads as a few short
@@ -100,7 +127,9 @@ export function Sidebar({
     label: NAV_GROUP_LABELS[group],
     items: primary.filter((n) => n.group === group),
   })).filter((s) => s.items.length > 0);
-  const manage = NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id));
+  // The level portal's own pages replace the cohort list, so it keeps only
+  // Settings (admin).
+  const manage = NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id) && (!levelPortal || n.id === "settings"));
   const canCreateCohort = role === "admin";
 
   const renderItem = (item: NavItem) => {
@@ -110,7 +139,7 @@ export function Sidebar({
     return (
       <SidebarNavItem
         key={item.id}
-        item={item}
+        icon={item.icon}
         label={navLabel(item, role)}
         href={href}
         active={active}
@@ -119,6 +148,14 @@ export function Sidebar({
       />
     );
   };
+
+  const current = levelPortal ? (org?.current ?? null) : null;
+  const levelSections = current
+    ? current.sections.map((cs) => ({ ...UNIT_SECTIONS.find((s) => s.id === cs.id)!, label: cs.label }))
+    : [];
+  // Every place this person works — one person can lead a promotion and
+  // teach two of its cohorts; each is its own workspace.
+  const workspaces = org?.workspaces ?? [];
 
   return (
     <aside className={cn("sticky top-0 flex h-screen w-60 flex-none flex-col border-r border-border bg-card", className)}>
@@ -132,7 +169,7 @@ export function Sidebar({
         />
         <div className="min-w-0">
           <div className="text-[15px] font-bold leading-tight text-ink">Discipleship</div>
-          <div className="text-[11px] font-semibold text-accent-700">{roleLabel(role)}</div>
+          <div className="text-[11px] font-semibold text-accent-700">{roleText ?? roleLabel(role)}</div>
         </div>
       </div>
 
@@ -145,22 +182,75 @@ export function Sidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3">
+        {current && (
+          <div className="flex flex-col gap-0.5">
+            <div className="px-2.5 pb-2 pt-1">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-accent-700">{current.levelLabel}</div>
+              <div className="mt-0.5 text-[14px] font-bold leading-tight text-ink">{current.name}</div>
+              {current.partOf && <div className="mt-0.5 text-[11px] text-ink-muted">Part of {current.partOf}</div>}
+            </div>
+            {levelSections.map((s) => {
+              const href = unitHref(current.slug, s.id);
+              const isAttention = s.id === "attention";
+              return (
+                <SidebarNavItem
+                  key={s.id}
+                  icon={s.icon}
+                  label={s.label}
+                  href={href}
+                  active={s.id === "overview" ? pathname === href : pathname.startsWith(href)}
+                  badge={isAttention ? current.attention.count : undefined}
+                  badgeTone={current.attention.urgent ? "alert" : "quiet"}
+                  onNavigate={onNavigate}
+                />
+              );
+            })}
+          </div>
+        )}
+
+
         {ungrouped.length > 0 && <div className="flex flex-col gap-0.5">{ungrouped.map(renderItem)}</div>}
 
         {sections.map((section) => (
           <div key={section.group} className="flex flex-col gap-0.5">
-            <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-              {section.label}
-            </div>
+            <GroupLabel>{section.label}</GroupLabel>
             {section.items.map(renderItem)}
           </div>
         ))}
 
+        {workspaces.length > 1 && (
+          <div className="flex flex-col gap-0.5">
+            <GroupLabel>Your workspaces</GroupLabel>
+            {workspaces.map((w) => {
+              const active = org?.activeWorkspace === w.href;
+              return (
+                <Link
+                  key={w.href}
+                  href={w.href}
+                  onClick={onNavigate}
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-control px-2.5 py-[7px] hover:bg-hover",
+                    active && "bg-accent-100 hover:bg-accent-100"
+                  )}
+                >
+                  {w.kind === "unit" ? (
+                    <GlobeHemisphereEast size={16} className={active ? "text-accent-800" : "text-ink-tertiary"} />
+                  ) : (
+                    <UsersThree size={16} className={active ? "text-accent-800" : "text-ink-tertiary"} />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block truncate text-[13px] font-medium", active ? "font-bold text-accent-800" : "text-ink-secondary")}>{w.title}</span>
+                    <span className="block truncate text-[11px] text-ink-muted">{w.role}</span>
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
         {manage.length > 0 && (
           <div className="flex flex-col gap-0.5">
-            <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
-              Manage
-            </div>
+            <GroupLabel>Manage</GroupLabel>
             {manage.map(renderItem)}
           </div>
         )}

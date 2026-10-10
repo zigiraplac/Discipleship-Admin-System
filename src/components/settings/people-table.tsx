@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { EditPersonDialog } from "./edit-person-dialog";
 import { RemovePersonDialog } from "./remove-person-dialog";
+import { LevelRolePills, type LevelRole } from "./level-roles";
 import { roleLabel } from "@/lib/roles";
 import { describeScope } from "@/lib/data/people";
 import type { AppUser, Role } from "@/lib/domain/types";
@@ -41,12 +42,15 @@ export function PeopleTable({
   scopesByUser,
   cohorts,
   currentUserId,
+  levelRolesByUser,
   headerAction,
 }: {
   people: AppUser[];
   scopesByUser: Map<string, { cohortId: string; cohortName: string; capacity: string }[]>;
   cohorts: { id: string; name: string }[];
   currentUserId: string;
+  /** Organization level roles per person (userId → roles). */
+  levelRolesByUser: Record<string, LevelRole[]>;
   headerAction?: React.ReactNode;
 }) {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
@@ -75,6 +79,7 @@ export function PeopleTable({
           <SortableTH label="Person" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <SortableTH label="Role" sortKey="role" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <StaticTH>Cohorts</StaticTH>
+          <StaticTH>Levels</StaticTH>
           <SortableTH label="State" sortKey="state" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <StaticTH>
             <span className="sr-only">Actions</span>
@@ -99,6 +104,9 @@ export function PeopleTable({
                 {describeScope(person.role, scopesByUser.get(person.id))}
               </TD>
               <TD>
+                <LevelRolePills roles={levelRolesByUser[person.id] ?? []} />
+              </TD>
+              <TD>
                 <Pill tone={STATE_TONE[person.state]}>{STATE_LABEL[person.state]}</Pill>
               </TD>
               <TD>
@@ -115,7 +123,7 @@ export function PeopleTable({
           ))}
           {people.length === 0 && (
             <TR>
-              <TD colSpan={5} className="py-6 text-center text-ink-faint">
+              <TD colSpan={6} className="py-6 text-center text-ink-faint">
                 No people yet.
               </TD>
             </TR>

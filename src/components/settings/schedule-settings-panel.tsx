@@ -18,10 +18,9 @@ export interface CohortScheduleOption {
   nextLesson: { eventId: string; lessonRef: string; globalIndex: number } | null;
 }
 
-/** Picks which cohort's teaching schedule to view/change — moved here
- * (admin-only) from what used to be its own per-cohort sidebar page, so a
- * facilitator no longer changes this directly; they'd ask an admin, same
- * as any other cohort-wide setting on this page. */
+/** Picks which cohort's teaching schedule to view/change. Lives on the
+ * Settings page of the church or promotion the cohorts sit in — the level
+ * that runs them day to day. */
 export function ScheduleSettingsPanel({ options }: { options: CohortScheduleOption[] }) {
   const [selectedId, setSelectedId] = useState(options[0]?.cohortId ?? "");
   const selected = options.find((o) => o.cohortId === selectedId) ?? options[0] ?? null;

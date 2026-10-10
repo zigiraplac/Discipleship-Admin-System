@@ -16,6 +16,7 @@ import { signOutAction } from "@/lib/actions/auth";
 import { getCohortQuickStats } from "@/lib/actions/cohorts";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/domain/types";
+import type { OrgNav } from "./org-nav";
 import type { QuickStats } from "@/lib/data/quick-stats";
 import type { NotificationView } from "@/lib/data/notifications";
 
@@ -33,10 +34,13 @@ export function TopBar({
   userName,
   roleLabel,
   notifications,
+  notificationTotals,
   badges,
+  org,
   className,
 }: {
   role: Role;
+  org?: OrgNav | null;
   cohorts: CohortSwitcherItem[];
   activeCohortId: string | null;
   /** Falls back to the first visible cohort when there's no active one
@@ -46,6 +50,7 @@ export function TopBar({
   userName: string;
   roleLabel: string;
   notifications: NotificationView[];
+  notificationTotals: { unread: number; unreadAction: number };
   badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
   className?: string;
 }) {
@@ -73,7 +78,7 @@ export function TopBar({
         className
       )}
     >
-      <MobileNav role={role} activeCohortSlug={navCohortSlug} badges={badges} />
+      <MobileNav role={role} activeCohortSlug={navCohortSlug} badges={badges} org={org} roleText={roleLabel} />
 
       <div className="min-w-0">
         <div className="truncate text-[17px] font-bold leading-tight text-ink">{title}</div>
@@ -121,7 +126,7 @@ export function TopBar({
       )}
 
       <ThemeToggle />
-      <NotificationsBell notifications={notifications} role={role} />
+      <NotificationsBell notifications={notifications} totals={notificationTotals} />
 
       <Popover>
         <PopoverTrigger className="flex items-center gap-2.5 border-0 bg-transparent p-[3px]">

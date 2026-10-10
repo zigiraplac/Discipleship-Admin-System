@@ -4,6 +4,7 @@ import { useState } from "react";
 import { List } from "@phosphor-icons/react";
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
 import { Sidebar } from "./sidebar";
+import type { OrgNav } from "./org-nav";
 import type { Role } from "@/lib/domain/types";
 
 /** The sidebar is `w-60` and always visible from `lg` up — below that it's
@@ -14,10 +15,14 @@ export function MobileNav({
   role,
   activeCohortSlug,
   badges,
+  org,
+  roleText,
 }: {
   role: Role;
   activeCohortSlug: string | null;
   badges: { lessons?: number; followup?: number; catchup?: number; calendar?: number };
+  org?: OrgNav | null;
+  roleText?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -36,6 +41,8 @@ export function MobileNav({
             role={role}
             activeCohortSlug={activeCohortSlug}
             badges={badges}
+            org={org}
+            roleText={roleText}
             className="w-72"
             onNavigate={() => setOpen(false)}
           />

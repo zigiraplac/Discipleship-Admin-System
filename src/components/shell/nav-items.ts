@@ -44,5 +44,5 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "catchup", label: "Catch ups", href: (c) => `/c/${c}/catchup`, icon: ArrowsClockwise, cohortScoped: true, group: "students" },
   { id: "reports", label: "Reports", href: (c) => `/c/${c}/reports`, icon: ChartLineUp, cohortScoped: true, group: "reports" },
   { id: "cohorts", label: "Cohorts", href: () => `/cohorts`, icon: Stack, cohortScoped: false },
-  { id: "settings", label: "Settings", href: () => `/settings`, icon: Gear, cohortScoped: false },
+  { id: "settings", label: "Accounts", href: () => `/settings`, icon: Gear, cohortScoped: false },
 ];

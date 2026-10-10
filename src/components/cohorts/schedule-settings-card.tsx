@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label, Textarea } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
-import { cn, formatShortDate } from "@/lib/utils";
+import { cn, formatShortDate, todayISO } from "@/lib/utils";
 import { DAY_DEFS, formatTeachingDays, LESSONS_PER_SESSION_OPTIONS, INTERVAL_OPTIONS } from "@/components/wizard/day-defs";
 import { changeCohortSchedule } from "@/lib/actions/schedule";
 import { buildIdealSchedule, curriculumScheduleItems, lastLessonDate, type ScheduleSegment } from "@/lib/domain/generator";
@@ -75,7 +75,8 @@ export function ScheduleSettingsCard({
     const items = curriculumScheduleItems();
     const startsAtPosition = items.findIndex((it) => it.kind === "lesson" && it.globalIndex === nextLesson.globalIndex);
     if (startsAtPosition < 0) return null;
-    const hypothetical: ScheduleSegment = { startsAtPosition, teachingDays, lessonsPerSession, intervalWeeks };
+    // A change saved now takes effect from today.
+    const hypothetical: ScheduleSegment = { startsAtPosition, effectiveFrom: todayISO(), teachingDays, lessonsPerSession, intervalWeeks };
     return lastLessonDate(buildIdealSchedule(cohort, [...segments, hypothetical]));
   }, [cohort, segments, nextLesson, teachingDays, lessonsPerSession, intervalWeeks]);
 

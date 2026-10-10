@@ -49,3 +49,25 @@ export function TD({
     />
   );
 }
+
+/**
+ * The row that splits a table into groups — just the group's name (the
+ * table already says what kind of place it is). Taller than a row and
+ * ruled above, so it reads as a divider rather than another row; no
+ * colour, the same everywhere.
+ */
+export function SplitLabel({ title }: { title: React.ReactNode }) {
+  return <span className="block px-3.5 pb-2.5 pt-5 text-left text-[14px] font-bold text-ink">{title}</span>;
+}
+
+export const SPLIT_RULE = "border-t-2 border-border";
+
+export function SplitRow({ colSpan, title }: { colSpan: number; title: React.ReactNode }) {
+  return (
+    <tr className={SPLIT_RULE}>
+      <td colSpan={colSpan} className="p-0">
+        <SplitLabel title={title} />
+      </td>
+    </tr>
+  );
+}

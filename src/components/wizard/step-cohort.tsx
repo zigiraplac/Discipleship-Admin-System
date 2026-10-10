@@ -1,6 +1,6 @@
 "use client";
 
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, NativeSelect } from "@/components/ui/input";
 import { formatShortDate, cn } from "@/lib/utils";
 import { lastLessonDate, type GeneratedEvent } from "@/lib/domain/generator";
 import { StepCard } from "./step-card";
@@ -28,9 +28,17 @@ export function StepCohort({
   setLessonsPerSession,
   intervalWeeks,
   setIntervalWeeks,
+  placements,
+  orgUnitId,
+  setOrgUnitId,
+  requirePlacement,
   events,
   onContinue,
 }: {
+  placements: { id: string; label: string }[];
+  orgUnitId: string;
+  setOrgUnitId: (v: string) => void;
+  requirePlacement: boolean;
   name: string;
   setName: (v: string) => void;
   city: string;
@@ -48,10 +56,27 @@ export function StepCohort({
 }) {
   const last = lastLessonDate(events);
   const year = last ? last.slice(0, 4) : "";
-  const canContinue = teachingDays.length > 0;
+  const canContinue = teachingDays.length > 0 && (!requirePlacement || !!orgUnitId);
 
   return (
     <StepCard step={1} onContinue={onContinue} continueDisabled={!canContinue}>
+      {placements.length > 0 && (
+        <div>
+          <Label htmlFor="cohort-placement">
+            Promotion
+            {!requirePlacement && <span className="font-normal text-ink-muted"> (optional)</span>}
+          </Label>
+          <NativeSelect id="cohort-placement" value={orgUnitId} onChange={(e) => setOrgUnitId(e.target.value)}>
+            <option value="">{requirePlacement ? "Choose a promotion…" : "Not placed yet"}</option>
+            {placements.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      )}
+
       <div>
         <Label htmlFor="cohort-name">Cohort name</Label>
         <Input
