@@ -1,7 +1,6 @@
 import type { DB } from "./types";
 import type { Json } from "@/lib/supabase/database.types";
-import { upcomingBirthdays, type BirthdaySource } from "@/lib/domain/birthdays";
-import { daysBetween } from "@/lib/utils";
+import { filterCategories, kindsIn, type NotificationCategory, type NotificationFilter } from "@/lib/domain/notification-category";
 
 /** Structured payload for a `birthday` notification — lets the bell
  * recompute a live "in N days" countdown at render time instead of trusting
@@ -21,7 +20,15 @@ export interface CrusadeUpcomingNotificationData {
   date: string; // the weekend's Friday, ISO date
 }
 
-export type NotificationData = BirthdayNotificationData | CrusadeUpcomingNotificationData;
+/** One cohort's birthdays today (the daily digest). */
+export interface BirthdayDigestNotificationData {
+  kind: "birthday_digest";
+  cohortId: string;
+  date: string;
+  count: number;
+}
+
+export type NotificationData = BirthdayNotificationData | CrusadeUpcomingNotificationData | BirthdayDigestNotificationData;
 
 /**
  * Plain data-layer functions, not server actions — deliberately not
@@ -73,153 +80,81 @@ export interface NotificationView {
   data: NotificationData | null;
   read: boolean;
   createdAt: string;
+  /** May this person open `href`? Set from their capabilities (authz) —
+   * undefined means not checked (treated as openable). */
+  canOpen?: boolean;
+  /** Derived for display (see lib/notify/describe.ts). */
+  category?: NotificationCategory;
+  /** The cohort or level it concerns, e.g. "Cohort 01" or "Rwanda". */
+  context?: string | null;
+  /** What opening it does, e.g. "View follow-ups". */
+  actionLabel?: string | null;
 }
 
+const SELECT = "id, kind, title, body, href, data, read_at, created_at";
+
+type Row = { id: string; kind: string; title: string; body: string | null; href: string | null; data: unknown; read_at: string | null; created_at: string };
+const toView = (r: Row): NotificationView => ({
+  id: r.id,
+  kind: r.kind,
+  title: r.title,
+  body: r.body,
+  href: r.href,
+  data: (r.data as NotificationData | null) ?? null,
+  read: r.read_at != null,
+  createdAt: r.created_at,
+});
+
+/** The latest few, for the bell. */
 export async function listNotifications(db: DB, userId: string, limit = 20): Promise<NotificationView[]> {
-  const { data, error } = await db
-    .from("notification")
-    .select("id, kind, title, body, href, data, read_at, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const { data, error } = await db.from("notification").select(SELECT).eq("user_id", userId).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit);
   if (error) throw error;
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    kind: r.kind,
-    title: r.title,
-    body: r.body,
-    href: r.href,
-    data: (r.data as unknown as NotificationData | null) ?? null,
-    read: r.read_at != null,
-    createdAt: r.created_at,
-  }));
+  return ((data ?? []) as Row[]).map(toView);
 }
 
-/** A stable 7-day bucket (not a calendar week) — just needs to change
- * once a week so a dedupe key built from it fires again the next week if
- * the situation is still unresolved, without needing real ISO week math. */
-function weekBucket(todayISO: string): number {
-  const [y, m, d] = todayISO.split("-").map(Number);
-  const days = Math.floor(Date.UTC(y, m - 1, d) / 86400000);
-  return Math.floor(days / 7);
+/** Unread totals across the whole history — the bell's badge. */
+export async function notificationCounts(db: DB, userId: string): Promise<{ unread: number; unreadAction: number }> {
+  const base = () => db.from("notification").select("id", { count: "exact", head: true }).eq("user_id", userId).is("read_at", null);
+  const [all, action] = await Promise.all([base(), base().in("kind", kindsIn(["action"]))]);
+  if (all.error) throw all.error;
+  if (action.error) throw action.error;
+  return { unread: all.count ?? 0, unreadAction: action.count ?? 0 };
 }
 
 /**
- * A student who's flagged (attendance below the band) and has *never* had
- * an outcome recorded is the case most likely to fall through the cracks
- * silently — nobody's actively working it, and nothing currently surfaces
- * that beyond the Attention page itself. One summary notification per
- * cohort (not one per student, to avoid a flood) goes to that cohort's own
- * facilitators/teachers plus every admin/leadership user, re-firing at
- * most once a week for as long as it stays unresolved.
+ * One page of a person's notification history, newest first: filtered,
+ * searched, and continued from `cursor` (the last item already shown) so
+ * filters and "Load more" work together without loading everything.
+ * Always scoped to `userId` — never anyone else's.
+ *
+ * Search matches title and text, except for kinds whose older notices may
+ * hold a student's name (individual birthdays, early outcome notices):
+ * those are shown neutrally and never matched by search.
  */
-export async function ensureAttentionEscalation(
-  db: DB,
-  input: {
-    /** The cohort's real id, not its slug — used only for the dedupe key,
-     * which should stay stable even in the (currently impossible, but
-     * cheap to guard against) event a slug ever changed. */
-    cohortId: string;
-    cohortSlug: string;
-    cohortName: string;
-    neverContactedCount: number;
-    recipientIds: string[];
-    todayISO: string;
-  }
-): Promise<void> {
-  if (input.neverContactedCount <= 0 || !input.recipientIds.length) return;
-  const bucket = weekBucket(input.todayISO);
-  await createNotifications(
-    db,
-    input.recipientIds.map((userId) => ({
-      userId,
-      kind: "attention_escalation",
-      title: `${input.neverContactedCount} student${input.neverContactedCount === 1 ? "" : "s"} in ${input.cohortName} still need a first follow-up`,
-      body: "Flagged for attendance, never contacted.",
-      href: `/c/${input.cohortSlug}/followup`,
-      dedupeKey: `escalate:${input.cohortId}:${bucket}`,
-    }))
-  );
-}
-
-/**
- * A crusade weekend (3 day-events sharing the same after_class) has no
- * natural "the plan changed, tell people" moment the way postponing a
- * lesson does — this instead reminds everyone once the weekend is within
- * the next 7 days, so it can actually be communicated ahead of time
- * rather than showing up unannounced. One notification per weekend to
- * every recipient, same batched shape as ensureAttentionEscalation. The
- * dedupe key has no year in it (unlike birthdays) — a given cohort only
- * ever has this weekend once, so it only ever needs to fire once.
- */
-export async function ensureCrusadeReminders(
-  db: DB,
-  input: {
-    /** The cohort's real id, not its slug — used only for the dedupe key. */
-    cohortId: string;
-    cohortSlug: string;
-    crusadeEvents: { afterClass: number; date: string }[];
-    recipientIds: string[];
-    todayISO: string;
-  }
-): Promise<void> {
-  if (!input.recipientIds.length || !input.crusadeEvents.length) return;
-
-  const fridayByClass = new Map<number, string>();
-  for (const ev of input.crusadeEvents) {
-    const current = fridayByClass.get(ev.afterClass);
-    if (!current || ev.date < current) fridayByClass.set(ev.afterClass, ev.date);
-  }
-
-  for (const [afterClass, friday] of fridayByClass) {
-    const daysUntil = daysBetween(input.todayISO, friday);
-    if (daysUntil < 0 || daysUntil > 7) continue;
-    await createNotifications(
-      db,
-      input.recipientIds.map((userId) => ({
-        userId,
-        kind: "crusade_upcoming",
-        title: `Crusade weekend after Class ${afterClass} is coming up`,
-        // Fallback text only — the bell recomputes a live countdown from
-        // `data` instead of trusting this once it's more than a moment old.
-        body: daysUntil === 0 ? "Starts today" : daysUntil === 1 ? "Starts tomorrow" : `In ${daysUntil} days`,
-        href: `/c/${input.cohortSlug}/crusades`,
-        dedupeKey: `crusade:${input.cohortId}:${afterClass}`,
-        data: { kind: "crusade_upcoming", cohortId: input.cohortId, afterClass, date: friday },
-      }))
-    );
-  }
-}
-
-/**
- * A birthday isn't a discrete event, so there's no natural moment to
- * insert its notification — instead, every time a page load happens to
- * have the relevant students' data in hand, this ensures a row exists for
- * anyone whose birthday falls in the next 7 days. The unique dedupe key
- * (student + this year) means calling this on every such page load is
- * always safe and never posts the same birthday twice.
- */
-export async function ensureBirthdayNotifications(
+export async function listNotificationsPage(
   db: DB,
   userId: string,
-  students: BirthdaySource[],
-  todayISO: string
-): Promise<void> {
-  const soon = upcomingBirthdays(students, todayISO, students.length).filter((b) => b.daysUntil <= 7);
-  if (!soon.length) return;
-  const year = todayISO.slice(0, 4);
-  await createNotifications(
-    db,
-    soon.map((b) => ({
-      userId,
-      kind: "birthday",
-      title: `${b.name}'s birthday`,
-      // Fallback text only — this is what freezes stale ("In 5 days" still
-      // showing days later); the bell recomputes a live countdown from
-      // `data` instead of trusting this once it's more than a moment old.
-      body: b.daysUntil === 0 ? "Today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`,
-      dedupeKey: `birthday:${b.studentId}:${year}`,
-      data: { kind: "birthday", studentId: b.studentId, dobDay: b.day, dobMonth: b.month },
-    }))
-  );
+  opts: { filter: NotificationFilter; q?: string; cursor?: { createdAt: string; id: string } | null; limit?: number }
+): Promise<{ items: NotificationView[]; next: { createdAt: string; id: string } | null }> {
+  const limit = opts.limit ?? 30;
+  let query = db.from("notification").select(SELECT).eq("user_id", userId);
+  if (opts.filter === "unread") query = query.is("read_at", null);
+  const cats = filterCategories(opts.filter);
+  if (cats) query = query.in("kind", kindsIn(cats));
+  const q = opts.q?.trim().replace(/[%,()*\\]/g, " ").trim();
+  if (q) {
+    query = query.or(`title.ilike.%${q}%,body.ilike.%${q}%`).not("kind", "in", `(${SEARCH_EXCLUDED.join(",")})`);
+  }
+  if (opts.cursor) {
+    query = query.or(`created_at.lt.${opts.cursor.createdAt},and(created_at.eq.${opts.cursor.createdAt},id.lt.${opts.cursor.id})`);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
+  if (error) throw error;
+  const rows = ((data ?? []) as Row[]).map(toView);
+  const items = rows.slice(0, limit);
+  const last = items[items.length - 1];
+  return { items, next: rows.length > limit && last ? { createdAt: last.createdAt, id: last.id } : null };
 }
+
+/** Kinds never matched by search (older notices may name a student). */
+const SEARCH_EXCLUDED = ["birthday", "outcome_recorded"];

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBands } from "@/lib/data/cohorts";
+import { getCohortWithBands } from "@/lib/data/org";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getCrusadeEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
-import { ensureBirthdayNotifications, ensureAttentionEscalation, ensureCrusadeReminders } from "@/lib/data/notifications";
+import { sendAttentionEscalation, sendBirthdayDigest, sendCrusadeReminders } from "@/lib/notify/cohort-alerts";
+import { runStatusAlerts } from "@/lib/notify/status-alerts";
 import { aggregateCohort } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
 
@@ -14,17 +15,23 @@ import { todayISO } from "@/lib/utils";
  * cover whichever cohort's dashboard the current viewer is looking at, at
  * whatever time they happen to look. This sweeps every running cohort at
  * a fixed time instead:
- *   - birthdays: same `ensureBirthdayNotifications`, so the dedupe key
- *     guarantees it's still safe even though this may run alongside the
- *     opportunistic check too.
+ *   - birthdays: one digest per cohort with birthdays today, to its
+ *     facilitators (sendBirthdayDigest); keyed by cohort + date, so a
+ *     re-run never repeats it.
  *   - attention escalation: a cohort with students flagged for attendance
  *     who've *never* had an outcome recorded gets one summary
- *     notification (not one per student) to that cohort's own members
- *     plus every admin/leadership user, re-firing weekly if unresolved.
+ *     notification (not one per student), re-firing weekly if unresolved.
  *   - crusade reminders: a cohort's next crusade weekend, once it's
- *     within 7 days, gets one notification to that cohort's own members
- *     plus every admin/leadership user — the only way this fires reliably
- *     regardless of whether anyone happens to load that cohort's pages.
+ *     within 7 days, gets one notification.
+ *   - status alerts: each level and cohort's alert status; a confirmed
+ *     change for the worse goes one level up (lib/notify/status-alerts).
+ *
+ * Who gets what — decided by the central router (lib/notify), from the
+ * same responsibility rules as access and staffing:
+ *   - birthday digests → the cohort's facilitators only (and only from this job);
+ *   - escalations and crusade reminders → the cohort's team, plus the
+ *     leader responsible for the cohort (promotion → church → nearest
+ *     staffed level). Never "every admin" as a fallback.
  *
  * `CRON_SECRET` is the standard Vercel Cron pattern: set it as an env var
  * and Vercel automatically sends it as a bearer token on the scheduled
@@ -39,15 +46,8 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const today = todayISO();
 
-  const [{ data: cohorts, error: cohortErr }, { data: broadUsers, error: userErr }, bands] = await Promise.all([
-    admin.from("cohort").select("id, slug, name").eq("status", "running"),
-    admin.from("app_user").select("id").in("role", ["admin", "leadership"]),
-    getBands(admin),
-  ]);
+  const { data: cohorts, error: cohortErr } = await admin.from("cohort").select("id, slug, name, org_unit_id").eq("status", "running");
   if (cohortErr) throw cohortErr;
-  if (userErr) throw userErr;
-
-  const broadRecipientIds = (broadUsers ?? []).map((u) => u.id);
 
   let cohortsSwept = 0;
   let escalationsSent = 0;
@@ -59,46 +59,36 @@ export async function GET(request: Request) {
   // ones were missed. Now a single failure is isolated and reported.
   for (const cohort of cohorts ?? []) {
     try {
-      const [{ data: members, error: membersErr }, students, lessonEvents, outcomes, crusadeEvents] = await Promise.all([
-        admin.from("cohort_member").select("user_id").eq("cohort_id", cohort.id),
+      const [students, lessonEvents, outcomes, crusadeEvents] = await Promise.all([
         getStudents(admin, cohort.id),
         getLessonEvents(admin, cohort.id),
         getOutcomesForCohort(admin, cohort.id),
         getCrusadeEvents(admin, cohort.id),
       ]);
-      if (membersErr) throw membersErr;
-
-      const recipientIds = [...new Set([...(members ?? []).map((m) => m.user_id), ...broadRecipientIds])];
-      if (!recipientIds.length) {
-        cohortsSwept++;
-        continue;
-      }
-
-      const activeStudents = students.filter((s) => !s.leftAt);
-      for (const userId of recipientIds) {
-        await ensureBirthdayNotifications(admin, userId, activeStudents, today);
-      }
-
-      const agg = aggregateCohort(activeStudents, lessonEvents, bands, today);
-      const latest = latestByStudent(outcomes);
-      const neverContacted = agg.roster.filter((s) => s.status !== "On track" && !latest.has(s.id)).length;
-      if (neverContacted > 0) {
-        await ensureAttentionEscalation(admin, {
-          cohortId: cohort.id,
-          cohortSlug: cohort.slug,
-          cohortName: cohort.name,
-          neverContactedCount: neverContacted,
-          recipientIds,
-          todayISO: today,
-        });
-        escalationsSent++;
-      }
-
-      await ensureCrusadeReminders(admin, {
+      // Birthdays: one digest for today, to the facilitators.
+      await sendBirthdayDigest({
         cohortId: cohort.id,
         cohortSlug: cohort.slug,
+        cohortName: cohort.name,
+        students: students.filter((s) => !s.leftAt),
+        todayISO: today,
+      });
+
+      // Escalations and crusade reminders: team + the responsible leader.
+      const [, bands] = await getCohortWithBands(admin, cohort.id);
+      const agg = aggregateCohort(students, lessonEvents, bands, today);
+      const latest = latestByStudent(outcomes);
+      const neverContacted = agg.roster.filter(
+        (s) => !s.leftAt && (s.performance === "Needs help" || s.performance === "At risk") && !latest.has(s.id) && !s.contactedAt
+      ).length;
+      if (await sendAttentionEscalation({ cohortId: cohort.id, cohortSlug: cohort.slug, cohortName: cohort.name, neverContactedCount: neverContacted, todayISO: today })) {
+        escalationsSent++;
+      }
+      await sendCrusadeReminders({
+        cohortId: cohort.id,
+        cohortSlug: cohort.slug,
+        cohortName: cohort.name,
         crusadeEvents: crusadeEvents.map((e) => ({ afterClass: e.afterClass, date: e.date })),
-        recipientIds,
         todayISO: today,
       });
 
@@ -109,8 +99,20 @@ export async function GET(request: Request) {
     }
   }
 
+  // One-level-up status alerts: each level's and cohort's alert status vs.
+  // yesterday's; a confirmed worsening (or Critical → Needs attention) tells
+  // its parent's leaders. Isolated so a failure here never hides the above.
+  let statusAlerts: { checked: number; alerts: number } | { error: string };
+  try {
+    statusAlerts = await runStatusAlerts(today);
+  } catch (e) {
+    console.error("Status alerts failed:", e);
+    statusAlerts = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
-    ok: failedCohortIds.length === 0,
+    ok: failedCohortIds.length === 0 && !("error" in statusAlerts),
+    statusAlerts,
     cohortsSwept,
     escalationsSent,
     failedCohortIds,
