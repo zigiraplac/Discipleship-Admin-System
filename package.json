@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
     "bootstrap-admin": "tsx --env-file=.env.local scripts/bootstrap-admin.ts",
     "fix-crusade-schedule": "tsx --env-file=.env.local scripts/fix-crusade-schedule.ts"
   },
@@ -36,6 +37,7 @@
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }
