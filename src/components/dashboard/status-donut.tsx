@@ -33,7 +33,7 @@ const STROKE = 12;
  * generalized from one segment to several: each status gets its own
  * `<circle>`, sized to its share of the ring and offset by every segment
  * drawn before it, so the ring reads left-to-right as one continuous band. */
-export function StatusDonut({ segments, total }: { segments: DonutSegment[]; total: number }) {
+export function StatusDonut({ segments, total, title = "Cohort status" }: { segments: DonutSegment[]; total: number; title?: string }) {
   const radius = (SIZE - STROKE) / 2;
   const circumference = 2 * Math.PI * radius;
 
@@ -49,7 +49,7 @@ export function StatusDonut({ segments, total }: { segments: DonutSegment[]; tot
 
   return (
     <Card className="p-4">
-      <div className="text-[15px] font-bold text-ink">Cohort status</div>
+      <div className="text-[15px] font-bold text-ink">{title}</div>
 
       <div className="mt-3 flex flex-col items-center gap-3">
         <Ring3D size={SIZE} glossy={false}>

@@ -15,7 +15,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { Spinner } from "@/components/ui/spinner";
 import { recordOutcome } from "@/lib/actions/outcomes";
-import { cn } from "@/lib/utils";
+import { cn, todayISO } from "@/lib/utils";
+import { Input, Label } from "@/components/ui/input";
 import type { OutcomeKind } from "@/lib/domain/types";
 import { OUTCOME_NARRATIVE, outcomeShortLabel } from "./outcome-copy";
 
@@ -53,6 +54,7 @@ export function OutcomeModal({
   const [error, setError] = useState<string | null>(null);
   const { show } = useToast();
   const router = useRouter();
+  const [leftOn, setLeftOn] = useState(todayISO());
 
   // "Back on track" only makes sense to offer while there's an actual
   // catch-up decision to close out — showing it for a student who's never
@@ -73,7 +75,7 @@ export function OutcomeModal({
     setPending(true);
     setError(null);
     try {
-      await recordOutcome({ studentId, cohortId, kind });
+      await recordOutcome({ studentId, cohortId, kind, leftOn: kind === "left" ? leftOn : undefined });
       show(`${outcomeShortLabel(kind)} recorded for ${studentName}.`);
       setOpen(false);
       router.refresh();
@@ -125,6 +127,14 @@ export function OutcomeModal({
             );
           })}
         </div>
+
+        {kind === "left" && (
+          <div className="px-5 pb-3">
+            <Label htmlFor="left-on">Left on</Label>
+            <Input id="left-on" type="date" value={leftOn} max={todayISO()} onChange={(e) => setLeftOn(e.target.value)} className="w-44" />
+            <p className="mt-1 text-[11px] text-ink-muted">Lessons before this day still count in their attendance.</p>
+          </div>
+        )}
 
         {error && <div className="px-5 pb-1 text-xs font-medium text-accent-2-700">{error}</div>}
 

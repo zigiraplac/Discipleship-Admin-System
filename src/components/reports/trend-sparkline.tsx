@@ -17,16 +17,8 @@ const HEIGHT = 22;
  * down the page); this is a glance-only "is it heading the right way,"
  * always the full history regardless of the Month/Quarter/All toggle
  * above it (same scope `MonthChartCard` already uses). */
-export function TrendSparkline({
-  lessons,
-  enrolled,
-  bands,
-}: {
-  lessons: ReportLesson[];
-  enrolled: number;
-  bands: Bands;
-}) {
-  const months = monthlyRatesFrom(lessons, enrolled);
+export function TrendSparkline({ lessons, bands }: { lessons: ReportLesson[]; bands: Bands }) {
+  const months = monthlyRatesFrom(lessons);
   if (months.length < 2) return null;
 
   return (

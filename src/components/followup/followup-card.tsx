@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { OutcomeModal } from "@/components/outcome/outcome-modal";
 import { markStudentContacted } from "@/lib/actions/students";
+import { FollowUpPlan } from "./follow-up-plan";
 import { whatsappHref, catchupOutreachMessage } from "@/lib/domain/whatsapp";
 import { isRecorded } from "@/lib/domain/metrics";
 import { cn, todayISO } from "@/lib/utils";
@@ -41,6 +42,7 @@ export function FollowUpCard({
   currentOutcomeKind,
   lessonEvents,
   canRecord,
+  people,
 }: {
   cohortId: string;
   cohortSlug: string;
@@ -49,6 +51,8 @@ export function FollowUpCard({
   lessonEvents: LessonEventView[];
   /** True only for facilitator/admin — leadership sees this page read-only. */
   canRecord: boolean;
+  /** Who a follow-up can be assigned to (this cohort's facilitators + admins). */
+  people: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const { show } = useToast();
@@ -57,18 +61,35 @@ export function FollowUpCard({
   const overdue = student.missed > 8;
 
   const missedLessons = lessonEvents
-    .filter((e) => isRecorded(e) && e.register.attendance[student.id] !== "present")
+    // Absences still to make up (a caught-up lesson is already recovered).
+    .filter((e) => isRecorded(e) && e.register.attendance[student.id] !== "present" && !e.register.caughtUp?.includes(student.id))
     .sort((a, b) => a.globalIndex - b.globalIndex);
   const whatsappLink = student.whatsapp
     ? whatsappHref(student.whatsapp, student.country, catchupOutreachMessage(student.fullName, missedLessons))
     : null;
 
-  const statusLine = contacted
-    ? `Missed ${student.missed} lessons. Contacted ${(() => {
+  // Why are they here → were they contacted → what was decided.
+  const contactedWhen = contacted
+    ? (() => {
         const d = daysAgo(student.contactedAt!);
-        return d === 0 ? "today" : d === 1 ? "yesterday" : `${d} days ago`;
-      })()} — awaiting outcome.`
-    : `Missed ${student.missed} lessons. Not yet contacted.`;
+        return d === 0 ? "Today" : d === 1 ? "Yesterday" : `${d} days ago`;
+      })()
+    : null;
+  const steps: { label: string; value: string; done: boolean }[] = [
+    {
+      label: "Why",
+      value: `${student.performance === "Not started" ? "Struggling" : student.performance} · ${student.rate}% attendance${
+        student.currentMissStreak >= 2 ? ` · ${student.currentMissStreak} absences in a row` : ""
+      }`,
+      done: true,
+    },
+    { label: "Contacted", value: contactedWhen ?? "Not yet", done: contacted },
+    {
+      label: "Decision",
+      value: currentOutcomeKind === "resolved" ? "Was resolved — below the band again" : "Waiting (catch up, or leaving)",
+      done: false,
+    },
+  ];
 
   function handleMarkContacted() {
     startTransition(async () => {
@@ -108,7 +129,24 @@ export function FollowUpCard({
         )}
       </div>
 
-      <div className="mx-4 rounded-control bg-page px-3 py-2.5 text-xs text-ink-secondary">{statusLine}</div>
+      <ol className="mx-4 flex flex-col gap-1.5 rounded-control bg-page px-3 py-2.5">
+        {steps.map((s) => (
+          <li key={s.label} className="flex items-baseline gap-2 text-xs">
+            <span className={cn("size-1.5 flex-none translate-y-[-1px] rounded-full", s.done ? "bg-accent" : "bg-ink-faint")} />
+            <span className="w-[68px] flex-none font-semibold text-ink-tertiary">{s.label}</span>
+            <span className="text-ink-secondary">{s.value}</span>
+          </li>
+        ))}
+      </ol>
+      <FollowUpPlan
+        studentId={student.id}
+        cohortId={cohortId}
+        assigneeId={student.followUpAssignee}
+        nextOn={student.followUpNextOn}
+        people={people}
+        canEdit={canRecord}
+        className="mx-4 mt-2.5"
+      />
 
       <div className="flex gap-2 p-4 pt-3">
         {canRecord ? (

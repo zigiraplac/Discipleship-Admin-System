@@ -45,7 +45,7 @@ export function CatchupChecklist({
   const missed = useMemo(
     () =>
       lessonEvents
-        .filter((e) => isRecorded(e) && e.register.attendance[studentId] !== "present")
+        .filter((e) => isRecorded(e) && e.register.attendance[studentId] !== "present" && !e.register.caughtUp?.includes(studentId))
         .sort((a, b) => b.globalIndex - a.globalIndex),
     [lessonEvents, studentId]
   );

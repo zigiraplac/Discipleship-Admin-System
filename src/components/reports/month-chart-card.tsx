@@ -5,16 +5,8 @@ import { monthLabel, monthlyRatesFrom, type ReportLesson } from "./report-utils"
 
 /** Every month the cohort has run — whole-cohort, independent of the
  * Month/Quarter/All selector. */
-export function MonthChartCard({
-  lessons,
-  enrolled,
-  bands,
-}: {
-  lessons: ReportLesson[];
-  enrolled: number;
-  bands: Bands;
-}) {
-  const monthly = monthlyRatesFrom(lessons, enrolled);
+export function MonthChartCard({ lessons, bands }: { lessons: ReportLesson[]; bands: Bands }) {
+  const monthly = monthlyRatesFrom(lessons);
 
   return (
     <Card className="p-[18px]">

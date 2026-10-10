@@ -1,7 +1,8 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { getCohortWithBands } from "@/lib/data/org";
 import { createClient } from "@/lib/supabase/server";
-import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
@@ -18,13 +19,15 @@ export default async function CatchupPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
-  if (!NAV_BY_ROLE[user.role].includes("catchup")) notFound();
+  await requireUser();
 
   const supabase = await createClient();
-  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
+  const [cohort, bands] = await getCohortWithBands(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_followups")) notFound();
 
   const [allStudents, lessonEvents, outcomes] = await Promise.all([
     getStudents(supabase, cohortId),
@@ -32,20 +35,20 @@ export default async function CatchupPage({
     getOutcomesForCohort(supabase, cohortId),
   ]);
 
-  const students = allStudents.filter((s) => !s.leftAt);
-  const agg = aggregateCohort(students, lessonEvents, bands, todayISO());
+  const today = todayISO();
+  const agg = aggregateCohort(allStudents, lessonEvents, bands, today);
   const latest = latestByStudent(outcomes);
-  const canRecord = user.role === "facilitator" || user.role === "admin";
+  const canRecord = caps.has("manage_followups");
 
   // Everyone with a live "catchup" decision on record — regardless of
   // current status, since "every missed lesson made up" (Ready to update)
   // typically also means their rate has recovered to "On track".
   const entries: CatchupEntry[] = agg.roster
-    .filter((s) => latest.get(s.id)?.kind === "catchup")
+    .filter((s) => !s.leftAt && latest.get(s.id)?.kind === "catchup")
     .sort((a, b) => a.rate - b.rate)
     .map((student) => {
       const outcome = latest.get(student.id)!;
-      return { student, outcome, sinceProgress: attendanceSince(student.id, lessonEvents, outcome.recordedAt) };
+      return { student, outcome, sinceProgress: attendanceSince(student, lessonEvents, outcome.recordedAt, today) };
     });
 
   const onCatchup = entries.filter((e) => e.student.missed > 0);

@@ -6,15 +6,7 @@ import { classRateFrom, type ReportLesson } from "./report-utils";
 
 /** Whole-cohort curriculum progress — deliberately not period-filtered
  * (per spec: "taught" here means recorded-ever, not recorded-in-period). */
-export function ByClassCard({
-  lessons,
-  enrolled,
-  bands,
-}: {
-  lessons: ReportLesson[];
-  enrolled: number;
-  bands: Bands;
-}) {
+export function ByClassCard({ lessons, bands }: { lessons: ReportLesson[]; bands: Bands }) {
   return (
     <Card className="overflow-hidden">
       <div className="px-[18px] pt-4 pb-3.5 text-[15px] font-bold text-ink">By class</div>
@@ -22,7 +14,7 @@ export function ByClassCard({
         {CURRICULUM.map((cls, classIndex) => {
           const taught = lessons.filter((l) => l.classIndex === classIndex && l.recorded).length;
           const total = cls.lessons.length;
-          const rate = classRateFrom(lessons, classIndex, enrolled);
+          const rate = classRateFrom(lessons, classIndex);
           const tone = rate != null ? toneForRate(rate, bands.activeThreshold, bands.helpThreshold) : "grey";
 
           return (

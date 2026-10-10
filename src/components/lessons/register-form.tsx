@@ -20,6 +20,9 @@ export interface RegisterRosterEntry {
   rate: number;
   attended: number;
   expected: number;
+  /** Absent at this lesson and made it up later — the absence stays as
+   * recorded and can't be flipped to present here (undo the catch-up first). */
+  caughtUp?: boolean;
 }
 
 /** A student no longer in the cohort — shown as a disabled tile (not
@@ -55,10 +58,14 @@ export interface RegisterFormProps {
   /** True when the signed-in user may tap tiles, enter scores, and save. */
   editable: boolean;
   enrolled: number;
-  /** Cohort-wide totals excluding this lesson's own register, used to
-   * project "cohort after saving" from the live draft. */
-  recordedCountExcludingThis: number;
+  /** Cohort-wide seat totals used to project "cohort after saving" from the
+   * live draft (same seat rule as every other rate): present marks from
+   * every other lesson, and every seat owed so far including this one. */
   totalPresentExcludingThis: number;
+  totalExpected: number;
+  /** Students who'd joined by this lesson's date — only their marks count
+   * toward the cohort rate. */
+  countedIds: string[];
   activeThreshold: number;
   helpThreshold: number;
 }
@@ -79,8 +86,9 @@ export function RegisterForm({
   isFuture,
   editable,
   enrolled,
-  recordedCountExcludingThis,
   totalPresentExcludingThis,
+  totalExpected,
+  countedIds,
   activeThreshold,
   helpThreshold,
 }: RegisterFormProps) {
@@ -96,6 +104,7 @@ export function RegisterForm({
 
   function toggle(id: string) {
     if (!editable) return;
+    if (roster.find((r) => r.id === id)?.caughtUp) return;
     const next: "present" | "absent" = isPresent(id) ? "absent" : "present";
     setAttendance((prev) => ({ ...prev, [id]: next }));
   }
@@ -133,11 +142,11 @@ export function RegisterForm({
 
   const thisLessonPct = isFuture ? null : enrolled ? Math.round((presentCount / enrolled) * 100) : null;
 
-  const recordedCountAfter = recordedCountExcludingThis + 1;
+  const countedPresent = countedIds.filter((id) => isPresent(id)).length;
   const projectedPct = isFuture
     ? null
-    : enrolled && recordedCountAfter
-      ? Math.round(((totalPresentExcludingThis + presentCount) / (enrolled * recordedCountAfter)) * 100)
+    : totalExpected
+      ? Math.round(((totalPresentExcludingThis + countedPresent) / totalExpected) * 100)
       : 0;
 
   let buttonLabel: string;
@@ -217,7 +226,7 @@ export function RegisterForm({
                 key={entry.id}
                 entry={entry}
                 present={isPresent(entry.id)}
-                editable={editable}
+                editable={editable && !entry.caughtUp}
                 onToggle={() => toggle(entry.id)}
               />
             ))}
@@ -231,7 +240,7 @@ export function RegisterForm({
           {filteredLeftStudents.length > 0 && (
             <div className="mt-4 border-t border-divider pt-4">
               <div className="mb-3 text-xs text-ink-muted">
-                No longer with the cohort — not counted here, can&rsquo;t be marked.
+                No longer with the cohort — their mark is kept as history and can&rsquo;t be changed.
               </div>
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
                 {filteredLeftStudents.map((entry) => (
@@ -341,7 +350,7 @@ function StudentTile({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-semibold text-ink">{entry.fullName}</span>
         <span className="block text-[11px] text-ink-muted">
-          {present ? `${entry.rate}% · ${entry.attended}/${entry.expected}` : "Absent"}
+          {present ? `${entry.rate}% · ${entry.attended}/${entry.expected}` : entry.caughtUp ? "Absent · caught up later" : "Absent"}
         </span>
       </span>
     </div>

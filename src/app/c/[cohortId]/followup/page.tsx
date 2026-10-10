@@ -1,7 +1,10 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { getCohortWithBands } from "@/lib/data/org";
 import { createClient } from "@/lib/supabase/server";
-import { getCohort, getBands } from "@/lib/data/cohorts";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCohortPeople } from "@/lib/data/people";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents } from "@/lib/data/lessons";
 import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
@@ -19,25 +22,29 @@ export default async function FollowUpPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
-  if (!NAV_BY_ROLE[user.role].includes("followup")) notFound();
+  await requireUser();
 
   const supabase = await createClient();
-  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
+  const [cohort, bands] = await getCohortWithBands(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_followups")) notFound();
 
-  const [allStudents, lessonEvents, outcomes] = await Promise.all([
+  // The cohort lookup above went through RLS, so this viewer has access to the
+  // cohort; the people list itself needs the service role because
+  // facilitators can't list each other.
+  const [allStudents, lessonEvents, outcomes, people] = await Promise.all([
     getStudents(supabase, cohortId),
     getLessonEvents(supabase, cohortId),
     getOutcomesForCohort(supabase, cohortId),
+    getCohortPeople(createAdminClient(), cohortId),
   ]);
 
-  // A student marked "left" is done being tracked here — same as before.
-  const students = allStudents.filter((s) => !s.leftAt);
-  const agg = aggregateCohort(students, lessonEvents, bands, todayISO());
+  const agg = aggregateCohort(allStudents, lessonEvents, bands, todayISO());
   const latest = latestByStudent(outcomes);
-  const canRecord = user.role === "facilitator" || user.role === "admin";
+  const canRecord = caps.has("manage_followups");
 
   // A "resolved" outcome that still leaves someone below the band (rare —
   // only possible if the plan didn't actually fix things, or a manual
@@ -45,8 +52,9 @@ export default async function FollowUpPage({
   // decision was closed, but they still need a fresh one. Anyone with a
   // live "catchup" outcome belongs on the Catch ups page instead.
   const isToContact = (s: StudentAggregate) => !latest.has(s.id) || latest.get(s.id)?.kind === "resolved";
+  // A student who has left is done being tracked here.
   const entries: FollowUpEntry[] = agg.roster
-    .filter((s) => s.status !== "On track" && isToContact(s))
+    .filter((s) => !s.leftAt && s.performance !== "On track" && s.performance !== "Not started" && isToContact(s))
     .sort((a, b) => a.rate - b.rate)
     .map((student) => ({ student, currentOutcomeKind: latest.get(student.id)?.kind ?? null }));
 
@@ -65,6 +73,7 @@ export default async function FollowUpPage({
         cohortSlug={cohort.slug}
         lessonEvents={lessonEvents}
         canRecord={canRecord}
+        people={people}
       />
 
       <HowFollowUpWorksCard />

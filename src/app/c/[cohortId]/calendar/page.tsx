@@ -1,5 +1,6 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { NAV_BY_ROLE, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCohort } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
@@ -30,13 +31,15 @@ export default async function CalendarPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
-  if (!NAV_BY_ROLE[user.role].includes("calendar")) notFound();
+  await requireUser();
 
   const supabase = await createClient();
   const cohort = await getCohort(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_cohort")) notFound();
   const cohortSlug = cohort.slug;
 
   const [allStudents, crusadeEvents] = await Promise.all([
@@ -50,7 +53,7 @@ export default async function CalendarPage({
   const students = allStudents.filter((s) => !s.leftAt);
 
   let lessonEvents: CalendarLessonEvent[];
-  if (user.role === "teacher") {
+  if (!caps.has("view_attendance")) {
     const pub = await getLessonEventsPublic(supabase, cohortId);
     lessonEvents = pub.map((p) => ({
       eventId: p.eventId,
@@ -61,10 +64,9 @@ export default async function CalendarPage({
       rate: p.rate,
     }));
   } else {
-    const activeIds = new Set(students.map((s) => s.id));
     const full = await getLessonEvents(supabase, cohortId);
     lessonEvents = full.map((e) => {
-      const stats = lessonStats(e, activeIds);
+      const stats = lessonStats(e, allStudents);
       return {
         eventId: e.eventId,
         date: e.date,
@@ -76,9 +78,9 @@ export default async function CalendarPage({
     });
   }
 
-  const canOpenLesson = user.role === "facilitator" || user.role === "admin";
-  const hasLessonsNav = NAV_BY_ROLE[user.role].includes("lessons");
-  const canOpenStudent = NAV_BY_ROLE[user.role].includes("students");
+  const canOpenLesson = caps.has("view_attendance");
+  const hasLessonsNav = caps.has("view_cohort");
+  const canOpenStudent = caps.has("view_student");
 
   const birthdays = students
     .filter((s) => s.dobDay != null && s.dobMonth != null)

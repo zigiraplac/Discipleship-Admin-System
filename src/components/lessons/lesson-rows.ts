@@ -1,4 +1,4 @@
-import { isRecorded, lessonStats } from "@/lib/domain/metrics";
+import { isRecorded, lessonStats, type SeatStudent } from "@/lib/domain/metrics";
 import { toneForRate } from "@/components/ui/progress-bar";
 import type { LessonEventView, Bands } from "@/lib/domain/types";
 import type { LessonPublicView } from "@/lib/data/lessons";
@@ -13,14 +13,15 @@ import type { LessonRow } from "./lessons-browser";
  */
 export function buildLessonRows(
   lessonEvents: LessonEventView[],
-  activeIds: Set<string>,
+  /** Every student — each lesson counts whoever was enrolled that day. */
+  allStudents: SeatStudent[],
   bands: Bands,
   today: string
 ): LessonRow[] {
   return lessonEvents.map((ev) => {
     const recorded = isRecorded(ev);
     const status: LessonRow["status"] = recorded ? "recorded" : ev.date <= today ? "missing" : "upcoming";
-    const stats = lessonStats(ev, activeIds);
+    const stats = lessonStats(ev, allStudents);
     const ratePct = stats ? stats.rate : null;
     return {
       eventId: ev.eventId,
@@ -30,7 +31,7 @@ export function buildLessonRows(
       lessonRef: ev.lessonRef,
       lessonTitle: ev.lessonTitle,
       status,
-      presentText: stats ? `${stats.present}/${activeIds.size}` : "—",
+      presentText: stats ? `${stats.present}/${stats.expected}` : "—",
       ratePct,
       tone: ratePct !== null ? toneForRate(ratePct, bands.activeThreshold, bands.helpThreshold) : "grey",
       edited: ev.edited,

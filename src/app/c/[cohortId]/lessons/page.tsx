@@ -1,8 +1,9 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth";
+import { getCohortWithBands } from "@/lib/data/org";
 import { createClient } from "@/lib/supabase/server";
-import { getCohort, getBands } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { TOTAL_LESSONS } from "@/lib/domain/curriculum";
@@ -18,19 +19,21 @@ export default async function LessonsPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createClient();
 
-  // getBands doesn't depend on the cohort at all, so it runs alongside
-  // resolving it rather than waiting behind it.
-  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
+  // Bands come from the cohort's own branch (a level can set stricter ones).
+  const [cohort, bands] = await getCohortWithBands(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_cohort")) notFound();
 
   const today = todayISO();
   let rows: LessonRow[] = [];
 
-  if (user.role === "teacher") {
+  if (!caps.has("view_attendance")) {
     const pub = await getLessonEventsPublic(supabase, cohortId);
     rows = buildLessonRowsPublic(pub, bands, today);
   } else {
@@ -41,8 +44,7 @@ export default async function LessonsPage({
     // Left students stop counting toward the cohort's own numbers, same
     // as everywhere else — otherwise this page's rates disagree with
     // Dashboard/Attention for a cohort with any departures.
-    const activeIds = new Set(allStudents.filter((s) => !s.leftAt).map((s) => s.id));
-    rows = buildLessonRows(lessonEvents, activeIds, bands, today);
+    rows = buildLessonRows(lessonEvents, allStudents, bands, today);
   }
 
   const recordedCount = rows.filter((r) => r.status === "recorded").length;
@@ -72,7 +74,7 @@ export default async function LessonsPage({
         />
       </StatGrid>
 
-      <LessonsBrowser cohortId={cohortId} cohortSlug={cohort.slug} role={user.role} rows={rows} />
+      <LessonsBrowser cohortId={cohortId} cohortSlug={cohort.slug} canOpenRegister={caps.has("view_attendance")} canPostpone={caps.has("postpone_lesson")} rows={rows} />
     </div>
   );
 }

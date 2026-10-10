@@ -14,7 +14,8 @@ import { HighlightCards } from "./highlight-cards";
 import { WhatsChangedCard } from "@/components/shared/whats-changed-card";
 import { TrendSparkline } from "./trend-sparkline";
 import { downloadLessonsCsv } from "./csv-export";
-import { formatRangeLabel, inRange, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
+import { formatRangeLabel, inRange, reportSeats, resolvePeriodRange, type Period, type ReportLesson } from "./report-utils";
+import { seatTotals } from "@/lib/domain/metrics";
 
 const PERIOD_OPTIONS: SegmentedOption<Period>[] = [
   { value: "Month", label: "Month" },
@@ -63,12 +64,11 @@ export function ReportsView({
   const recordedInPeriod = useMemo(() => inPeriod.filter((l) => l.recorded), [inPeriod]);
 
   const lessonsTaught = inPeriod.length;
-  const sumPresent = recordedInPeriod.reduce((a, l) => a + (l.present ?? 0), 0);
-  const sumAbsent = recordedInPeriod.reduce((a, l) => a + (l.absent ?? 0), 0);
-  const attendanceRate =
-    recordedInPeriod.length && enrolled
-      ? Math.round((sumPresent / (enrolled * recordedInPeriod.length)) * 100)
-      : null;
+  // Same seat rule as every other screen: a due lesson nobody recorded
+  // still owes its seats, so it counts as missed rather than vanishing.
+  const seats = seatTotals(inPeriod.map(reportSeats));
+  const sumAbsent = seats.expected - seats.present;
+  const attendanceRate = seats.rate;
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -107,7 +107,7 @@ export function ReportsView({
           label="Attendance"
           value={attendanceRate != null ? `${attendanceRate}%` : "—"}
           sub={`target ${bands.activeThreshold}%`}
-          trend={<TrendSparkline lessons={lessons} enrolled={enrolled} bands={bands} />}
+          trend={<TrendSparkline lessons={lessons} bands={bands} />}
         />
         <StatCard label="Absences" value={sumAbsent} sub="seats missed" />
         <StatCard
@@ -139,10 +139,10 @@ export function ReportsView({
       </StatGrid>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <ByClassCard lessons={lessons} enrolled={enrolled} bands={bands} />
+        <ByClassCard lessons={lessons} bands={bands} />
         <div className="flex flex-col gap-4">
-          <MonthChartCard lessons={lessons} enrolled={enrolled} bands={bands} />
-          <HighlightCards recordedInPeriod={recordedInPeriod} enrolled={enrolled} />
+          <MonthChartCard lessons={lessons} bands={bands} />
+          <HighlightCards recordedInPeriod={recordedInPeriod} />
         </div>
       </div>
 

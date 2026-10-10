@@ -1,5 +1,6 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { requireUser, NAV_BY_ROLE } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCohort } from "@/lib/data/cohorts";
@@ -22,13 +23,15 @@ export default async function CrusadesPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
-  if (!NAV_BY_ROLE[user.role].includes("crusades")) notFound();
+  await requireUser();
 
   const supabase = await createClient();
   const cohort = await getCohort(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_cohort")) notFound();
 
   const [crusadeEvents, reportsByAfterClass, majorChanges] = await Promise.all([
     getCrusadeEvents(supabase, cohortId),
@@ -37,7 +40,7 @@ export default async function CrusadesPage({
   ]);
   const crusadeChanges = majorChanges.filter((c) => c.changeKind === "crusade");
 
-  const canRecord = user.role === "facilitator" || user.role === "admin";
+  const canRecord = caps.has("record_crusade");
   const today = todayISO();
 
   return (

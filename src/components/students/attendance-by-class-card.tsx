@@ -20,22 +20,18 @@ export function AttendanceByClassCard({
   cohortId,
   studentId,
   lessonEvents,
-  caughtUpEventIds,
   canRecord,
 }: {
   cohortId: string;
   studentId: string;
   lessonEvents: LessonEventView[];
-  /** Present marks that came from correcting a lesson via catch-up —
-   * shown amber instead of blue so it reads differently from being there
-   * on the day. */
-  caughtUpEventIds: string[];
   /** Lets a mistaken catch-up mark be undone right from the grid — the
    * checklist only ever adds a mark, so this is the one place to reverse it. */
   canRecord: boolean;
 }) {
   const router = useRouter();
-  const [caughtUp, setCaughtUp] = useState<Set<string>>(new Set(caughtUpEventIds));
+  // Catch-ups undone here, shown as plain absences until the page refreshes.
+  const [undone, setUndone] = useState<Set<string>>(new Set());
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   async function undo(eventId: string) {
@@ -43,11 +39,7 @@ export function AttendanceByClassCard({
     setPendingId(eventId);
     try {
       await toggleLessonCatchup({ studentId, cohortId, eventId, caughtUp: false });
-      setCaughtUp((prev) => {
-        const next = new Set(prev);
-        next.delete(eventId);
-        return next;
-      });
+      setUndone((prev) => new Set(prev).add(eventId));
       router.refresh();
     } catch {
       // The mark stays amber and clickable — the click simply didn't take.
@@ -66,7 +58,9 @@ export function AttendanceByClassCard({
       </CardHeader>
       <div className="flex flex-col gap-3 px-[18px] py-4">
         {CURRICULUM.map((cls, classIndex) => {
-          const marks = studentClassMarks(studentId, lessonEvents, classIndex, caughtUp);
+          const marks = studentClassMarks(studentId, lessonEvents, classIndex).map((m) =>
+            m.status === "caught-up" && undone.has(m.ev.eventId) ? { ...m, status: "absent" as const } : m
+          );
 
           // A class with a real Part A/Part B split (per curriculum.ts) gets
           // its tile strip broken into one labeled sub-row per part instead

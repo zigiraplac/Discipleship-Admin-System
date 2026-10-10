@@ -11,12 +11,12 @@ import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
 import { buttonVariants } from "@/components/ui/button";
 import { MarkOnTrackButton } from "@/components/outcome/mark-on-track-button";
-import { outcomeShortLabel, outcomeTone } from "@/components/outcome/outcome-copy";
 import { lessonAt, TOTAL_LESSONS } from "@/lib/domain/curriculum";
 import { cn } from "@/lib/utils";
+import { LIFECYCLE_LABELS, studentIntervention, studentLifecycle, studentPerformance } from "@/lib/domain/student-state";
 import type { Bands, OutcomeKind, Status, StudentAggregate } from "@/lib/domain/types";
 
-type Filter = "all" | "On track" | "Needs help" | "At risk";
+export type Filter = "all" | "On track" | "Needs help" | "At risk";
 type SortKey = "name" | "attended" | "attendance" | "status";
 
 const STATUS_RANK: Record<Status, number> = { "On track": 0, "Needs help": 1, "At risk": 2 };
@@ -33,29 +33,42 @@ export function StudentsTable({
   cohortSlug,
   roster,
   outcomesByStudent,
+  inactiveIds = [],
   bands,
+  cohortFinished = false,
+  graduatedIds = [],
+  showIntervention = true,
+  initialFilter = "all",
+  today,
   headerAction,
 }: {
   cohortId: string;
   cohortSlug: string;
   roster: StudentAggregate[];
   outcomesByStudent: Record<string, OutcomeKind>;
+  /** Still enrolled, but absent at their last few recorded lessons in a row. */
+  inactiveIds?: string[];
   bands: Bands;
+  /** Everyone still enrolled has completed. */
+  cohortFinished?: boolean;
+  /** Of those, who meets the graduation rule (computed server-side). */
+  graduatedIds?: string[];
+  /** Follow-up/catch-up state is pastoral — only for those who may see it. */
+  showIntervention?: boolean;
+  initialFilter?: Filter;
+  today: string;
   headerAction?: React.ReactNode;
 }) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>(initialFilter);
+  const inactive = useMemo(() => new Set(inactiveIds), [inactiveIds]);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = roster.filter((s) => {
-      // A left student always displays "No longer with us" regardless of
-      // their frozen status — matching them into a specific On track /
-      // Needs help / At risk filter would surface someone whose visible
-      // label contradicts the filter that found them.
-      const left = s.leftAt != null || outcomesByStudent[s.id] === "left";
-      if (filter !== "all" && (left || s.status !== filter)) return false;
+      // Performance filters only ever match students still in the programme.
+      if (filter !== "all" && (s.leftAt != null || s.performance !== filter)) return false;
       if (q && !s.fullName.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -65,14 +78,11 @@ export function StudentsTable({
       if (sort.key === "name") return dir * a.fullName.localeCompare(b.fullName);
       if (sort.key === "attended") return dir * (a.attended - b.attended);
       if (sort.key === "attendance") return dir * (a.rate - b.rate);
-      // status: left always ranks last regardless of direction — it's not
-      // part of the On track/Needs help/At risk severity scale being sorted.
-      const aLeft = a.leftAt != null || outcomesByStudent[a.id] === "left";
-      const bLeft = b.leftAt != null || outcomesByStudent[b.id] === "left";
-      if (aLeft !== bLeft) return aLeft ? 1 : -1;
+      // Left students always last — they're off the performance scale.
+      if ((a.leftAt != null) !== (b.leftAt != null)) return a.leftAt ? 1 : -1;
       return dir * (STATUS_RANK[a.status] - STATUS_RANK[b.status]);
     });
-  }, [roster, filter, query, outcomesByStudent, sort]);
+  }, [roster, filter, query, sort]);
 
   return (
     <>
@@ -91,49 +101,76 @@ export function StudentsTable({
       <Table>
         <THead>
           <SortableTH label="Student" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <TH>Completed through</TH>
-          <SortableTH
-            label="Lessons taken"
-            sortKey="attended"
-            sort={sort}
-            onSort={(k) => setSort((s) => nextSort(s, k))}
-          />
+          <TH>Lifecycle</TH>
+          <SortableTH label="Performance" sortKey="status" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          {showIntervention && <TH>Intervention</TH>}
           <SortableTH label="Attendance" sortKey="attendance" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <SortableTH label="Status" sortKey="status" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          <SortableTH label="Progress" sortKey="attended" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <TH align="right" />
         </THead>
         <tbody>
           {rows.map((s) => {
-            const outcome = outcomesByStudent[s.id];
+            const outcome = outcomesByStudent[s.id] ?? null;
+            const lifecycle = studentLifecycle(s, cohortFinished, graduatedIds.includes(s.id));
+            const performance = studentPerformance(s, lifecycle);
+            const intervention = studentIntervention(s, outcome, today);
             const pct = s.expected === 0 ? null : s.rate;
-            const left = s.leftAt != null || outcome === "left";
             return (
-              <TR key={s.id} className={cn(left && "opacity-60")}>
+              <TR key={s.id} className={cn(lifecycle === "left" && "opacity-60")}>
                 <TD>
                   <span className="flex items-center gap-2.5">
                     <Avatar name={s.fullName} />
                     <span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="block text-[13px] font-semibold text-ink">{s.fullName}</span>
-                        {left && <Pill tone="grey">Left</Pill>}
-                      </span>
+                      <span className="block text-[13px] font-semibold text-ink">{s.fullName}</span>
                       <span className="block text-[11px] text-ink-muted">{s.country ?? "—"}</span>
                     </span>
                   </span>
                 </TD>
-                <TD className="text-[12px] text-ink-muted">
-                  {left || s.lastAttendedGlobalIndex == null ? (
-                    left ? "—" : <span className="text-ink-faint">Not started</span>
+                <TD>
+                  <span className="flex flex-wrap items-center gap-1">
+                    <Pill tone={lifecycle === "left" || lifecycle === "registered" ? "grey" : lifecycle === "graduated" ? "green" : lifecycle === "completed" ? "teal" : "cyan"}>
+                      {LIFECYCLE_LABELS[lifecycle]}
+                    </Pill>
+                    {lifecycle === "active" && inactive.has(s.id) && (
+                      <span title="Absent at their last few recorded lessons in a row">
+                        <Pill tone="magenta">Inactive</Pill>
+                      </span>
+                    )}
+                  </span>
+                </TD>
+                <TD>
+                  {performance === null ? (
+                    <span className="text-[12px] text-ink-faint">—</span>
+                  ) : performance === "Not started" ? (
+                    <Pill tone="grey">Not started</Pill>
                   ) : (
-                    (() => {
-                      const l = lessonAt(s.lastAttendedGlobalIndex);
-                      return `${l.ref} — ${l.title}`;
-                    })()
+                    <StatusPill status={performance} />
                   )}
                 </TD>
-                <TD className="tabular" title={`${s.attended} of ${s.expected} recorded lessons so far`}>
-                  {s.attended} / {TOTAL_LESSONS}
-                </TD>
+                {showIntervention && (
+                  <TD>
+                    {intervention.kind === "catch-up" ? (
+                      intervention.complete ? (
+                        <span className="flex flex-col items-start gap-1">
+                          <Pill tone="green">Catch-up done</Pill>
+                          <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
+                        </span>
+                      ) : (
+                        <Pill tone="amber">
+                          Catch-up {intervention.recovered}/{intervention.toRecover}
+                        </Pill>
+                      )
+                    ) : intervention.kind === "follow-up" ? (
+                      <Pill tone={intervention.overdue ? "magenta" : "yellow"}>
+                        {intervention.overdue ? "Follow-up overdue" : intervention.contacted ? "Contacted" : "Follow-up"}
+                      </Pill>
+                    ) : outcome === "resolved" && lifecycle !== "left" ? (
+                      <span className="text-[12px] text-ink-muted">Resolved</span>
+                    ) : (
+                      <span className="text-[12px] text-ink-faint">—</span>
+                    )}
+                  </TD>
+                )}
                 <TD>
                   <span className="flex items-center gap-2.5">
                     <ProgressBar
@@ -143,37 +180,22 @@ export function StudentsTable({
                     />
                     <span className="text-[12px] font-semibold tabular">{pct === null ? "—" : `${pct}%`}</span>
                   </span>
-                </TD>
-                <TD>
-                  {left ? (
-                    <Pill tone="grey">No longer with us</Pill>
-                  ) : outcome === "resolved" && s.status !== "On track" ? (
-                    // A "resolved" decision only holds while it's still
-                    // true. The moment live attendance disagrees (they've
-                    // fallen behind again since being marked back on
-                    // track), this record is stale — show the current band
-                    // instead of a frozen "Back on track" pill. Matches
-                    // followup/page.tsx's existing handling of the same
-                    // relapse case.
-                    <StatusPill status={s.status} />
-                  ) : outcome === "catchup" && s.missed === 0 ? (
-                    <span className="flex flex-col items-start gap-1">
-                      <Pill tone="yellow">Ready to update</Pill>
-                      <MarkOnTrackButton studentId={s.id} cohortId={cohortId} studentName={s.fullName} size="row" />
+                  {s.recovered > 0 && (
+                    <span className="mt-0.5 block text-[11px] text-ink-muted" title="Counting lessons made up through catch-up">
+                      {s.effectiveRate}% with {s.recovered} caught up
                     </span>
-                  ) : outcome ? (
-                    <Pill tone={outcomeTone(outcome)}>{outcomeShortLabel(outcome)}</Pill>
-                  ) : s.expected === 0 ? (
-                    // `status` defaults to "On track" here purely so a
-                    // just-enrolled student isn't flagged "At risk" with
-                    // nothing recorded since they joined (metrics.ts) — but
-                    // showing that as the same green "On track" pill next to
-                    // a real 0/80 reads as a contradiction. This is a
-                    // distinct, neutral "hasn't started yet," not a judged
-                    // good rate.
-                    <Pill tone="grey">Not started</Pill>
+                  )}
+                </TD>
+                <TD className="text-[12px] text-ink-muted" title={`${s.attended} of ${s.expected} recorded lessons attended`}>
+                  {s.lastAttendedGlobalIndex == null ? (
+                    <span className="text-ink-faint">—</span>
                   ) : (
-                    <StatusPill status={s.status} />
+                    <>
+                      <span className="block font-semibold tabular text-ink-secondary">
+                        {s.attended} / {TOTAL_LESSONS}
+                      </span>
+                      <span className="block">Through {lessonAt(s.lastAttendedGlobalIndex).ref}</span>
+                    </>
                   )}
                 </TD>
                 <TD align="right">
@@ -189,7 +211,7 @@ export function StudentsTable({
           })}
           {rows.length === 0 && (
             <TR>
-              <TD colSpan={6} className="py-6 text-center text-ink-faint">
+              <TD colSpan={showIntervention ? 7 : 6} className="py-6 text-center text-ink-faint">
                 No students match.
               </TD>
             </TR>

@@ -1,7 +1,7 @@
 import { Card, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/card";
 import { ProgressBar, toneForRate } from "@/components/ui/progress-bar";
 import { monthLabel } from "@/components/reports/report-utils";
-import { studentMonthlyRates } from "@/lib/domain/metrics";
+import { studentMonthlyRates, type SeatStudent } from "@/lib/domain/metrics";
 import type { Bands, LessonEventView } from "@/lib/domain/types";
 
 /** Same shape as the cohort's own "Month over month" chart (Reports),
@@ -9,15 +9,17 @@ import type { Bands, LessonEventView } from "@/lib/domain/types";
  * the only place a student's own profile shows whether they're actually
  * trending up or down recently. */
 export function AttendanceTrendCard({
-  studentId,
+  student,
   lessonEvents,
   bands,
+  today,
 }: {
-  studentId: string;
+  student: SeatStudent;
   lessonEvents: LessonEventView[];
   bands: Bands;
+  today: string;
 }) {
-  const monthly = studentMonthlyRates(studentId, lessonEvents);
+  const monthly = studentMonthlyRates(student, lessonEvents, today);
   if (monthly.length < 2) return null;
 
   return (

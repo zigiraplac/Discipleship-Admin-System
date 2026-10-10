@@ -20,6 +20,7 @@ export function FollowUpBoard({
   cohortSlug,
   lessonEvents,
   canRecord,
+  people,
 }: {
   entries: FollowUpEntry[];
   needsContact: FollowUpEntry[];
@@ -28,6 +29,7 @@ export function FollowUpBoard({
   cohortSlug: string;
   lessonEvents: LessonEventView[];
   canRecord: boolean;
+  people: { id: string; name: string }[];
 }) {
   const [view, setView] = useState<ViewMode>("list");
 
@@ -42,6 +44,7 @@ export function FollowUpBoard({
           currentOutcomeKind={currentOutcomeKind}
           lessonEvents={lessonEvents}
           canRecord={canRecord}
+          people={people}
         />
       ))}
       {roster.length === 0 && (
@@ -89,7 +92,7 @@ export function FollowUpBoard({
       </div>
       {view === "list" ? (
         <Card className="overflow-hidden">
-          <FollowUpList entries={entries} cohortId={cohortId} cohortSlug={cohortSlug} lessonEvents={lessonEvents} canRecord={canRecord} />
+          <FollowUpList entries={entries} cohortId={cohortId} cohortSlug={cohortSlug} lessonEvents={lessonEvents} canRecord={canRecord} people={people} />
         </Card>
       ) : (
         <GroupTabs tabs={tabs} />

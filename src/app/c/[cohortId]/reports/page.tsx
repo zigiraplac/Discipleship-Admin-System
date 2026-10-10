@@ -1,12 +1,14 @@
+import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { NAV_BY_ROLE, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
+import { getCohortWithBands } from "@/lib/data/org";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getBands, getCohort, getScheduleSegments } from "@/lib/data/cohorts";
+import { getScheduleSegments } from "@/lib/data/cohorts";
 import { getStudents } from "@/lib/data/students";
 import { getLessonEvents, getLessonEventsPublic } from "@/lib/data/lessons";
 import { getAuditLogForCohort } from "@/lib/data/audit";
-import { aggregateCohort, computePace, lessonStats } from "@/lib/domain/metrics";
+import { aggregateCohort, computePace, lessonSeats, lessonStats } from "@/lib/domain/metrics";
 import { cohortHealth } from "@/lib/domain/bands";
 import { todayISO } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
@@ -19,15 +21,16 @@ export default async function ReportsPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
-  if (!NAV_BY_ROLE[user.role].includes("reports")) notFound();
+  await requireUser();
 
   const supabase = await createClient();
-  // getBands doesn't depend on the cohort at all, so it runs alongside
-  // resolving it rather than waiting behind it.
-  const [cohort, bands] = await Promise.all([getCohort(supabase, routeParam), getBands(supabase)]);
+  // Bands come from the cohort's own branch (a level can set stricter ones).
+  const [cohort, bands] = await getCohortWithBands(supabase, routeParam);
   if (!cohort) notFound();
   const cohortId = cohort.id;
+  // What this person may do in *this* cohort (authz/policy), not their account role.
+  const caps = await cohortCapabilities(cohortId);
+  if (!caps.has("view_cohort")) notFound();
 
   // audit_log is admin-read-only by RLS (nothing pastoral in it, but no
   // broader read policy exists either) — read it through the admin client,
@@ -39,11 +42,9 @@ export default async function ReportsPage({
     getScheduleSegments(supabase, cohortId),
   ]);
 
-  // Left students stop counting toward the cohort's own numbers, same as
-  // Dashboard/Attention — otherwise this report (and its CSV export)
-  // disagrees with those pages for a cohort with any departures.
+  // Attendance counts everyone enrolled on each lesson's date (leaving
+  // later doesn't erase it); `enrolled` is who's in the cohort now.
   const students = allStudents.filter((s) => !s.leftAt);
-  const activeIds = new Set(students.map((s) => s.id));
   const enrolled = students.length;
   const leftCount = allStudents.length - enrolled;
   const today = todayISO();
@@ -54,7 +55,7 @@ export default async function ReportsPage({
   // ReportsView leaves those cards out rather than showing a wrong number.
   let insights: { health: ReturnType<typeof cohortHealth>; atRisk: number } | null = null;
 
-  if (user.role === "teacher") {
+  if (!caps.has("view_attendance")) {
     const pub = await getLessonEventsPublic(supabase, cohortId);
     lessons = pub.map((p) => ({
       eventId: p.eventId,
@@ -64,7 +65,9 @@ export default async function ReportsPage({
       classNumber: p.classNumber,
       lessonRef: p.lessonRef,
       lessonTitle: p.lessonTitle,
+      due: p.date <= today,
       recorded: p.recorded,
+      expected: p.enrolled,
       present: p.present,
       absent: p.absent,
       rate: p.rate,
@@ -72,7 +75,8 @@ export default async function ReportsPage({
   } else {
     const full = await getLessonEvents(supabase, cohortId);
     lessons = full.map((e) => {
-      const stats = lessonStats(e, activeIds);
+      const stats = lessonStats(e, allStudents);
+      const seats = lessonSeats(e, allStudents, today);
       return {
         eventId: e.eventId,
         date: e.date,
@@ -81,13 +85,15 @@ export default async function ReportsPage({
         classNumber: e.classNumber,
         lessonRef: e.lessonRef,
         lessonTitle: e.lessonTitle,
+        due: seats.due,
+        expected: seats.expected,
         recorded: stats !== null,
         present: stats?.present ?? null,
         absent: stats?.absent ?? null,
         rate: stats?.rate ?? null,
       };
     });
-    const agg = aggregateCohort(students, full, bands, today);
+    const agg = aggregateCohort(allStudents, full, bands, today);
     insights = { health: cohortHealth(agg.rate, agg.atRisk, agg.enrolled), atRisk: agg.atRisk };
   }
 

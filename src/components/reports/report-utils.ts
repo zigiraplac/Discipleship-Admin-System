@@ -1,13 +1,14 @@
+import { seatTotals } from "@/lib/domain/metrics";
 import type { CrusadeEventView } from "@/lib/domain/types";
 
 export type Period = "Month" | "Quarter" | "All";
 
 /** Normalized lesson shape Reports needs — built server-side from either the
  * full register view (facilitator/admin/leadership) or the public aggregate
- * view (teacher). Deliberately mirrors `LessonPublicView`'s aggregate-only
- * fields so both roles feed the same downstream maths without re-deriving
- * anything from `src/lib/domain/metrics.ts` (left untouched per instructions —
- * the small aggregations below are local equivalents, not edits to it). */
+ * view (teacher), so both roles feed the same downstream maths. `due` and
+ * `expected` are the shared seat rule from `lessonSeats` (metrics.ts): every
+ * percentage on Reports is built from them, never from "everyone × lessons
+ * recorded". */
 export interface ReportLesson {
   eventId: string;
   date: string; // YYYY-MM-DD
@@ -16,10 +17,20 @@ export interface ReportLesson {
   classNumber: number;
   lessonRef: string;
   lessonTitle: string;
+  /** Lesson date is today or earlier. */
+  due: boolean;
   recorded: boolean;
+  /** Active students who'd joined by this lesson's date. */
+  expected: number;
   present: number | null;
   absent: number | null;
   rate: number | null;
+}
+
+/** A Report lesson as seats — only recorded lessons owe seats; a missing
+ * register is a reporting gap, not an absence. */
+export function reportSeats(l: Pick<ReportLesson, "due" | "recorded" | "expected" | "present">) {
+  return { due: l.due, expected: l.recorded ? l.expected : 0, present: l.present ?? 0 };
 }
 
 export interface MonthlyRate {
@@ -103,41 +114,28 @@ export function monthLabel(monthKey: string): string {
   return MONTH_SHORT[m - 1] ?? monthKey;
 }
 
-/** Local equivalent of `monthlyRates` from domain/metrics.ts, operating on
- * the normalized `ReportLesson[]` shared by both roles. Only needs these
- * three fields, so a caller with a lighter-weight lesson shape (e.g. the
- * Dashboard's own per-role lesson mapping) can reuse it without building a
- * full `ReportLesson`. */
+/** Attendance rate per calendar month, over due lessons only. */
 export function monthlyRatesFrom(
-  lessons: Pick<ReportLesson, "date" | "recorded" | "present">[],
-  enrolled: number
+  lessons: Pick<ReportLesson, "date" | "due" | "recorded" | "expected" | "present">[]
 ): MonthlyRate[] {
-  const byMonth = new Map<string, { present: number; n: number }>();
+  const byMonth = new Map<string, Pick<ReportLesson, "due" | "recorded" | "expected" | "present">[]>();
   for (const l of lessons) {
-    if (!l.recorded || !enrolled || l.present == null) continue;
+    if (!l.due) continue;
     const key = l.date.slice(0, 7);
-    const acc = byMonth.get(key) ?? { present: 0, n: 0 };
-    acc.present += l.present;
-    acc.n += enrolled;
-    byMonth.set(key, acc);
+    const arr = byMonth.get(key) ?? [];
+    arr.push(l);
+    byMonth.set(key, arr);
   }
   return [...byMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, { present, n }]) => ({ month, rate: n ? Math.round((present / n) * 100) : 0 }));
+    .map(([month, rows]) => ({ month, rate: seatTotals(rows.map(reportSeats)).rate }))
+    .filter((m): m is MonthlyRate => m.rate != null);
 }
 
-/** Local equivalent of `classRate` from domain/metrics.ts. Whole-cohort —
- * never period-filtered (it's a curriculum-progress figure). */
-export function classRateFrom(
-  lessons: ReportLesson[],
-  classIndex: number,
-  enrolled: number
-): number | null {
-  const inClass = lessons.filter((l) => l.classIndex === classIndex && l.recorded);
-  if (!inClass.length || !enrolled) return null;
-  let present = 0;
-  for (const l of inClass) present += l.present ?? 0;
-  return Math.round((present / (enrolled * inClass.length)) * 100);
+/** Attendance rate for one curriculum class, over its due lessons.
+ * Whole-cohort — never period-filtered (it's a curriculum-progress figure). */
+export function classRateFrom(lessons: ReportLesson[], classIndex: number): number | null {
+  return seatTotals(lessons.filter((l) => l.classIndex === classIndex).map(reportSeats)).rate;
 }
 
 /** Groups crusade day-events (0/1) into weekends by `afterClass`. There is

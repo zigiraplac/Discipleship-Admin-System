@@ -16,6 +16,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useToast } from "@/components/ui/toast";
 import { OutcomeModal } from "@/components/outcome/outcome-modal";
 import { markStudentContacted } from "@/lib/actions/students";
+import { FollowUpPlan } from "./follow-up-plan";
 import { whatsappHref, catchupOutreachMessage } from "@/lib/domain/whatsapp";
 import { isRecorded } from "@/lib/domain/metrics";
 import { todayISO } from "@/lib/utils";
@@ -50,12 +51,15 @@ export function FollowUpList({
   cohortSlug,
   lessonEvents,
   canRecord,
+  people,
 }: {
   entries: FollowUpEntry[];
   cohortId: string;
   cohortSlug: string;
   lessonEvents: LessonEventView[];
   canRecord: boolean;
+  /** Who a follow-up can be assigned to (this cohort's facilitators + admins). */
+  people: { id: string; name: string }[];
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -106,6 +110,7 @@ export function FollowUpList({
               cohortSlug={cohortSlug}
               lessonEvents={lessonEvents}
               canRecord={canRecord}
+              people={people}
             />
           ))}
           {rows.length === 0 && (
@@ -127,12 +132,14 @@ function FollowUpRow({
   cohortSlug,
   lessonEvents,
   canRecord,
+  people,
 }: {
   entry: FollowUpEntry;
   cohortId: string;
   cohortSlug: string;
   lessonEvents: LessonEventView[];
   canRecord: boolean;
+  people: { id: string; name: string }[];
 }) {
   const { student, currentOutcomeKind } = entry;
   const router = useRouter();
@@ -142,7 +149,7 @@ function FollowUpRow({
   const overdue = student.missed > 8;
 
   const missedLessons = lessonEvents
-    .filter((e) => isRecorded(e) && e.register.attendance[student.id] !== "present")
+    .filter((e) => isRecorded(e) && e.register.attendance[student.id] !== "present" && !e.register.caughtUp?.includes(student.id))
     .sort((a, b) => a.globalIndex - b.globalIndex);
   const whatsappLink = student.whatsapp
     ? whatsappHref(student.whatsapp, student.country, catchupOutreachMessage(student.fullName, missedLessons))
@@ -188,6 +195,15 @@ function FollowUpRow({
         ) : (
           <Pill tone="yellow">To contact</Pill>
         )}
+        <FollowUpPlan
+          studentId={student.id}
+          cohortId={cohortId}
+          assigneeId={student.followUpAssignee}
+          nextOn={student.followUpNextOn}
+          people={people}
+          canEdit={canRecord}
+          className="mt-1.5"
+        />
       </TD>
       <TD className="tabular">{student.missed}</TD>
       <TD align="right">

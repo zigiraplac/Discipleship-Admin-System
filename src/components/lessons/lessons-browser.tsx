@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CaretDown, CaretRight, Check } from "@phosphor-icons/react";
-import { Table, THead, TH, TR, TD } from "@/components/ui/table";
+import { SPLIT_RULE, SplitLabel, Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { Segmented, type SegmentedOption } from "@/components/ui/segmented";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -24,7 +24,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { CURRICULUM, partDisplayLabel, partSpans, partsSummary } from "@/lib/domain/curriculum";
 import { cn, formatShortDate } from "@/lib/utils";
 import { postponeLesson } from "@/lib/actions/schedule";
-import type { Role } from "@/lib/domain/types";
 
 export type LessonRowStatus = "recorded" | "missing" | "upcoming";
 
@@ -76,16 +75,19 @@ function summaryText(classRows: LessonRow[], filter: "all" | LessonRowStatus): s
 export function LessonsBrowser({
   cohortId,
   cohortSlug,
-  role,
+  canOpenRegister,
+  canPostpone,
   rows,
 }: {
   cohortId: string;
   cohortSlug: string;
-  role: Role;
+  /** May open a lesson's register (to view, or to take it). */
+  canOpenRegister: boolean;
+  /** May postpone a lesson (authz: postpone_lesson). */
+  canPostpone: boolean;
   rows: LessonRow[];
 }) {
   const [filter, setFilter] = useState<"all" | LessonRowStatus>("all");
-  const canOpenRegister = role === "facilitator" || role === "admin";
 
   const rowsByClass = useMemo(() => {
     const map = new Map<number, LessonRow[]>();
@@ -209,6 +211,7 @@ export function LessonsBrowser({
                       cohortId={cohortId}
                       cohortSlug={cohortSlug}
                       canOpenRegister={canOpenRegister}
+                      canPostpone={canPostpone}
                     />
                   ) : (
                     <>
@@ -217,8 +220,8 @@ export function LessonsBrowser({
                         if (partRows.length === 0) return null;
                         return (
                           <div key={pi}>
-                            <div className="border-t border-divider bg-subtle px-[18px] py-2 text-[11px] font-bold uppercase tracking-wide text-ink-muted first:border-t-0">
-                              {partDisplayLabel(part, pi, cls.parts.length)} · {part.count} lessons
+                            <div className={SPLIT_RULE}>
+                              <SplitLabel title={partDisplayLabel(part, pi, cls.parts.length)} />
                             </div>
                             <LessonRowsView
                               rows={partRows}
@@ -226,6 +229,7 @@ export function LessonsBrowser({
                               cohortId={cohortId}
                               cohortSlug={cohortSlug}
                               canOpenRegister={canOpenRegister}
+                              canPostpone={canPostpone}
                             />
                           </div>
                         );
@@ -252,12 +256,14 @@ function LessonRowsView({
   cohortId,
   cohortSlug,
   canOpenRegister,
+  canPostpone,
 }: {
   rows: LessonRow[];
   currentPositionId: string | null;
   cohortId: string;
   cohortSlug: string;
   canOpenRegister: boolean;
+  canPostpone: boolean;
 }) {
   return (
     <Table>
@@ -276,6 +282,7 @@ function LessonRowsView({
             cohortId={cohortId}
             cohortSlug={cohortSlug}
             canOpenRegister={canOpenRegister}
+            canPostpone={canPostpone}
           />
         ))}
         {rows.length === 0 && (
@@ -298,12 +305,14 @@ function LessonTR({
   cohortId,
   cohortSlug,
   canOpenRegister,
+  canPostpone,
 }: {
   row: LessonRow;
   isCurrent: boolean;
   cohortId: string;
   cohortSlug: string;
   canOpenRegister: boolean;
+  canPostpone: boolean;
 }) {
   return (
     <TR>
@@ -328,7 +337,7 @@ function LessonTR({
       </TD>
       <TD align="right">
         <span className="flex items-center justify-end gap-2">
-          {row.status === "missing" && canOpenRegister && (
+          {row.status === "missing" && canPostpone && (
             <PostponeButton cohortId={cohortId} eventId={row.eventId} lessonRef={row.lessonRef} />
           )}
           <RowAction cohortSlug={cohortSlug} row={row} canOpenRegister={canOpenRegister} />
@@ -419,7 +428,9 @@ function PostponeButton({
       setOpen(false);
       show(
         result.shiftedCount > 1
-          ? `${lessonRef} postponed — ${result.shiftedCount} lessons and crusade days shifted forward.`
+          ? `${lessonRef} postponed — ${result.shiftedCount} lessons and crusade days shifted forward.${
+              result.keptRecorded ? ` ${result.keptRecorded} later lesson(s) already recorded kept their dates.` : ""
+            }`
           : `${lessonRef} postponed to the next study day.`
       );
       router.refresh();
