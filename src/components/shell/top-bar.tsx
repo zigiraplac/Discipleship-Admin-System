@@ -9,6 +9,7 @@ import { HealthPill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/ui/avatar";
 import { NotificationsBell } from "./notifications-bell";
+import { SearchButton } from "./search-palette";
 import { ThemeToggle } from "./theme-toggle";
 import { MobileNav } from "./mobile-nav";
 import { usePageHead } from "./page-head";
@@ -126,6 +127,7 @@ export function TopBar({
       )}
 
       <ThemeToggle />
+      <SearchButton />
       <NotificationsBell notifications={notifications} totals={notificationTotals} />
 
       <Popover>

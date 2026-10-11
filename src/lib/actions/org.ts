@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { childId, childName, getAllUnits, getCohortStaff, getMyUnitRoles, getPolicy, getStaffCounts, getUnitLeaderContacts, getUnitReport } from "@/lib/data/org";
 import { childrenLabelFor } from "@/components/shell/org-nav";
+import { placesInside, placesNotSetUp } from "@/lib/geo/reference";
 import { isResponsibleFor } from "@/lib/domain/responsibility";
 import { managementReason, managementStatus, statusLabel, type UnitStatus } from "@/lib/domain/status";
 import { authorize, cohortTarget, getResponsibilities, unitTarget, type Capability } from "@/lib/authz";
@@ -43,8 +44,27 @@ export type OverviewData =
       movement: { joined: number; left: number; completed: number; graduated: number };
       /** What it calls the things directly inside it ("Countries"). */
       childrenLabel: string;
-      /** Those things, as a parent sees them: status in words and scale only. */
-      children: { id: string; name: string; status: UnitStatus; statusText: string; students: number; active: number }[];
+      /** Those things, as a parent sees them: scale and who leads them. */
+      children: {
+        id: string;
+        name: string;
+        status: UnitStatus;
+        statusText: string;
+        students: number;
+        active: number;
+        /** Sites inside it. */
+        churches: number;
+        /** Promotions inside it with a running cohort. */
+        activePromotions: number;
+        staff: number;
+        /** An official place inside it nobody has set up yet (all zeros). */
+        notSetUp?: boolean;
+      }[];
+      /** How many of those have BCC (at least one cohort inside). */
+      childrenWithBcc: number;
+      /** How many official places belong inside it (a continent's countries,
+       * a country's regions), to show reach against; null below that. */
+      worldTotal: number | null;
       series: { label: string; title: string; value: number }[];
     }
   | {
@@ -130,9 +150,35 @@ export async function loadOverview(ref: OverviewRef, period: string): Promise<Ov
           const facts = report.factsByChild.get(childId(c)) ?? [];
           const ct = sumFacts(facts, report.today);
           const cs = managementStatus(facts, report.today, bands).status;
-          return { id: childId(c), name: childName(c), status: cs, statusText: statusLabel(cs, ct.active), students: ct.registered, active: ct.active };
+          return {
+            id: childId(c),
+            name: childName(c),
+            status: cs,
+            statusText: statusLabel(cs, ct.active),
+            students: ct.registered,
+            active: ct.active,
+            churches: c.kind === "unit" ? units.filter((u) => u.type === "site" && (u.id === c.unit.id || u.path.startsWith(`${c.unit.path}.`))).length : 0,
+            activePromotions: new Set(facts.filter((f) => f.phase === "running" && f.orgUnitId).map((f) => f.orgUnitId)).size,
+            staff: staffCounts.get(childId(c)) ?? 0,
+          };
         })
-        .sort((a, b) => b.active - a.active || a.name.localeCompare(b.name)),
+        .sort((a, b) => b.students - a.students || a.name.localeCompare(b.name))
+        .concat(
+          placesNotSetUp(unit, report.children.flatMap((c) => (c.kind === "unit" ? [c.unit] : []))).map((p) => ({
+            id: `geo:${p.code}`,
+            name: p.name,
+            status: "quiet" as const,
+            statusText: "Not set up",
+            students: 0,
+            active: 0,
+            churches: 0,
+            activePromotions: 0,
+            staff: 0,
+            notSetUp: true,
+          }))
+        ),
+      childrenWithBcc: report.children.filter((c) => (report.factsByChild.get(childId(c)) ?? []).length > 0).length,
+      worldTotal: placesInside(unit)?.length ?? null,
     };
   }
 

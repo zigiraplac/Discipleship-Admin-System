@@ -3,11 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
+import { GlobeHemisphereEast, Plus, Stack, Student, UsersThree } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import { NAV_ITEMS, NAV_GROUP_LABELS, NAV_GROUP_ORDER, type NavItem } from "./nav-items";
 import { UNIT_SECTIONS, unitHref, type OrgNav } from "./org-nav";
-import { SearchTrigger } from "./search-palette";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
@@ -20,6 +19,14 @@ function navLabel(item: NavItem, role: Role): string {
   if (item.id === "dashboard" && role === "leadership") return "Overview";
   return item.label;
 }
+
+/** The Super admin console's menu. */
+const ADMIN_ITEMS: { label: string; href: string; icon: Icon }[] = [
+  { label: "Accounts", href: "/admin/accounts", icon: UsersThree },
+  { label: "Countries", href: "/admin/countries", icon: GlobeHemisphereEast },
+  { label: "Promotions", href: "/admin/promotions", icon: Student },
+  { label: "Cohorts", href: "/admin/cohorts", icon: Stack },
+];
 
 function isActive(id: string, pathname: string, cohortSlug: string | null): boolean {
   if (id === "dashboard") return pathname === `/c/${cohortSlug}`;
@@ -109,13 +116,14 @@ export function Sidebar({
   const allowed = new Set(org?.allowedNav ?? NAV_BY_ROLE[role]);
   // A level page shows that level's sections; a cohort page that cohort's.
   const levelPortal = org?.context === "unit";
+  const adminConsole = org?.context === "admin";
 
   // Cohort-scoped items need a cohort to link to. `activeCohortSlug`
   // already falls back to the user's first visible cohort when they're on
   // a global page (Shell resolves that) — it's only still null when
   // there genuinely isn't one yet, in which case those items would point
   // nowhere (`/c/null`) and are hidden instead of shown broken.
-  const primary = levelPortal ? [] : NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
+  const primary = levelPortal || adminConsole ? [] : NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
   // Dashboard has no group — stays standalone above every section, the way
   // a "home" item usually does. Everything else is grouped by function
   // (Schedule / Students / Reports) so the sidebar reads as a few short
@@ -128,8 +136,9 @@ export function Sidebar({
   })).filter((s) => s.items.length > 0);
   // The level portal's own pages replace the cohort list, so it keeps only
   // Settings (admin).
-  const manage = NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id) && (!levelPortal || n.id === "settings"));
-  const canCreateCohort = role === "admin";
+  const manage = adminConsole ? [] : NAV_ITEMS.filter((n) => !n.cohortScoped && allowed.has(n.id) && (!levelPortal || n.id === "settings"));
+  // Level pages add cohorts from a promotion's Cohorts page, not from here.
+  const canCreateCohort = role === "admin" && !levelPortal;
 
   const renderItem = (item: NavItem) => {
     const href = item.href(activeCohortSlug);
@@ -172,22 +181,9 @@ export function Sidebar({
         </div>
       </div>
 
-      <div className="px-3 pb-2.5">
-        <SearchTrigger>
-          <MagnifyingGlass size={15} className="text-ink-faint" />
-          <span className="flex-1 text-left text-[13px] text-ink-muted">Search</span>
-          <span className="rounded-[5px] border border-border bg-card px-1.5 py-px text-[10px] tabular">⌘K</span>
-        </SearchTrigger>
-      </div>
-
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto px-3 pb-3">
         {current && (
           <div className="flex flex-col gap-0.5">
-            <div className="px-2.5 pb-2 pt-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-accent-700">{current.levelLabel}</div>
-              <div className="mt-0.5 text-[14px] font-bold leading-tight text-ink">{current.name}</div>
-              {current.partOf && <div className="mt-0.5 text-[11px] text-ink-muted">Part of {current.partOf}</div>}
-            </div>
             {levelSections.map((s) => {
               const href = unitHref(current.slug, s.id);
               const isAttention = s.id === "attention";
@@ -204,6 +200,21 @@ export function Sidebar({
                 />
               );
             })}
+          </div>
+        )}
+
+        {adminConsole && (
+          <div className="flex flex-col gap-0.5">
+            {ADMIN_ITEMS.map((item) => (
+              <SidebarNavItem
+                key={item.href}
+                icon={item.icon}
+                label={item.label}
+                href={item.href}
+                active={pathname.startsWith(item.href)}
+                onNavigate={onNavigate}
+              />
+            ))}
           </div>
         )}
 

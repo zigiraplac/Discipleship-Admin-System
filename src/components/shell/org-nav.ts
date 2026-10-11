@@ -51,8 +51,9 @@ export function unitHref(slug: string, section: UnitSectionId = "overview"): str
 
 /** Plain data the server hands the (client) sidebar — no icons, no functions. */
 export interface OrgNav {
-  /** What the page is about: a level (its sections) or a cohort (its pages). */
-  context: "unit" | "cohort";
+  /** What the page is about: a level (its sections), a cohort (its pages),
+   * or the Super admin console (accounts, countries, promotions). */
+  context: "unit" | "cohort" | "admin";
   /** Page ids this person may open here (cohort pages + Cohorts/Accounts),
    * from their capabilities — see authz/nav.ts. */
   allowedNav: string[];

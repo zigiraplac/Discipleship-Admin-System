@@ -44,6 +44,8 @@ export function PeopleTable({
   currentUserId,
   levelRolesByUser,
   headerAction,
+  toolbar,
+  placesByUser,
 }: {
   people: AppUser[];
   scopesByUser: Map<string, { cohortId: string; cohortName: string; capacity: string }[]>;
@@ -52,6 +54,10 @@ export function PeopleTable({
   /** Organization level roles per person (userId → roles). */
   levelRolesByUser: Record<string, LevelRole[]>;
   headerAction?: React.ReactNode;
+  /** Filters shown under the header (the Super admin console's). */
+  toolbar?: React.ReactNode;
+  /** Where each person serves (userId → country, continent): adds a Country column. */
+  placesByUser?: Record<string, { continent: string; country: string }[]>;
 }) {
   const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
@@ -74,10 +80,12 @@ export function PeopleTable({
         </div>
         {headerAction}
       </CardHeader>
+      {toolbar}
       <Table>
         <THead>
           <SortableTH label="Person" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
           <SortableTH label="Role" sortKey="role" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
+          {placesByUser && <StaticTH>Country</StaticTH>}
           <StaticTH>Cohorts</StaticTH>
           <StaticTH>Levels</StaticTH>
           <SortableTH label="State" sortKey="state" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
@@ -100,6 +108,11 @@ export function PeopleTable({
               <TD>
                 <Pill tone={ROLE_TONE[person.role]}>{roleLabel(person.role)}</Pill>
               </TD>
+              {placesByUser && (
+                <TD className="text-[13px] text-ink-secondary">
+                  {[...new Set((placesByUser[person.id] ?? []).map((p) => p.country))].join(", ") || "—"}
+                </TD>
+              )}
               <TD className="text-[13px] text-ink-secondary">
                 {describeScope(person.role, scopesByUser.get(person.id))}
               </TD>
@@ -123,7 +136,7 @@ export function PeopleTable({
           ))}
           {people.length === 0 && (
             <TR>
-              <TD colSpan={6} className="py-6 text-center text-ink-faint">
+              <TD colSpan={placesByUser ? 7 : 6} className="py-6 text-center text-ink-faint">
                 No people yet.
               </TD>
             </TR>

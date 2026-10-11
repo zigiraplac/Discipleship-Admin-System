@@ -30,7 +30,7 @@ const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 const NAME_COL = "w-[260px] min-w-[260px] max-w-[260px]";
 const STATUS_COL = "w-[170px] min-w-[170px] max-w-[170px]";
 
-type StatusFilter = StatusRow["status"] | "all";
+type StatusFilter = StatusRow["status"] | "all" | "notSetUp";
 
 /** Who answers for a child, by name only. */
 function responsibleNames(r: StatusRow["responsible"]): string {
@@ -73,19 +73,25 @@ export function ChildrenTable({
   const compact = limit != null;
 
   const filterOptions = useMemo(() => {
-    const present = (["critical", "attention", "good", "quiet"] as const).filter((st) => rows.some((r) => r.status === st));
+    const real = rows.filter((r) => !r.placeholder);
+    const notSetUp = rows.length - real.length;
+    const present = (["critical", "attention", "good", "quiet"] as const).filter((st) => real.some((r) => r.status === st));
     return [
       { value: "all" as StatusFilter, label: `All ${rows.length}` },
-      ...present.map((st) => ({ value: st as StatusFilter, label: `${STATUS_LABELS[st]} ${rows.filter((r) => r.status === st).length}` })),
+      ...present.map((st) => ({ value: st as StatusFilter, label: `${STATUS_LABELS[st]} ${real.filter((r) => r.status === st).length}` })),
+      ...(notSetUp ? [{ value: "notSetUp" as StatusFilter, label: `Not set up ${notSetUp}` }] : []),
     ];
   }, [rows]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = rows.filter((r) => (filter === "all" || r.status === filter) && (!q || r.name.toLowerCase().includes(q)));
+    const list = rows.filter(
+      (r) =>
+        (filter === "all" || (filter === "notSetUp" ? r.placeholder : !r.placeholder && r.status === filter)) && (!q || r.name.toLowerCase().includes(q))
+    );
     const dir = sort?.dir === "desc" ? -1 : 1;
     const sorted = !sort
-      ? list
+      ? [...list].sort((a, b) => Number(!!a.placeholder) - Number(!!b.placeholder))
       : [...list].sort((a, b) =>
           sort.key === "name"
             ? dir * a.name.localeCompare(b.name)
@@ -99,6 +105,7 @@ export function ChildrenTable({
   }, [rows, filter, query, sort, compact, limit]);
 
   function openRow(r: StatusRow) {
+    if (r.placeholder) return;
     if (compact) return openPopout({ kind: r.kind, id: r.id });
     setSelectedId(r.id);
     overview.load({ kind: r.kind, id: r.id });
@@ -124,7 +131,15 @@ export function ChildrenTable({
       </THead>
       <tbody>
         {shown.map((r) => (
-          <TR key={r.id} className={cn("cursor-pointer hover:bg-hover", r.id === selectedId && "bg-accent-100 hover:bg-accent-100")} onClick={() => openRow(r)}>
+          <TR
+            key={r.id}
+            aria-disabled={r.placeholder || undefined}
+            className={cn(
+              r.placeholder ? "opacity-50" : "cursor-pointer hover:bg-hover",
+              r.id === selectedId && "bg-accent-100 hover:bg-accent-100"
+            )}
+            onClick={() => openRow(r)}
+          >
             <TD className={compact ? undefined : NAME_COL}>
               <span className="block truncate text-[13px] font-semibold text-ink" title={r.name}>
                 {r.name}
@@ -136,10 +151,10 @@ export function ChildrenTable({
             <TD align="right" className="text-[13px] font-semibold tabular">
               {r.students.toLocaleString()}
             </TD>
-            <TD className="text-[13px] text-ink-secondary">{responsibleNames(r.responsible)}</TD>
+            <TD className="text-[13px] text-ink-secondary">{r.placeholder ? "—" : responsibleNames(r.responsible)}</TD>
             {canManage && (
               <TD align="right" className="w-px whitespace-nowrap">
-                {r.kind === "unit" && (
+                {r.kind === "unit" && !r.placeholder && (
                   <span onClick={stop}>
                     <ChildManageActions id={r.id} name={r.name} levelLabel={r.levelLabel} />
                   </span>

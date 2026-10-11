@@ -36,6 +36,9 @@ export interface OrgUnit {
 
 /** A level's own details (see domain/unit-details.ts for which apply where). */
 export interface OrgUnitDetails {
+  /** The official place it is, when known: continent ("AF"), country (ISO
+   * "RW") or region (ISO "RW-02") — see src/lib/geo. */
+  geoCode?: string;
   /** General contact for the level itself — not its leader's. */
   email?: string;
   description?: string;

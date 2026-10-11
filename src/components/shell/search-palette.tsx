@@ -4,7 +4,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useRouter } from "next/navigation";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { Dialog, DialogPopup } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
 
 export interface SearchResultItem {
   kind: "PAGE" | "STUDENT" | "LESSON";
@@ -111,18 +110,18 @@ function useSearch() {
   return ctx;
 }
 
-export function SearchTrigger({ children, className }: { children: React.ReactNode; className?: string }) {
+/** The top bar's search icon (Ctrl/⌘ K opens it too). */
+export function SearchButton() {
   const { setOpen } = useSearch();
   return (
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className={cn(
-        "flex w-full items-center gap-2 rounded-control border border-border bg-hover px-2.5 py-2 text-left hover:border-accent-300",
-        className
-      )}
+      aria-label="Search (Ctrl K)"
+      title="Search (Ctrl K)"
+      className="grid size-9 flex-none place-items-center rounded-control border border-border bg-card text-ink-secondary hover:border-accent-300"
     >
-      {children}
+      <MagnifyingGlass size={16} />
     </button>
   );
 }

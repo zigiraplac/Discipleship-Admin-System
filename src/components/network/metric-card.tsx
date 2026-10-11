@@ -33,5 +33,12 @@ export function MetricCard({ m }: { m: MetricView }) {
 }
 
 export function MetricRow({ metrics }: { metrics: MetricView[] }) {
-  return <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{metrics.map((m) => <MetricCard key={m.key} m={m} />)}</div>;
+  // Four or five across on wide screens, two on narrow ones.
+  return (
+    <div className={cn("grid grid-cols-2 gap-3", metrics.length === 5 ? "lg:grid-cols-3 xl:grid-cols-5" : "xl:grid-cols-4")}>
+      {metrics.map((m) => (
+        <MetricCard key={m.key} m={m} />
+      ))}
+    </div>
+  );
 }

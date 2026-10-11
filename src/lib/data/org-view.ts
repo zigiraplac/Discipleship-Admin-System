@@ -225,6 +225,28 @@ export interface StatusRow {
   /** For a cohort: who its team is, e.g. "1 facilitator · 2 teachers". */
   staffDetail?: string;
   responsible: Responsible;
+  /** An official place (continent, country, region) nobody has set up yet:
+   * shown greyed out with zeros, not openable. */
+  placeholder?: boolean;
+}
+
+/** Rows for the official places inside a level that aren't set up yet. */
+export function placeholderRows(places: { code: string; name: string }[], levelLabel: string): StatusRow[] {
+  return places.map((p) => ({
+    id: `geo:${p.code}`,
+    kind: "unit",
+    name: p.name,
+    levelLabel,
+    status: "quiet",
+    statusText: "Not set up",
+    reason: null,
+    students: 0,
+    active: 0,
+    href: null,
+    staff: 0,
+    responsible: { kind: "people", role: "", people: [] },
+    placeholder: true,
+  }));
 }
 
 /**
@@ -686,5 +708,37 @@ export function promotionMetrics(report: UnitReport, periodDays: number, staff: 
       change: null,
       context: `Crusades still to come in ${monthName}`,
     },
+  ];
+}
+
+/** Global HQ's cards: how far BCC reaches (continents, countries with a
+ * cohort), its students, graduates and staff. */
+export function hqMetrics(report: UnitReport, periodDays: number, staff: number): MetricView[] {
+  const general = levelMetrics(report, periodDays, staff);
+  const pick = (key: string) => general.find((m) => m.key === key)!;
+  const countries = new Set(
+    report.facts.map((f) => [report.unit, ...(report.chainBelow.get(f.cohortId) ?? [])].find((u) => u.type === "country")?.id).filter(Boolean)
+  ).size;
+  const continentsWithBcc = new Set(
+    report.facts.map((f) => [report.unit, ...(report.chainBelow.get(f.cohortId) ?? [])].find((u) => u.type === "continent")?.id).filter(Boolean)
+  ).size;
+  return [
+    {
+      key: "continents",
+      label: "Continents",
+      value: report.children.length.toLocaleString(),
+      change: null,
+      context: `${continentsWithBcc} with BCC running`,
+    },
+    {
+      key: "countries",
+      label: "Countries",
+      value: countries.toLocaleString(),
+      change: null,
+      context: "Where BCC has a cohort",
+    },
+    pick("students"),
+    pick("graduated"),
+    pick("staff"),
   ];
 }

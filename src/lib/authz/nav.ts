@@ -27,5 +27,5 @@ export interface Workspace {
   href: string;
   title: string;
   role: string;
-  kind: "unit" | "cohort";
+  kind: "unit" | "cohort" | "admin";
 }

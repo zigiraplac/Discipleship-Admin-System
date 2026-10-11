@@ -10,9 +10,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { loadOverview, type OverviewData, type OverviewRef } from "@/lib/actions/org";
-import { formatShortDate } from "@/lib/utils";
-import { GrowthChart } from "./growth-chart";
-import { UnitStatusBadge } from "./status-ui";
+import { cn, formatShortDate } from "@/lib/utils";
 import { StatusSplit, StatusLegend } from "./status-split";
 import { scheduleText } from "./schedule-text";
 
@@ -71,9 +69,10 @@ export function OverviewContent({
     <>
       <div className="flex items-start gap-3 border-b border-divider px-5 pb-3.5 pt-[18px]">
         <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-accent-700">
-            {data ? (data.kind === "unit" ? data.levelLabel : "Cohort") : "Overview"}
-          </div>
+          {/* A level is named by itself; a cohort is labelled (its name is in its card). */}
+          {data?.kind !== "unit" && (
+            <div className="text-[10px] font-bold uppercase tracking-wider text-accent-700">{data ? "Cohort" : "Overview"}</div>
+          )}
           {/* A cohort's name and people are in its information card below. */}
           {data?.kind !== "cohort" && (
             <h2 className="mt-0.5 truncate text-[17px] font-bold text-ink">{data?.name ?? (error ? "Not available" : "Loading…")}</h2>
@@ -185,46 +184,15 @@ function UnitOverview({ data }: { data: Extract<OverviewData, { kind: "unit" }> 
   const t = data.totals;
   return (
     <div className="flex flex-col gap-5">
-      {/* Status and why — the parent's whole question about a child. */}
-      <Section title="Status">
-        <UnitStatusBadge status={data.status.status} label={data.status.text} />
-        {data.status.reasons.length ? (
-          <ul className="flex flex-col gap-1">
-            {data.status.reasons.map((r) => (
-              <li key={r} className={data.status.status === "critical" ? "text-[13px] text-accent-2-700" : "text-[13px] text-yellow-ink"}>
-                {r}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-[13px] text-ink-muted">Nothing needs attention.</p>
-        )}
-      </Section>
-
-      <Section title="Responsible">
-        {data.leaders.length ? (
-          data.leaders.map((l) => (
-            <a key={l.email} href={`mailto:${l.email}`} className="text-[13px] font-semibold text-accent-700 hover:underline">
-              {l.name} · {l.email}
-            </a>
-          ))
-        ) : (
-          <p className="text-[13px] text-ink-muted">Not assigned{data.managedBy ? ` · managed by ${data.managedBy}` : ""}</p>
-        )}
-      </Section>
-
-      <div className="grid grid-cols-3 gap-2">
-        <Mini label="Students" value={t.registered} />
-        <Mini label="Active" value={t.active} />
-        <Mini label="Graduated" value={t.graduated} />
+      <div className="grid grid-cols-2 gap-2">
+        <Mini
+          label={data.childrenLabel}
+          value={data.worldTotal ? `${data.childrenWithBcc} / ${data.worldTotal}` : data.children.filter((c) => !c.notSetUp).length}
+        />
+        <Mini label="Students" value={t.registered.toLocaleString()} />
+        <Mini label="Graduated" value={t.graduated.toLocaleString()} />
         <Mini label="Staff" value={data.staff} />
-        <Mini label={data.childrenLabel} value={data.children.length} />
-        <Mini label="New enrolments" value={data.movement.joined} />
       </div>
-
-      <Section title="Active students over time">
-        <GrowthChart points={data.series} height={90} />
-      </Section>
 
       {data.children.length > 0 && (
         <Section title={`${data.childrenLabel} · ${data.children.length}`}>
@@ -235,11 +203,10 @@ function UnitOverview({ data }: { data: Extract<OverviewData, { kind: "unit" }> 
   );
 }
 
-const CHILD_TONE = { good: "green", attention: "yellow", critical: "magenta", quiet: "grey" } as const;
-
-/** What's directly inside the child — status in words and scale only —
- * in a scrolling table that stays compact however many there are, with a
- * search once the list is long. */
+/** What's directly inside, in numbers — students, sites, active
+ * promotions and staff — in a scrolling
+ * table that stays compact however many there are, with a search once the
+ * list is long. */
 function ChildList({ items, label }: { items: Extract<OverviewData, { kind: "unit" }>["children"]; label: string }) {
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -247,32 +214,32 @@ function ChildList({ items, label }: { items: Extract<OverviewData, { kind: "uni
   return (
     <div className="flex flex-col gap-2">
       {items.length > 8 && <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Find in ${label.toLowerCase()}`} />}
-      <div className="max-h-[320px] overflow-y-auto rounded-control border border-border">
+      <div className="max-h-[420px] overflow-auto rounded-control border border-border">
         <table className="w-full border-collapse text-[12px]">
           <thead className="sticky top-0 z-[1] bg-subtle">
             <tr className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
               <th className="px-3 py-2 text-left">Name</th>
-              <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-right">Students</th>
-              <th className="px-3 py-2 text-right">Active</th>
+              <th className="px-3 py-2 text-right">Sites</th>
+              <th className="px-3 py-2 text-right" title="Promotions with a running cohort">Active promotions</th>
+              <th className="px-3 py-2 text-right">Staff</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((c) => (
-              <tr key={c.id} className="border-t border-divider">
-                <td className="max-w-[140px] truncate px-3 py-2 font-semibold text-ink" title={c.name}>
+              <tr key={c.id} className={cn("border-t border-divider", c.notSetUp && "text-ink-faint opacity-60")} title={c.notSetUp ? "Not set up yet" : undefined}>
+                <td className="max-w-[160px] truncate px-3 py-2 font-semibold text-ink" title={c.name}>
                   {c.name}
                 </td>
-                <td className="px-3 py-2">
-                  <Pill tone={CHILD_TONE[c.status]}>{c.statusText}</Pill>
-                </td>
                 <td className="px-3 py-2 text-right tabular text-ink">{c.students.toLocaleString()}</td>
-                <td className="px-3 py-2 text-right tabular text-ink-secondary">{c.active.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right tabular text-ink-secondary">{c.churches}</td>
+                <td className="px-3 py-2 text-right tabular text-ink-secondary">{c.activePromotions}</td>
+                <td className="px-3 py-2 text-right tabular text-ink-secondary">{c.staff}</td>
               </tr>
             ))}
             {!shown.length && (
               <tr>
-                <td colSpan={4} className="px-3 py-4 text-center text-ink-faint">
+                <td colSpan={5} className="px-3 py-4 text-center text-ink-faint">
                   No match.
                 </td>
               </tr>

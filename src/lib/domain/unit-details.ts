@@ -7,7 +7,8 @@ import type { OrgUnitDetails, OrgUnitType } from "./types";
  * leader's name and email come from their account, never from here.
  */
 
-export type DetailKey = keyof OrgUnitDetails;
+/** The details people fill in (the official place, geoCode, is chosen, not typed). */
+export type DetailKey = Exclude<keyof OrgUnitDetails, "geoCode">;
 
 /** Every level may have these. */
 export const CONTACT_FIELDS: DetailKey[] = ["email", "phone", "description"];

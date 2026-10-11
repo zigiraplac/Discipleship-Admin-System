@@ -111,7 +111,8 @@ export function StudentsTable({
   };
 
   return (
-    <>
+    // The drawer covers the card from its top edge (toolbar included), right of the names.
+    <div className={cn("relative", panel && "min-h-[70vh]")}>
       <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
         <Segmented
           options={FILTER_OPTIONS}
@@ -135,7 +136,7 @@ export function StudentsTable({
           {headerAction}
         </div>
       </div>
-      <div className={cn("relative", panel && "min-h-[70vh]")}>
+      <div>
         <Table>
           <THead>
             <SortableTH label="Student" sortKey="name" sort={sort} onSort={onSort} className={NAME_COL} />
@@ -326,6 +327,6 @@ export function StudentsTable({
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

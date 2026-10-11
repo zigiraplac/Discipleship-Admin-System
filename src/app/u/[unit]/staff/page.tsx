@@ -7,8 +7,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CohortStaffManager, type CohortStaffGroup } from "@/components/network/cohort-staff-manager";
 import { cohortStewardOf, stewardOf } from "@/lib/domain/responsibility";
 import { loadLevelPage } from "@/lib/data/org-view";
-import { ancestryOf, descendantsOf, LEVELS, levelRank } from "@/lib/domain/levels";
-import { AppointmentsDialog, StaffDirectory, type DirectoryRow, type StaffAssignment } from "@/components/network/staff-directory";
+import { placesInside, placesNotSetUp } from "@/lib/geo/reference";
+import { ancestryOf, descendantsOf, LEVELS, levelRank, nextLevel } from "@/lib/domain/levels";
+import { AppointmentsDialog, StaffDirectory, type DirectoryRow, type PlaceBreakdown, type StaffAssignment } from "@/components/network/staff-directory";
 import type { OrgUnitType } from "@/lib/domain/types";
 
 /** The people below this level:
@@ -132,8 +133,54 @@ export default async function LevelStaffPage({
   const places =
     unit.type === "promotion"
       ? cohorts.filter((c) => c.orgUnitId === unit.id).map((c) => ({ id: c.id, name: c.name.trim() }))
-      : units.filter((u) => u.parentId === unit.id).map((u) => ({ id: u.id, name: u.name }));
+      : [
+          ...units.filter((u) => u.parentId === unit.id).map((u) => ({ id: u.id, name: u.name })),
+          // Official places (continents, a continent's countries…) not set up yet.
+          ...placesNotSetUp(unit, units.filter((u) => u.parentId === unit.id)).map((p) => ({ id: `geo:${p.code}`, name: p.name, notSetUp: true })),
+        ];
   const groupLabel = unit.type === "promotion" ? "Cohort" : LEVELS[NEXT[unit.type]].label;
+
+  // For each direct child that has levels inside it (e.g. Africa → its
+  // countries): how many serve in each of those, by role, and who leads it.
+  const inside = (root: { id: string; path: string }) => (id: string) => {
+    const u = byId.get(id);
+    return !!u && (u.id === root.id || u.path.startsWith(`${root.path}.`));
+  };
+  const breakdown: Record<string, PlaceBreakdown> = {};
+  for (const place of units.filter((u) => u.parentId === unit.id)) {
+    const subs = units.filter((u) => u.parentId === place.id).sort((a, b) => a.name.localeCompare(b.name));
+    // Every official place inside it too (a continent's countries), zeros where not set up.
+    const official = placesInside(place);
+    if (!subs.length && !official?.length) continue;
+    const next = nextLevel(place.type);
+    breakdown[place.id] = {
+      label: next === "cohort" ? "Cohort" : LEVELS[next].label,
+      rows: subs.map((sub) => {
+        const within = inside(sub);
+        const cohortIds = new Set(cohorts.filter((c) => c.orgUnitId && within(c.orgUnitId)).map((c) => c.id));
+        const members = [...cohortIds].flatMap((id) => cohortStaff.get(id) ?? []);
+        const count = (capacity: "facilitator" | "teacher") => new Set(members.filter((m) => m.capacity === capacity).map((m) => m.userId)).size;
+        return {
+          id: sub.id,
+          name: sub.name,
+          leaders: new Set(branchStaff.filter((s) => s.role === "leader" && within(s.unitId)).map((s) => s.userId)).size,
+          facilitators: count("facilitator"),
+          teachers: count("teacher"),
+          inCharge: (leaders.get(sub.id) ?? []).map((l) => ({ name: l.name, email: l.email })),
+        };
+      }).concat(
+        placesNotSetUp(place, subs).map((p) => ({
+          id: `geo:${p.code}`,
+          name: p.name,
+          leaders: 0,
+          facilitators: 0,
+          teachers: 0,
+          inCharge: [],
+          notSetUp: true,
+        }))
+      ),
+    };
+  }
 
   const gaps = boxes.filter((b) => !rows.some((r) => r.unitId === b.id)).length + groups.filter((g) => !g.staff.length).length;
   const appointments =
@@ -168,7 +215,7 @@ export default async function LevelStaffPage({
           )
         }
       />
-      <StaffDirectory rows={directory} groupLabel={groupLabel} places={places} />
+      <StaffDirectory rows={directory} groupLabel={groupLabel} places={places} breakdown={breakdown} />
     </div>
   );
 }

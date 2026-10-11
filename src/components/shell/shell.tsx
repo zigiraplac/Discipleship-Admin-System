@@ -45,6 +45,7 @@ const PAGE_LABELS: Record<string, string> = {
 export async function Shell({
   cohortParam,
   unitParam = null,
+  adminConsole = false,
   children,
 }: {
   /** Whatever's in the url for a cohort-scoped page — a slug, or an old
@@ -53,6 +54,8 @@ export async function Shell({
   cohortParam: string | null;
   /** The box slug on a level page (/u/[unit]/...), else null. */
   unitParam?: string | null;
+  /** The Super admin console (/admin): its own menu and workspace. */
+  adminConsole?: boolean;
   children: React.ReactNode;
 }) {
   const user = await requireUser();
@@ -120,20 +123,26 @@ export async function Shell({
   const cohortCaps = context === "cohort" && navCohort ? await cohortCapabilities(navCohort.id) : new Set<Capability>();
   // Only the administrator has system authority (the cohort directory).
   const isSystem = user.role === "admin";
-  const globalNav = [
-    ...(isSystem || responsibilities.some((r) => r.kind === "cohort") ? ["cohorts"] : []),
-    ...(user.role === "admin" ? ["settings"] : []),
-  ];
+  // Accounts live in the Super admin console now, not in any other menu.
+  const globalNav = [...(isSystem || responsibilities.some((r) => r.kind === "cohort") ? ["cohorts"] : [])];
   const allowedNav = new Set([...(context === "cohort" ? cohortNavFor(cohortCaps) : []), ...globalNav]);
   const levelPortal = context === "unit";
 
   // Every place this person works, with the role they hold there — one
   // person can lead a promotion and teach two of its cohorts.
   const units = await getAllUnits();
-  const workspaces: Workspace[] = buildWorkspaces(responsibilities, units, cohorts);
+  const workspaces: Workspace[] = [
+    ...buildWorkspaces(responsibilities, units, cohorts),
+    // TODO(permissions): the Super admin console is offered to everyone for now, on purpose.
+    { kind: "admin", href: "/admin", title: "Super admin", role: "Accounts, countries, promotions" },
+  ];
   const activeWorkspace =
     workspaces.find((w) =>
-      context === "unit" && levelNav?.current ? w.href === unitHref(levelNav.current.slug) : w.href === `/c/${navCohort?.slug}`
+      adminConsole
+        ? w.kind === "admin"
+        : context === "unit" && levelNav?.current
+          ? w.href === unitHref(levelNav.current.slug)
+          : w.href === `/c/${navCohort?.slug}`
     ) ?? null;
   // Breadcrumbs: the levels above what's on screen; a level is a link only
   // if this person may open it. Cohort pages show none.
@@ -156,7 +165,7 @@ export async function Shell({
   const org: OrgNav = {
     units: levelNav?.units ?? [],
     current: levelNav?.current ?? null,
-    context: levelNav?.current ? context : "cohort",
+    context: adminConsole ? "admin" : levelNav?.current ? context : "cohort",
     allowedNav: [...allowedNav],
     workspaces,
     activeWorkspace: activeWorkspace?.href ?? null,
@@ -171,7 +180,7 @@ export async function Shell({
   // repeated for cohorts nobody's currently looking at. It's now fetched
   // client-side, on demand, the first time the dropdown is actually
   // opened (getCohortQuickStats, lib/actions/cohorts.ts).
-  const switcherItems: CohortSwitcherItem[] = levelPortal
+  const switcherItems: CohortSwitcherItem[] = levelPortal || adminConsole
     ? []
     : cohorts.map((c) => ({ id: c.id, slug: c.slug, name: c.name }));
 

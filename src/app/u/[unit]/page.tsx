@@ -7,8 +7,11 @@ import { MetricRow } from "@/components/network/metric-card";
 import { ChildrenTable } from "@/components/network/level-tables";
 import { UnitStatusBadge } from "@/components/network/status-ui";
 import { UpcomingEventsCard } from "@/components/shared/upcoming-events";
+import { WorldMap } from "@/components/network/world-map";
+import { ChildStudentsChart } from "@/components/network/child-students-chart";
+import { SAMPLE_PRESENCE } from "@/components/network/world-map-sample";
 import { childrenLabelFor, unitHref } from "@/components/shell/org-nav";
-import { childComparison, childGrowth, crusadesThisMonth, levelMetrics, loadChildRows, loadLevelPage, promotionMetrics } from "@/lib/data/org-view";
+import { childComparison, childGrowth, crusadesThisMonth, hqMetrics, levelMetrics, loadChildRows, loadLevelPage, promotionMetrics } from "@/lib/data/org-view";
 import { LEVELS } from "@/lib/domain/levels";
 import { managementStatus, statusLabel } from "@/lib/domain/status";
 import type { OrgUnitType } from "@/lib/domain/types";
@@ -22,13 +25,7 @@ import type { OrgUnitType } from "@/lib/domain/types";
  * children menu (Continents, Countries, … Cohorts). Operational measures
  * (attendance, registers, at-risk students) live on the cohort dashboard.
  */
-export default async function LevelOverviewPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ unit: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function LevelOverviewPage({ params, searchParams }: { params: Promise<{ unit: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { unit: slug } = await params;
   const { unit, report, period, totals: t, user } = await loadLevelPage(slug, searchParams);
   const { rows, bands, staffCounts } = await loadChildRows(report, user);
@@ -51,51 +48,49 @@ export default async function LevelOverviewPage({
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title={unit.name} subtitle={`${LEVELS[unit.type].label} overview`} />
-      <LevelHeader
-        levelLabel={LEVELS[unit.type].label}
-        period={period}
-        actions={<UnitStatusBadge status={own.status} label={statusLabel(own.status, t.active)} />}
-      />
+      <LevelHeader levelLabel={LEVELS[unit.type].label} period={period} actions={<UnitStatusBadge status={own.status} label={statusLabel(own.status, t.active)} />} />
 
       {/* Reach, current activity, outcomes and capacity. */}
       <MetricRow
         metrics={
           crusades
             ? promotionMetrics(report, period, staffCounts.get(unit.id) ?? 0, crusades.upcoming, monthName)
-            : levelMetrics(report, period, staffCounts.get(unit.id) ?? 0)
+            : unit.type === "hq"
+              ? hqMetrics(report, period, staffCounts.get(unit.id) ?? 0)
+              : levelMetrics(report, period, staffCounts.get(unit.id) ?? 0)
         }
       />
 
+      {/* Global HQ: students by continent (now, or growth) then where BCC is
+          around the world (sample figures for now) — no continents table. */}
+      {unit.type === "hq" && (
+        <>
+          <ChildStudentsChart childWord={childWord} items={childComparison(report)} growth={childGrowth(report)} />
+          <WorldMap presence={SAMPLE_PRESENCE} sample />
+        </>
+      )}
+
       {/* How do the direct children compare now, and are we growing? How are the people serving spread? */}
       {/* Side by side on wide screens, stacked on narrow ones. */}
-      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-        {card(`Students By ${childWord}`, <ChildComparison items={childComparison(report)} />, <span className="text-[11px] text-ink-muted">Active students now</span>)}
-        {crusades ? (
-          <UpcomingEventsCard
-            title="Upcoming events"
-            subtitle={`Crusades in this promotion's cohorts · ${monthName}`}
-            rows={crusades.rows}
-            emptyLabel={`No more crusades in ${monthName}.`}
-          />
-        ) : (
-          card(`Student Growth By ${childWord}`, <GrowthLines {...childGrowth(report)} />, <span className="text-[11px] text-ink-muted">Month by month</span>)
-        )}
-      </div>
+      {unit.type !== "hq" && (
+        <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+          {card(`Students By ${childWord}`, <ChildComparison items={childComparison(report)} />, <span className="text-[11px] text-ink-muted">Active students now</span>)}
+          {crusades ? (
+            <UpcomingEventsCard title="Upcoming events" subtitle={`Crusades in this promotion's cohorts · ${monthName}`} rows={crusades.rows} emptyLabel={`No more crusades in ${monthName}.`} />
+          ) : (
+            card(`Student Growth By ${childWord}`, <GrowthLines {...childGrowth(report)} />, <span className="text-[11px] text-ink-muted">Month by month</span>)
+          )}
+        </div>
+      )}
       {/* The children most in need of attention; the rest are one click away.
           A promotion's cohorts are in its Cohorts menu instead. */}
-      {unit.type !== "promotion" && (
+      {unit.type !== "promotion" && unit.type !== "hq" && (
         <Card className="min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="flex-1">{childrenLabelFor(unit.type)}</CardTitle>
             <span className="text-[11px] text-ink-muted">Most in need of attention first</span>
           </CardHeader>
-          <ChildrenTable
-            rows={rows}
-            childLabel={LEVELS[NEXT[unit.type]].label}
-            childPlural={childrenLabelFor(unit.type)}
-            limit={5}
-            viewAllHref={unitHref(unit.slug, "children")}
-          />
+          <ChildrenTable rows={rows} childLabel={LEVELS[NEXT[unit.type]].label} childPlural={childrenLabelFor(unit.type)} limit={5} viewAllHref={unitHref(unit.slug, "children")} />
         </Card>
       )}
     </div>

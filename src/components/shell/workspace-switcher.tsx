@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { CaretUpDown, Check, GlobeHemisphereEast, UsersThree } from "@phosphor-icons/react";
+import { CaretUpDown, Check, GlobeHemisphereEast, ShieldCheck, UsersThree } from "@phosphor-icons/react";
 import { Popover, PopoverTrigger, PopoverPanel } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { Workspace } from "@/lib/authz/nav";
 
 function WorkspaceIcon({ kind, className }: { kind: Workspace["kind"]; className?: string }) {
-  const Icon = kind === "unit" ? GlobeHemisphereEast : UsersThree;
+  const Icon = kind === "unit" ? GlobeHemisphereEast : kind === "admin" ? ShieldCheck : UsersThree;
   return <Icon size={16} className={className} />;
 }
 
