@@ -113,7 +113,8 @@ export function WorldMap({ presence, sample = false }: { presence: CountryPresen
         {sample && <Pill tone="amber">Sample data</Pill>}
       </CardHeader>
 
-      <div className="px-3 pb-3 sm:px-[18px]">
+      {/* Kept to a moderate width so the map doesn't dominate the page. */}
+      <div className="mx-auto w-full max-w-[720px] px-3 pb-3 sm:px-[18px]">
         <div className="relative">
           <svg
             viewBox={`0 0 ${W} ${H}`}
