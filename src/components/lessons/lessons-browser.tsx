@@ -108,11 +108,8 @@ export function LessonsBrowser({
     [rows, currentPositionId]
   );
 
-  // Initialized once from the current-position lesson's class — that class
-  // starts expanded, every other class starts collapsed.
-  const [expandedClasses, setExpandedClasses] = useState<Set<number>>(
-    () => new Set(currentClassNumber != null ? [currentClassNumber] : [])
-  );
+  // Every class starts collapsed, the current one included.
+  const [expandedClasses, setExpandedClasses] = useState<Set<number>>(() => new Set());
 
   function toggleClass(n: number) {
     setExpandedClasses((prev) => {

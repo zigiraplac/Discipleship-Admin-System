@@ -80,7 +80,7 @@ export async function sendCrusadeReminders(input: {
         kind: "crusade_upcoming",
         title: audience === "team" ? `Crusade weekend after Class ${afterClass} is coming up` : `${input.cohortName.trim()}: crusade weekend after Class ${afterClass}`,
         body: days === 0 ? "Starts today" : days === 1 ? "Starts tomorrow" : `In ${days} days`,
-        href: audience === "team" ? `/c/${input.cohortSlug}/crusades` : undefined,
+        href: audience === "team" ? `/c/${input.cohortSlug}/activities` : undefined,
         dedupeKey: `crusade:${input.cohortId}:${afterClass}`,
         data: { kind: "crusade_upcoming", cohortId: input.cohortId, afterClass, date: friday },
       }),

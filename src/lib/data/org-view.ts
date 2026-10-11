@@ -13,6 +13,9 @@ import {
   type UnitReport,
 } from "./org";
 import { getResponsibilities } from "@/lib/authz";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { formatShortDate } from "@/lib/utils";
+import type { UpcomingEventRow } from "@/components/shared/upcoming-events";
 import type { AppUser } from "@/lib/domain/types";
 import { LEVELS } from "@/lib/domain/levels";
 import { managementReason, managementStatus, statusLabel, unitStatus, type StatusView, type UnitStatus } from "@/lib/domain/status";
@@ -602,4 +605,86 @@ export function childPlural(report: UnitReport): string {
   for (const c of units) if (c.kind === "unit") counts.set(c.unit.type, (counts.get(c.unit.type) ?? 0) + 1);
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0] as keyof typeof LEVELS;
   return LEVELS[top].plural.toLowerCase();
+}
+
+/**
+ * This calendar month's crusade weekends that aren't over yet (today up to
+ * the month's end), across every cohort inside the box — earliest first. Reads events with the service role, so only call
+ * it for a box the viewer may see (loadLevelPage checked). A weekend links
+ * to its cohort's Activities page only for people who work in that cohort.
+ */
+export async function crusadesThisMonth(
+  report: UnitReport,
+  user: AppUser
+): Promise<{ rows: UpcomingEventRow[]; upcoming: number }> {
+  const cohorts = new Map(report.facts.map((f) => [f.cohortId, f]));
+  if (!cohorts.size) return { rows: [], upcoming: 0 };
+  const [y, m] = report.today.split("-").map(Number);
+  const from = `${report.today.slice(0, 7)}-01`; // a weekend that started earlier but ends today still counts
+  const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+
+  const [{ data, error }, responsibilities] = await Promise.all([
+    createAdminClient()
+      .from("event")
+      .select("cohort_id, event_date, after_class")
+      .eq("kind", "crusade")
+      .in("cohort_id", [...cohorts.keys()])
+      .gte("event_date", from)
+      .lte("event_date", to)
+      .order("event_date"),
+    getResponsibilities(user),
+  ]);
+  if (error) throw error;
+  const myCohorts = new Set(responsibilities.flatMap((r) => (r.kind === "cohort" ? [r.cohortId] : [])));
+
+  // One row per weekend (its Friday and Saturday are separate events).
+  const weekends = new Map<string, { cohortId: string; afterClass: number; first: string; last: string }>();
+  for (const e of data ?? []) {
+    const key = `${e.cohort_id}:${e.after_class}`;
+    const w = weekends.get(key);
+    if (w) w.last = e.event_date;
+    else weekends.set(key, { cohortId: e.cohort_id, afterClass: e.after_class ?? 0, first: e.event_date, last: e.event_date });
+  }
+
+  const sorted = [...weekends.values()]
+    .filter((w) => w.last >= report.today)
+    .sort((a, b) => a.first.localeCompare(b.first));
+  const rows = sorted.map((w) => {
+      const cohort = cohorts.get(w.cohortId)!;
+      return {
+        id: `${w.cohortId}:${w.afterClass}`,
+        tone: "violet" as const,
+        kind: "crusade" as const,
+        title: `${cohort.name.trim()} crusade`,
+        meta: `After class ${w.afterClass}`,
+        dateLabel: w.first === w.last ? formatShortDate(w.first) : `${formatShortDate(w.first)} – ${formatShortDate(w.last)}`,
+        href: myCohorts.has(w.cohortId) ? `/c/${cohort.slug}/activities` : null,
+      };
+    });
+  return { rows, upcoming: rows.length };
+}
+
+/** A promotion's cards: its students, cohorts, staff, and activities still
+ * to come this month (crusades for now; other activities later). */
+export function promotionMetrics(report: UnitReport, periodDays: number, staff: number, upcoming: number, monthName: string): MetricView[] {
+  const general = levelMetrics(report, periodDays, staff);
+  const running = report.facts.filter((f) => f.phase === "running").length;
+  return [
+    general.find((m) => m.key === "students")!,
+    {
+      key: "cohorts",
+      label: "Cohorts",
+      value: report.facts.length.toLocaleString(),
+      change: null,
+      context: `${running} running`,
+    },
+    general.find((m) => m.key === "staff")!,
+    {
+      key: "activities",
+      label: "Upcoming activities",
+      value: upcoming.toLocaleString(),
+      change: null,
+      context: `Crusades still to come in ${monthName}`,
+    },
+  ];
 }

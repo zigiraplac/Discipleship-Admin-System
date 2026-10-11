@@ -13,7 +13,7 @@ import type { OutcomeKind } from "@/lib/domain/types";
  * student relapses instead of trusting a now-stale decision forever.
  *
  * Deliberately its own plain module (no "use client"): several Server
- * Components (attention-card.tsx, history-card.tsx, students-table.tsx)
+ * Components (history-card.tsx, students-table.tsx)
  * need these as plain functions, not client references. Importing them
  * from outcome-modal.tsx directly would have made every export of that
  * file a client boundary, breaking exactly that.

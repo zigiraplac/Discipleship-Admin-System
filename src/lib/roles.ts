@@ -15,7 +15,7 @@ export const NAV_BY_ROLE: Record<Role, string[]> = {
     "students",
     "followup",
     "catchup",
-    "crusades",
+    "activities",
     "calendar",
     "reports",
     "cohorts",
@@ -26,14 +26,14 @@ export const NAV_BY_ROLE: Record<Role, string[]> = {
     "students",
     "followup",
     "catchup",
-    "crusades",
+    "activities",
     "calendar",
     "reports",
     "cohorts",
     "settings",
   ],
-  teacher: ["dashboard", "lessons", "crusades", "calendar", "reports"],
-  leadership: ["dashboard", "students", "crusades", "reports", "cohorts"],
+  teacher: ["dashboard", "lessons", "activities", "calendar", "reports"],
+  leadership: ["dashboard", "students", "activities", "reports", "cohorts"],
 };
 
 export function roleLabel(role: Role): string {

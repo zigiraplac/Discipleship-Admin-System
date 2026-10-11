@@ -11,7 +11,7 @@ const COHORT_PAGES: { id: string; needs: Capability }[] = [
   { id: "dashboard", needs: "view_cohort" },
   { id: "lessons", needs: "view_cohort" },
   { id: "calendar", needs: "view_cohort" },
-  { id: "crusades", needs: "view_cohort" },
+  { id: "activities", needs: "view_cohort" },
   { id: "reports", needs: "view_cohort" },
   { id: "students", needs: "view_student" },
   { id: "followup", needs: "view_followups" },

@@ -7,7 +7,7 @@ import {
   ChartLineUp,
   Stack,
   Gear,
-  Megaphone,
+  CalendarStar,
   ArrowsClockwise,
 } from "@phosphor-icons/react/dist/ssr";
 import type { Icon } from "@phosphor-icons/react";
@@ -36,9 +36,9 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "dashboard", label: "Dashboard", href: (c) => `/c/${c}`, icon: SquaresFour, cohortScoped: true },
-  { id: "lessons", label: "Lessons", href: (c) => `/c/${c}/lessons`, icon: BookOpen, cohortScoped: true, group: "schedule" },
-  { id: "crusades", label: "Crusades", href: (c) => `/c/${c}/crusades`, icon: Megaphone, cohortScoped: true, group: "schedule" },
   { id: "calendar", label: "Calendar", href: (c) => `/c/${c}/calendar`, icon: CalendarBlank, cohortScoped: true, group: "schedule" },
+  { id: "lessons", label: "Lessons", href: (c) => `/c/${c}/lessons`, icon: BookOpen, cohortScoped: true, group: "schedule" },
+  { id: "activities", label: "Activities", href: (c) => `/c/${c}/activities`, icon: CalendarStar, cohortScoped: true, group: "schedule" },
   { id: "students", label: "Students", href: (c) => `/c/${c}/students`, icon: UsersThree, cohortScoped: true, group: "students" },
   { id: "followup", label: "Follow Up", href: (c) => `/c/${c}/followup`, icon: WarningCircle, cohortScoped: true, group: "students" },
   { id: "catchup", label: "Catch ups", href: (c) => `/c/${c}/catchup`, icon: ArrowsClockwise, cohortScoped: true, group: "students" },

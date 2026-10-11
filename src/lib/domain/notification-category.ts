@@ -70,7 +70,7 @@ export function actionLabelFor(href: string | null): string | null {
     if (page === "followup") return "View follow-ups";
     if (page === "students") return c[2] ? "View student" : "View students";
     if (page === "lessons") return "View lessons";
-    if (page === "crusades") return "View crusades";
+    if (page === "activities" || page === "crusades") return "View activities";
     if (page === "catchup") return "View catch-ups";
     if (page === "calendar") return "View calendar";
     return "Open cohort";

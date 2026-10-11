@@ -1,7 +1,10 @@
 import { cache } from "react";
 import type { DB } from "./types";
+import { ACTIVITIES_MIGRATION_APPLIED } from "@/lib/domain/activities";
 
 export interface CrusadeReport {
+  /** "done" = the weekend happened; "not_done" = it didn't, with notes on why. */
+  status: "done" | "not_done";
   theme: string | null;
   preacher: string | null;
   notes: string | null;
@@ -10,17 +13,23 @@ export interface CrusadeReport {
   recordedByName: string | null;
 }
 
-/** One report per crusade weekend that's actually been recorded — keyed
- * by after_class. A weekend with no entry here just hasn't happened yet
- * (or hasn't had its report filled in), same as an un-recorded lesson. */
+/** One report per crusade weekend that's been recorded — keyed by
+ * after_class. A weekend with no entry here hasn't been recorded yet; one
+ * with an entry says whether it happened (`status`). */
 export const getCrusadeReports = cache(async function getCrusadeReports(
   db: DB,
   cohortId: string
 ): Promise<Map<number, CrusadeReport>> {
-  const { data, error } = await db
-    .from("crusade_report")
-    .select("after_class, theme, preacher, notes, highlights, recorded_at, recorder:app_user!crusade_report_recorded_by_fkey(name)")
-    .eq("cohort_id", cohortId);
+  // Before migration 0045 there's no status column: every report is "done".
+  const { data, error } = ACTIVITIES_MIGRATION_APPLIED
+    ? await db
+        .from("crusade_report")
+        .select("after_class, status, theme, preacher, notes, highlights, recorded_at, recorder:app_user!crusade_report_recorded_by_fkey(name)")
+        .eq("cohort_id", cohortId)
+    : await db
+        .from("crusade_report")
+        .select("after_class, theme, preacher, notes, highlights, recorded_at, recorder:app_user!crusade_report_recorded_by_fkey(name)")
+        .eq("cohort_id", cohortId);
   if (error) throw error;
 
   const map = new Map<number, CrusadeReport>();
@@ -28,6 +37,7 @@ export const getCrusadeReports = cache(async function getCrusadeReports(
     if (row.recorded_at == null) continue;
     const recorder = Array.isArray(row.recorder) ? row.recorder[0] : row.recorder;
     map.set(row.after_class, {
+      status: "status" in row ? (row.status as CrusadeReport["status"]) : "done",
       theme: row.theme,
       preacher: row.preacher,
       notes: row.notes,

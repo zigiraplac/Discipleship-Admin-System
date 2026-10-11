@@ -18,16 +18,18 @@ export function SortableTH<K extends string>({
   sort,
   onSort,
   align = "left",
+  className,
 }: {
   label: string;
   sortKey: K;
   sort: SortState<K> | null;
   onSort: (key: K) => void;
   align?: "left" | "right";
+  className?: string;
 }) {
   const active = sort?.key === sortKey;
   return (
-    <TH align={align} className="p-0">
+    <TH align={align} className={cn("p-0", className)}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}

@@ -1,6 +1,5 @@
 import { cohortCapabilities } from "@/lib/authz";
 import { notFound } from "next/navigation";
-import { CheckCircle, WarningCircle, BookOpen, Gauge, Megaphone, UserPlus, ChartLineUp } from "@phosphor-icons/react/dist/ssr";
 import { requireUser } from "@/lib/auth";
 import { getCohortWithBands } from "@/lib/data/org";
 import { createClient } from "@/lib/supabase/server";
@@ -11,26 +10,17 @@ import { getCrusadeReports } from "@/lib/data/crusades";
 import { getCatchupCountsByEvent } from "@/lib/data/catchup";
 import { aggregateCohort, isRecorded, lessonSeats, seatTotals, computePace } from "@/lib/domain/metrics";
 import { cohortHealth } from "@/lib/domain/bands";
-import { CURRICULUM, classSpans, lessonAt } from "@/lib/domain/curriculum";
-import { buildIdealSchedule } from "@/lib/domain/generator";
+import { CURRICULUM, classSpans } from "@/lib/domain/curriculum";
 import { upcomingBirthdays, formatBirthdayDate } from "@/lib/domain/birthdays";
 import { crusadeWeekends } from "@/components/reports/report-utils";
 import { todayISO, formatShortDate } from "@/lib/utils";
 import { PageHead } from "@/components/shell/page-head";
 import { KpiRow, KpiCard, type DeltaTone } from "@/components/dashboard/kpi-card";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { GrowthLines } from "@/components/network/growth-lines";
-import { growthWindow } from "@/lib/data/org-view";
-import { cohortFinishedOn, studentHistory, studentSpan } from "@/lib/domain/rollup";
 import { AttendanceCard, type ChartBar } from "@/components/dashboard/attendance-card";
 import { UpcomingEventsCard, type UpcomingEventRow } from "@/components/shared/upcoming-events";
 import { TopAttendersCard } from "@/components/dashboard/top-attenders-card";
-import { Greeting } from "@/components/dashboard/greeting";
-import { HealthPill } from "@/components/ui/pill";
+import { HealthPill, Pill } from "@/components/ui/pill";
 import { StatusDonut, type DonutSegment } from "@/components/dashboard/status-donut";
-import { QuickActions, type QuickAction } from "@/components/dashboard/quick-actions";
-import { AttentionCard, type AttentionItem } from "@/components/dashboard/attention-card";
-import { getOutcomesForCohort, latestByStudent } from "@/lib/data/outcomes";
 import type { Student, StudentAggregate } from "@/lib/domain/types";
 
 /** Only lessons already due (recorded or not) — a future, not-yet-taught
@@ -133,7 +123,7 @@ export default async function DashboardPage({
   params: Promise<{ cohortId: string }>;
 }) {
   const { cohortId: routeParam } = await params;
-  const user = await requireUser();
+  await requireUser();
   const supabase = await createClient();
 
   const [cohort, bands] = await getCohortWithBands(supabase, routeParam);
@@ -156,7 +146,7 @@ export default async function DashboardPage({
     getScheduleSegments(supabase, cohortId),
   ]);
   const weekends = crusadeWeekends(crusadeEvents);
-  const crusadesDone = weekends.filter((w) => crusadeReports.has(w.afterClass)).length;
+  const crusadesDone = weekends.filter((w) => crusadeReports.get(w.afterClass)?.status === "done").length;
 
   let recordedCount = 0;
   let rate = 0;
@@ -169,20 +159,9 @@ export default async function DashboardPage({
   // The next due-but-unrecorded lesson's own register — "Record lesson"
   // deep-links straight there instead of just the Lessons list, so the
   // shortcut actually does the thing it says.
-  let nextLessonHref: string | null = null;
   let enrolled = 0;
   let studentsForBirthdays: Student[] = [];
-  // For the growth chart: everyone ever enrolled (with their dated history),
-  // and which lessons are recorded (to date the cohort's finish).
-  let historyStudents: Student[] = [];
-  let finishLessons: { date: string; recorded: boolean }[] = [];
-  // The last curriculum lesson's own (possibly postponed) scheduled date —
-  // the real, live-reflowed schedule already answers "when does this
-  // finish", so there's no need to re-derive a projection from scratch.
-  let finishDate: string | null = null;
   let statusSegments: DonutSegment[] | null = null;
-  // "Attention required": each line opens the page that deals with it.
-  const attention: AttentionItem[] = [];
 
   const canOpenStudent = caps.has("view_student");
   const studentHref = canOpenStudent ? (id: string) => `/c/${cohortSlug}/students/${id}` : null;
@@ -193,9 +172,6 @@ export default async function DashboardPage({
       getStudents(supabase, cohortId),
     ]);
     studentsForBirthdays = students.filter((s) => !s.leftAt);
-    historyStudents = students;
-    finishLessons = pub.map((p) => ({ date: p.date, recorded: p.recorded }));
-    finishDate = pub[pub.length - 1]?.date ?? null;
     recordedCount = pub.filter((p) => p.recorded).length;
     enrolled = studentsForBirthdays.length;
     // Same seat rule as aggregateCohort (the facilitator branch below): the
@@ -260,22 +236,16 @@ export default async function DashboardPage({
       getLessonEvents(supabase, cohortId),
     ]);
     studentsForBirthdays = allStudents.filter((s) => !s.leftAt);
-    historyStudents = allStudents;
-    finishLessons = lessonEvents.map((e) => ({ date: e.date, recorded: isRecorded(e) }));
     // Attendance counts everyone enrolled on each lesson's date (someone
     // who left later still attended what they attended); the roster
     // panels below show current students only.
     const allIds = new Set(allStudents.map((s) => s.id));
-    finishDate = lessonEvents[lessonEvents.length - 1]?.date ?? null;
     const agg = aggregateCohort(allStudents, lessonEvents, bands, today);
     const current = agg.roster.filter((s) => !s.leftAt);
     recordedCount = agg.recordedCount;
     rate = agg.rate;
     enrolled = agg.enrolled;
     atRiskCount = agg.atRisk;
-    nextLessonHref = agg.outstanding[0]
-      ? `/c/${cohortSlug}/lessons/${agg.outstanding[0].eventId}`
-      : `/c/${cohortSlug}/lessons`;
 
     const catchupCounts = await getCatchupCountsByEvent(
       supabase,
@@ -353,23 +323,6 @@ export default async function DashboardPage({
       .sort((a, b) => a.rate - b.rate)
       .slice(0, 5);
 
-    // Missing registers are a reporting gap — listed here, never counted
-    // as absences in attendance.
-    const perf = (p: string) => current.filter((s) => s.performance === p).length;
-    const missing = agg.outstanding.length;
-    if (perf("At risk")) attention.push({ text: `${perf("At risk")} students at risk`, href: `/c/${cohortSlug}/students?filter=At%20risk`, urgent: true });
-    if (perf("Needs help")) attention.push({ text: `${perf("Needs help")} students need help`, href: `/c/${cohortSlug}/students?filter=Needs%20help`, urgent: false });
-    if (missing) attention.push({ text: `${missing} ${missing === 1 ? "register" : "registers"} missing`, href: nextLessonHref ?? `/c/${cohortSlug}/lessons`, urgent: missing >= 3 });
-    if (caps.has("view_followups")) {
-      const latest = latestByStudent(await getOutcomesForCohort(supabase, cohortId));
-      const struggling = current.filter((s) => (s.performance === "At risk" || s.performance === "Needs help") && !latest.has(s.id));
-      const overdue = current.filter((s) => s.followUpNextOn && s.followUpNextOn < today && (struggling.includes(s) || latest.get(s.id)?.kind === "catchup")).length;
-      const catchups = current.filter((s) => latest.get(s.id)?.kind === "catchup" && s.missed > 0).length;
-      if (overdue) attention.push({ text: `${overdue} follow-ups overdue`, href: `/c/${cohortSlug}/followup`, urgent: true });
-      if (struggling.length) attention.push({ text: `${struggling.length} need a follow-up decision`, href: `/c/${cohortSlug}/followup`, urgent: false });
-      if (catchups) attention.push({ text: `${catchups} active catch-ups`, href: `/c/${cohortSlug}/catchup`, urgent: false });
-    }
-
     statusSegments = [
       { label: "On track", count: current.filter((s) => s.performance === "On track").length, tone: "cyan" },
       { label: "Not started", count: current.filter((s) => s.performance === "Not started").length, tone: "grey" },
@@ -380,7 +333,6 @@ export default async function DashboardPage({
 
   let classIndex = spans.findIndex(([a, b]) => recordedCount >= a && recordedCount <= b);
   if (classIndex < 0) classIndex = CURRICULUM.length - 1;
-  const currentClass = CURRICULUM[classIndex];
 
   const attendanceDelta = rate >= bands.activeThreshold ? "On target" : `${bands.activeThreshold - rate} under`;
   const attendanceTone: DeltaTone = rate >= bands.activeThreshold ? "ok" : "bad";
@@ -390,15 +342,6 @@ export default async function DashboardPage({
   // recorded, so postponing a lesson can never leave this stale.
   const pace = computePace(cohort, scheduleSegments, recordedCount, today);
   const onPace = pace.gap <= 0;
-  // The plan's own last lesson vs the live (postponed) schedule's — shown
-  // only when they differ, so an on-time cohort's card stays as it was.
-  const idealLessons = buildIdealSchedule(cohort, scheduleSegments).filter((e) => e.kind === "lesson");
-  const plannedEnd = idealLessons[idealLessons.length - 1]?.date ?? null;
-  const endText = finishDate
-    ? plannedEnd && plannedEnd !== finishDate
-      ? `Planned ${formatShortDate(plannedEnd)} · now ends ${formatShortDate(finishDate)}`
-      : `Ends ${formatShortDate(finishDate)}`
-    : null;
 
   // Same tiers already shown on the Cohorts switcher list — surfaced here
   // too since that's the only place it showed before, not the dashboard a
@@ -428,39 +371,7 @@ export default async function DashboardPage({
     .slice(0, 4)
     .map((i) => i.row);
 
-  // Gated by who can actually *do* the thing, not just who can see the
-  // page it lives on — "Add student" only exists as a button for
-  // facilitator/admin (students/page.tsx), and only those two roles can
-  // open a register to record it, so showing these to anyone else would
-  // be a shortcut to a page with nothing to click.
-  const canAddStudent = caps.has("edit_student");
-  const canRecordLessons = caps.has("edit_attendance");
-  const rawActions: (QuickAction | false)[] = [
-    canAddStudent && {
-      label: "Add student",
-      href: `/c/${cohortSlug}/students?add=1`,
-      icon: UserPlus,
-      tone: "cyan",
-    },
-    canRecordLessons && {
-      label: "Record lesson",
-      href: nextLessonHref ?? `/c/${cohortSlug}/lessons`,
-      icon: BookOpen,
-      tone: "green",
-    },
-    caps.has("view_followups") && { label: "Follow ups", href: `/c/${cohortSlug}/followup`, icon: WarningCircle, tone: "yellow" },
-    caps.has("view_cohort") && { label: "Reports", href: `/c/${cohortSlug}/reports`, icon: ChartLineUp, tone: "violet" },
-  ];
-  const quickActions = rawActions.filter((a): a is QuickAction => a !== false);
 
-  // One line: this cohort's students over time, from dated enrolment history.
-  const growth = growthWindow([
-    {
-      id: cohort.id,
-      name: cohort.name.trim(),
-      points: studentHistory([{ spans: historyStudents.map(studentSpan), finishedOn: cohortFinishedOn(cohort.status, finishLessons, today) }], today),
-    },
-  ]);
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -469,73 +380,33 @@ export default async function DashboardPage({
         subtitle={`${cohort.name} · Class ${classIndex + 1} of 7`}
       />
 
-      <Greeting name={user.name} right={<HealthPill health={health} />} />
+      <div className="flex items-center justify-between gap-3">
+        <Pill tone="cyan" className="px-3.5 py-1 text-sm">
+          {cohort.name.trim()}
+        </Pill>
+        <HealthPill health={health} />
+      </div>
 
       <KpiRow>
+        <KpiCard label="Students" value={enrolled} />
+        <KpiCard label="Attendance" value={`${rate}%`} delta={attendanceDelta} deltaTone={attendanceTone} />
         <KpiCard
-          icon={<CheckCircle size={15} />}
-          label="Attendance"
-          value={`${rate}%`}
-          delta={attendanceDelta}
-          deltaTone={attendanceTone}
-          sub={`Target ${bands.activeThreshold}%`}
-        />
-        {statusSegments !== null && (
-          <KpiCard
-            icon={<WarningCircle size={15} />}
-            label="Needs follow up"
-            value={atRiskCount}
-            sub={`of ${enrolled} students`}
-          />
-        )}
-        <KpiCard
-          icon={<BookOpen size={15} />}
-          label="Progress"
-          value={`Lesson ${recordedCount} / 80`}
-          sub={`Class ${classIndex + 1} · ${currentClass.title}`}
-        />
-        <KpiCard
-          icon={<Gauge size={15} />}
-          label="Pace"
-          value={onPace ? "On pace" : `${pace.gap} behind`}
+          label="Behind"
+          value={Math.max(0, pace.gap)}
           delta={onPace ? "On target" : "Catch up"}
           deltaTone={onPace ? "ok" : "bad"}
-          sub={
-            recordedCount < 80
-              ? `Now at ${lessonAt(recordedCount).ref}${endText ? ` · ${endText}` : ""}`
-              : (endText ?? "vs. this cohort's own ideal plan")
-          }
         />
         <KpiCard
-          icon={<Megaphone size={15} />}
-          label="Crusades done"
-          value={`${crusadesDone}/${weekends.length}`}
-          sub="Weekend reports recorded"
+          label="Lessons"
+          value={`${recordedCount}/80`}
+          sub={`Class ${classIndex + 1} · ${CURRICULUM[classIndex].title}`}
         />
+        <KpiCard label="Crusades" value={`${crusadesDone}/${weekends.length}`} />
       </KpiRow>
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <AttendanceCard lessonBars={lessonBars} classBars={classBars} />
         <div className="flex flex-col gap-4">
-          <AttendanceCard lessonBars={lessonBars} classBars={classBars} />
-          <Card className="overflow-hidden">
-            <CardHeader>
-              <CardTitle className="flex-1">Student growth</CardTitle>
-              <span className="text-[11px] text-ink-muted">Month by month</span>
-            </CardHeader>
-            <div className="px-[18px] py-3.5">
-              <GrowthLines {...growth} height={160} />
-            </div>
-          </Card>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-            {topAttenders !== null && needsFollowUp !== null && (
-              <TopAttendersCard good={topAttenders} followUp={needsFollowUp} bands={bands} />
-            )}
-            {statusSegments !== null && <StatusDonut segments={statusSegments} total={enrolled} />}
-          </div>
-        </div>
-        <div className="flex flex-col gap-4">
-          {statusSegments !== null && <AttentionCard items={attention} />}
-          <QuickActions actions={quickActions} />
           <UpcomingEventsCard
             title="Upcoming"
             rows={upNext}
@@ -544,6 +415,15 @@ export default async function DashboardPage({
           />
         </div>
       </div>
+
+      {(topAttenders !== null || statusSegments !== null) && (
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+          {topAttenders !== null && needsFollowUp !== null && (
+            <TopAttendersCard good={topAttenders} followUp={needsFollowUp} bands={bands} />
+          )}
+          {statusSegments !== null && <StatusDonut segments={statusSegments} total={enrolled} />}
+        </div>
+      )}
     </div>
   );
 }

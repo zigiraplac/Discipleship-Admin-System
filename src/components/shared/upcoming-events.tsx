@@ -22,16 +22,6 @@ const ICON_BY_KIND: Record<UpcomingKind, typeof BookOpen> = {
   birthday: Cake,
 };
 
-// The accent bar is purely decorative rhythm, not meaning — it cycles
-// through these tones by row position regardless of what the row is.
-const BAR_ALTERNATION: UpcomingTone[] = ["cyan", "magenta", "yellow", "violet"];
-const BAR_CLASSES: Record<UpcomingTone, string> = {
-  cyan: "bg-accent",
-  magenta: "bg-accent-2-500",
-  yellow: "bg-yellow",
-  violet: "bg-violet-500",
-};
-
 export interface UpcomingEventRow {
   id: string;
   tone: UpcomingTone;
@@ -65,8 +55,8 @@ export function UpcomingEventsCard({
       <div className="text-[15px] font-bold text-ink">{title}</div>
       {subtitle && <div className="mt-0.5 text-xs text-ink-muted">{subtitle}</div>}
       <div className="mt-3.5 flex flex-col gap-2">
-        {rows.map((r, i) => (
-          <UpcomingRow key={r.id} row={r} barTone={BAR_ALTERNATION[i % BAR_ALTERNATION.length]} />
+        {rows.map((r) => (
+          <UpcomingRow key={r.id} row={r} />
         ))}
         {rows.length === 0 && (
           <div className="rounded-[10px] border border-border-soft bg-subtle px-3 py-4 text-center text-[13px] text-ink-muted">
@@ -78,15 +68,14 @@ export function UpcomingEventsCard({
   );
 }
 
-function UpcomingRow({ row, barTone }: { row: UpcomingEventRow; barTone: UpcomingTone }) {
+function UpcomingRow({ row }: { row: UpcomingEventRow }) {
   const IconEl = ICON_BY_KIND[row.kind];
   const classes = cn(
-    "flex items-center gap-2.5 rounded-[9px] bg-subtle py-2.5 pl-2 pr-3",
+    "flex items-center gap-2.5 rounded-[9px] bg-subtle px-3 py-2.5",
     row.href && "hover:bg-hover"
   );
   const inner = (
     <>
-      <span className={cn("my-0.5 w-[3px] flex-none self-stretch rounded-full", BAR_CLASSES[barTone])} />
       <span className={cn("grid size-7 flex-none place-items-center rounded-[8px]", ICON_CLASSES[row.tone])}>
         <IconEl size={14} />
       </span>

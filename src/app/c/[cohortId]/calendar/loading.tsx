@@ -7,8 +7,7 @@ export default function CalendarLoading() {
   return (
     <div className="flex flex-col gap-[18px]">
       <PageHead title="Calendar" />
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-        <PanelSkeleton lines={5} />
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Card className="p-[18px]">
           <div className="flex items-center justify-between">
             <Skeleton className="h-5 w-32" />
@@ -20,6 +19,7 @@ export default function CalendarLoading() {
             ))}
           </div>
         </Card>
+        <PanelSkeleton lines={5} />
       </div>
     </div>
   );

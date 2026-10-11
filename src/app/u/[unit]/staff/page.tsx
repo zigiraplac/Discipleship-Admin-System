@@ -127,6 +127,12 @@ export default async function LevelStaffPage({
     }
   }
   const directory = [...people.values()];
+  // Every direct child — a promotion's cohorts, otherwise the levels just
+  // below — so a place with nobody serving still shows as a gap.
+  const places =
+    unit.type === "promotion"
+      ? cohorts.filter((c) => c.orgUnitId === unit.id).map((c) => ({ id: c.id, name: c.name.trim() }))
+      : units.filter((u) => u.parentId === unit.id).map((u) => ({ id: u.id, name: u.name }));
   const groupLabel = unit.type === "promotion" ? "Cohort" : LEVELS[NEXT[unit.type]].label;
 
   const gaps = boxes.filter((b) => !rows.some((r) => r.unitId === b.id)).length + groups.filter((g) => !g.staff.length).length;
@@ -162,7 +168,7 @@ export default async function LevelStaffPage({
           )
         }
       />
-      <StaffDirectory rows={directory} groupLabel={groupLabel} />
+      <StaffDirectory rows={directory} groupLabel={groupLabel} places={places} />
     </div>
   );
 }

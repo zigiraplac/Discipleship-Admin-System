@@ -11,10 +11,11 @@ import { Segmented } from "@/components/ui/segmented";
 import { Table, THead, TH, TR, TD } from "@/components/ui/table";
 import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
 import { ISSUE_LABELS, type IssueKind } from "@/lib/domain/rollup";
+import { STATUS_LABELS } from "@/lib/domain/status";
+import { cn } from "@/lib/utils";
 import type { IssueRow, StatusRow } from "@/lib/data/org-view";
-import { useOverviewPanel } from "./overview-panel";
+import { OverviewContent, useOverviewLoader, useOverviewPanel } from "./overview-panel";
 import { ChildManageActions } from "./child-manage";
-import { ResponsibleCell } from "./child-status";
 
 const TONE: Record<StatusRow["status"], PillTone> = { good: "green", attention: "yellow", critical: "magenta", quiet: "grey" };
 const RANK: Record<StatusRow["status"], number> = { critical: 3, attention: 2, good: 1, quiet: 0 };
@@ -24,13 +25,27 @@ type ChildSort = "name" | "status" | "students" | "active";
 /** Stops a click inside a row (a link, an email, rename) from also opening the row. */
 const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
+/** Fixed widths of the columns the full table's drawer leaves visible — it
+ * starts right after them (260 + 170 = 430px). */
+const NAME_COL = "w-[260px] min-w-[260px] max-w-[260px]";
+const STATUS_COL = "w-[170px] min-w-[170px] max-w-[170px]";
+
+type StatusFilter = StatusRow["status"] | "all";
+
+/** Who answers for a child, by name only. */
+function responsibleNames(r: StatusRow["responsible"]): string {
+  return r.kind === "people" && r.people.length ? r.people.map((p) => p.name).join(", ") : "Not assigned";
+}
+
 /**
- * The direct children of a level as one compact table (the same table as
- * a cohort's Students): status with one plain reason, scale, staff and who
- * answers for it. Clicking a row opens that child's overview on the right.
+ * The direct children of a level as one table: name, status, students and
+ * who answers for it. Clicking a row opens that child's overview in a
+ * drawer over the table, beside the names, so another one can be picked
+ * straight away; the drawer's button opens the child itself.
  *
  * `limit` gives the dashboard's short version: the children most in need
- * of attention, no toolbar, and a link to see them all.
+ * of attention, no toolbar, a link to see them all, and the overview in
+ * the pop-out panel instead.
  */
 export function ChildrenTable({
   rows,
@@ -49,14 +64,25 @@ export function ChildrenTable({
   limit?: number;
   viewAllHref?: string;
 }) {
-  const open = useOverviewPanel();
+  const openPopout = useOverviewPanel();
+  const overview = useOverviewLoader();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortState<ChildSort> | null>(null);
   const compact = limit != null;
 
+  const filterOptions = useMemo(() => {
+    const present = (["critical", "attention", "good", "quiet"] as const).filter((st) => rows.some((r) => r.status === st));
+    return [
+      { value: "all" as StatusFilter, label: `All ${rows.length}` },
+      ...present.map((st) => ({ value: st as StatusFilter, label: `${STATUS_LABELS[st]} ${rows.filter((r) => r.status === st).length}` })),
+    ];
+  }, [rows]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const list = rows.filter((r) => !q || r.name.toLowerCase().includes(q));
+    const list = rows.filter((r) => (filter === "all" || r.status === filter) && (!q || r.name.toLowerCase().includes(q)));
     const dir = sort?.dir === "desc" ? -1 : 1;
     const sorted = !sort
       ? list
@@ -70,68 +96,61 @@ export function ChildrenTable({
                 : dir * (RANK[a.status] - RANK[b.status])
         );
     return compact ? sorted.slice(0, limit) : sorted;
-  }, [rows, query, sort, compact, limit]);
+  }, [rows, filter, query, sort, compact, limit]);
 
-  const head = (label: string, key: ChildSort, align?: "right") =>
-    compact ? <TH align={align}>{label}</TH> : <SortableTH label={label} sortKey={key} sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} align={align} />;
+  function openRow(r: StatusRow) {
+    if (compact) return openPopout({ kind: r.kind, id: r.id });
+    setSelectedId(r.id);
+    overview.load({ kind: r.kind, id: r.id });
+  }
+
+  const head = (label: string, key: ChildSort, align?: "right", className?: string) =>
+    compact ? (
+      <TH align={align} className={className}>
+        {label}
+      </TH>
+    ) : (
+      <SortableTH label={label} sortKey={key} sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} align={align} className={className} />
+    );
 
   const table = (
     <Table>
       <THead>
-        {head(childLabel, "name")}
-        {head("Status", "status")}
+        {head(childLabel, "name", undefined, compact ? undefined : NAME_COL)}
+        {head("Status", "status", undefined, compact ? undefined : STATUS_COL)}
         {head("Students", "students", "right")}
-        {head("Active", "active", "right")}
-        <TH align="right">Staff</TH>
         <TH>Responsible</TH>
-        <TH align="right" />
+        {canManage && <TH align="right" />}
       </THead>
       <tbody>
         {shown.map((r) => (
-          <TR key={r.id} className="cursor-pointer hover:bg-hover" onClick={() => open({ kind: r.kind, id: r.id })}>
-            <TD>
-              <span className="block text-[13px] font-semibold text-ink">{r.name}</span>
-              {r.href && (
-                <Link href={r.href} onClick={stop} className="text-[11px] font-semibold text-accent-700 hover:underline">
-                  {r.kind === "cohort" ? "Open cohort" : "Manage directly"}
-                </Link>
-              )}
+          <TR key={r.id} className={cn("cursor-pointer hover:bg-hover", r.id === selectedId && "bg-accent-100 hover:bg-accent-100")} onClick={() => openRow(r)}>
+            <TD className={compact ? undefined : NAME_COL}>
+              <span className="block truncate text-[13px] font-semibold text-ink" title={r.name}>
+                {r.name}
+              </span>
             </TD>
-            <TD className="max-w-[260px]">
+            <TD className={compact ? undefined : STATUS_COL}>
               <Pill tone={TONE[r.status]}>{r.statusText}</Pill>
-              {r.reason && (
-                <span className="mt-1 block truncate text-[11px] text-ink-muted" title={r.reason}>
-                  {r.reason}
-                </span>
-              )}
             </TD>
             <TD align="right" className="text-[13px] font-semibold tabular">
               {r.students.toLocaleString()}
             </TD>
-            <TD align="right" className="text-[13px] tabular text-ink-secondary">
-              {r.active.toLocaleString()}
-            </TD>
-            <TD align="right" className="text-[13px] tabular text-ink-secondary" title={r.staffDetail}>
-              {r.staff}
-            </TD>
-            <TD onClick={stop} className="cursor-default">
-              <ResponsibleCell r={r.responsible} />
-            </TD>
-            <TD align="right" className="w-px whitespace-nowrap">
-              <span className="flex items-center justify-end gap-1">
-                {canManage && r.kind === "unit" && (
+            <TD className="text-[13px] text-ink-secondary">{responsibleNames(r.responsible)}</TD>
+            {canManage && (
+              <TD align="right" className="w-px whitespace-nowrap">
+                {r.kind === "unit" && (
                   <span onClick={stop}>
                     <ChildManageActions id={r.id} name={r.name} levelLabel={r.levelLabel} />
                   </span>
                 )}
-                <CaretRight size={13} className="text-ink-faint" />
-              </span>
-            </TD>
+              </TD>
+            )}
           </TR>
         ))}
         {!shown.length && (
           <TR>
-            <TD colSpan={7} className="py-6 text-center text-ink-faint">
+            <TD colSpan={canManage ? 5 : 4} className="py-6 text-center text-ink-faint">
               {rows.length ? "No one matches." : `No ${childPlural.toLowerCase()} yet.`}
             </TD>
           </TR>
@@ -145,7 +164,10 @@ export function ChildrenTable({
       <>
         {table}
         {viewAllHref && rows.length > 0 && (
-          <Link href={viewAllHref} className="flex items-center justify-center gap-1 border-t border-divider px-[18px] py-2.5 text-xs font-semibold text-accent-700 hover:bg-hover">
+          <Link
+            href={viewAllHref}
+            className="flex items-center justify-center gap-1 border-t border-divider px-[18px] py-2.5 text-xs font-semibold text-accent-700 hover:bg-hover"
+          >
             {rows.length > shown.length ? `View all ${rows.length} ${childPlural.toLowerCase()}` : `Open ${childPlural.toLowerCase()}`}
             <CaretRight size={12} />
           </Link>
@@ -155,11 +177,40 @@ export function ChildrenTable({
   }
 
   return (
-    <Card className="overflow-hidden">
+    // The drawer covers the card from its top edge (toolbar included), right of the names.
+    <Card className={cn("relative overflow-clip", selectedId && "min-h-[70vh]")}>
       <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Find a ${childLabel.toLowerCase()}`} className="ml-auto" style={{ width: 200 }} />
+        <Segmented options={filterOptions} value={filter} onChange={setFilter} className="max-w-full flex-wrap" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Find a ${childLabel.toLowerCase()}`}
+          className="ml-auto"
+          style={{ width: 200 }}
+        />
       </div>
       {table}
+      {selectedId && (
+        <div className="absolute inset-y-0 right-0 left-0 z-10 border-l border-border bg-card shadow-modal lg:left-[430px]">
+          <div className="sticky top-[76px] flex max-h-[calc(100dvh-88px)] flex-col">
+            <OverviewContent
+              data={overview.data}
+              error={overview.error}
+              pending={overview.pending}
+              close={
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(null)}
+                  aria-label="Close overview"
+                  className="grid size-8 flex-none place-items-center rounded-control border border-border bg-card text-ink-secondary hover:bg-hover"
+                >
+                  <X size={15} />
+                </button>
+              }
+            />
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

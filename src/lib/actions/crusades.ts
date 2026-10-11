@@ -14,10 +14,12 @@ import {
   type ScheduleItem,
 } from "@/lib/domain/generator";
 import { scheduleItemKey, one, type EventRow } from "@/lib/domain/schedule-position";
+import { ACTIVITIES_MIGRATION_APPLIED } from "@/lib/domain/activities";
 
 export interface SaveCrusadeReportInput {
   cohortId: string;
   afterClass: number;
+  status: "done" | "not_done";
   theme: string;
   preacher: string;
   notes: string;
@@ -25,20 +27,22 @@ export interface SaveCrusadeReportInput {
 }
 
 /**
- * Upserts the report for one crusade weekend — recording it *is* how a
- * weekend gets marked as having happened, no separate boolean. Uses the
+ * Upserts the report for one crusade weekend: whether it happened
+ * (`status`), plus theme, preacher and notes either way. Uses the
  * regular, RLS-respecting client: can_write_pastoral already confirms the
  * caller is an admin or a facilitator actually assigned to this cohort,
  * same as saveRegister.
  */
 export async function saveCrusadeReport(input: SaveCrusadeReportInput): Promise<void> {
   const user = await requireCapability("record_crusade", await cohortTarget(input.cohortId));
+  if (input.status !== "done" && input.status !== "not_done") throw new Error("Choose a status.");
   const supabase = await createClient();
 
   const { error } = await supabase.from("crusade_report").upsert(
     {
       cohort_id: input.cohortId,
       after_class: input.afterClass,
+      ...(ACTIVITIES_MIGRATION_APPLIED ? { status: input.status } : {}),
       theme: input.theme.trim() || null,
       preacher: input.preacher.trim() || null,
       notes: input.notes.trim() || null,
@@ -54,6 +58,7 @@ export async function saveCrusadeReport(input: SaveCrusadeReportInput): Promise<
   const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(`${base}/reports`);
   revalidatePath(`${base}/calendar`);
+  revalidatePath(`${base}/activities`);
 }
 
 /** Clears a weekend's report — the "undo" for a report saved by mistake. */
@@ -72,6 +77,7 @@ export async function clearCrusadeReport(input: { cohortId: string; afterClass: 
   const base = `/c/${cohort?.slug ?? input.cohortId}`;
   revalidatePath(`${base}/reports`);
   revalidatePath(`${base}/calendar`);
+  revalidatePath(`${base}/activities`);
 }
 
 export interface PostponeCrusadeResult {
@@ -80,8 +86,8 @@ export interface PostponeCrusadeResult {
 
 /**
  * A crusade weekend has no register and no "recorded" flag the way a
- * lesson does — instead, an already-reported weekend (saveCrusadeReport)
- * is what "already happened" means, and postponing that is refused the
+ * lesson does — instead, a report marked done (saveCrusadeReport) is
+ * what "already happened" means, and postponing that is refused the
  * same way postponing an already-recorded lesson is. Otherwise this is
  * exactly `postponeLesson` (src/lib/actions/schedule.ts), applied to the
  * weekend's two day-events (crusade_day 0 and 1) as a block instead of one
@@ -100,12 +106,14 @@ export async function postponeCrusadeWeekend(input: {
 
   const { data: existingReport } = await admin
     .from("crusade_report")
-    .select("id")
+    .select(ACTIVITIES_MIGRATION_APPLIED ? "status" : "id")
     .eq("cohort_id", input.cohortId)
     .eq("after_class", input.afterClass)
     .maybeSingle();
-  if (existingReport) {
-    throw new Error("This weekend's report is already recorded — nothing to postpone.");
+  // Before migration 0045 any saved report means done.
+  const alreadyDone = existingReport && (!ACTIVITIES_MIGRATION_APPLIED || (existingReport as { status?: string }).status === "done");
+  if (alreadyDone) {
+    throw new Error("This weekend is already marked done — nothing to postpone.");
   }
 
   const { data: cohort, error: cohortErr } = await admin
@@ -201,7 +209,7 @@ export async function postponeCrusadeWeekend(input: {
       kind: "crusade_postponed",
       title: `The crusade weekend after Class ${input.afterClass} was postponed`,
       body: updates.length > 1 ? `${updates.length} lessons and crusade days shifted forward.` : "It was shifted to the following weekend.",
-      href: `/c/${cohortSlug}/crusades`,
+      href: `/c/${cohortSlug}/activities`,
       dedupeKey: auditRow ? `crusade_postponed:${auditRow.id}` : undefined,
     }),
     { exclude: [actor.id] }
@@ -209,7 +217,7 @@ export async function postponeCrusadeWeekend(input: {
 
   const base = `/c/${cohortSlug}`;
   revalidatePath(base);
-  revalidatePath(`${base}/crusades`);
+  revalidatePath(`${base}/activities`);
   revalidatePath(`${base}/calendar`);
   revalidatePath(`${base}/reports`);
 

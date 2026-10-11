@@ -9,17 +9,20 @@ export const PopoverTrigger = BasePopover.Trigger;
 export function PopoverPanel({
   className,
   align = "end",
+  side = "bottom",
   width = 300,
   children,
 }: {
   className?: string;
   align?: "start" | "end";
+  /** "top" for a trigger near the bottom of the screen. */
+  side?: "top" | "bottom";
   width?: number;
   children: React.ReactNode;
 }) {
   return (
     <BasePopover.Portal>
-      <BasePopover.Positioner side="bottom" align={align} sideOffset={7}>
+      <BasePopover.Positioner side={side} align={align} sideOffset={7}>
         <BasePopover.Popup
           className={cn(
             "z-40 overflow-hidden rounded-[12px] border border-border bg-card shadow-dropdown outline-none",

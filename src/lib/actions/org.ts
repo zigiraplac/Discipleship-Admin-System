@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { childId, childName, getAllUnits, getMyUnitRoles, getPolicy, getStaffCounts, getUnitLeaderContacts, getUnitReport } from "@/lib/data/org";
+import { childId, childName, getAllUnits, getCohortStaff, getMyUnitRoles, getPolicy, getStaffCounts, getUnitLeaderContacts, getUnitReport } from "@/lib/data/org";
 import { childrenLabelFor } from "@/components/shell/org-nav";
 import { isResponsibleFor } from "@/lib/domain/responsibility";
 import { managementReason, managementStatus, statusLabel, type UnitStatus } from "@/lib/domain/status";
@@ -52,7 +52,14 @@ export type OverviewData =
       name: string;
       href: string | null;
       facilitators: string[];
+      teachers: string[];
       context: string;
+      city: string | null;
+      createdAt: string;
+      /** 0 = Sunday … 6 = Saturday. */
+      teachingDays: number[];
+      lessonsPerSession: number;
+      intervalWeeks: number;
       phase: "upcoming" | "running" | "finished";
       startsOn: string | null;
       finishedOn: string | null;
@@ -129,7 +136,11 @@ export async function loadOverview(ref: OverviewRef, period: string): Promise<Ov
     };
   }
 
-  const { data: cohort, error } = await createAdminClient().from("cohort").select("id, org_unit_id").eq("id", ref.id).maybeSingle();
+  const { data: cohort, error } = await createAdminClient()
+    .from("cohort")
+    .select("id, org_unit_id, city, created_at, teaching_days, lessons_per_session, interval_weeks")
+    .eq("id", ref.id)
+    .maybeSingle();
   if (error) throw error;
   const allowed =
     cohort && (await authorize("view_cohort_summary", await cohortTarget(cohort.id), user)).allowed;
@@ -138,13 +149,20 @@ export async function loadOverview(ref: OverviewRef, period: string): Promise<Ov
   const f = report.facts.find((x) => x.cohortId === cohort.id);
   if (!f) throw new Error("This cohort could not be found.");
   const home = units.find((u) => u.id === cohort.org_unit_id)!;
+  const staff = (await getCohortStaff([cohort.id])).get(cohort.id) ?? [];
   return {
     kind: "cohort",
     name: f.name,
     // Only the cohort's own team opens it from here; levels see this summary.
     href: (await getResponsibilities(user)).some((r) => r.kind === "cohort" && r.cohortId === cohort.id) ? `/c/${f.slug}` : null,
     facilitators: f.facilitatorNames,
+    teachers: staff.filter((m) => m.capacity === "teacher" && m.state !== "deactivated").map((m) => m.name),
     context: ancestryOf(home, units).filter((a) => a.type !== "hq").map((a) => a.name).join(" › "),
+    city: cohort.city,
+    createdAt: cohort.created_at,
+    teachingDays: cohort.teaching_days,
+    lessonsPerSession: cohort.lessons_per_session,
+    intervalWeeks: cohort.interval_weeks,
     phase: f.phase,
     startsOn: f.startsOn,
     finishedOn: f.finishedOn,

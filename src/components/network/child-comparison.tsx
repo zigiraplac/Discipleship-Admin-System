@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { byActive, compact, FILLS, MAX_BARS } from "./identity-colours";
+import { byActive, compact, MAX_BARS } from "./identity-colours";
 
 
 function niceMax(n: number): number {
@@ -20,8 +20,8 @@ function niceMax(n: number): number {
  *
  * Bars are wide and sized to the number of children (a slot per child,
  * the bar ~60% of it, capped so two children don't become slabs), with
- * the exact value above each bar. Past five children, the smallest fold
- * into "Others".
+ * the exact value above each bar, all in the one accent blue. Past five
+ * children, the smallest fold into "Others".
  */
 export function ChildComparison({ items, unit = "students", height = 220 }: { items: { id: string; name: string; value: number }[]; unit?: string; height?: number }) {
   const [hover, setHover] = useState<string | null>(null);
@@ -55,7 +55,7 @@ export function ChildComparison({ items, unit = "students", height = 220 }: { it
         </div>
 
         <div className="relative flex items-end" style={{ height }} role="img" aria-label={bars.map((b) => `${b.name}: ${b.value} ${unit}`).join("; ")}>
-          {bars.map((b, i) => {
+          {bars.map((b) => {
             const pct = (b.value / max) * 100;
             const share = total ? Math.round((b.value / total) * 100) : 0;
             return (
@@ -69,7 +69,7 @@ export function ChildComparison({ items, unit = "students", height = 220 }: { it
                   {b.value >= 10_000 ? compact(b.value) : b.value.toLocaleString()}
                 </span>
                 <div
-                  className={cn("rounded-t-[8px] transition-[height,opacity] duration-300", FILLS[i], hover && hover !== b.id && "opacity-60")}
+                  className={cn("rounded-t-[8px] bg-accent transition-[height,opacity] duration-300", hover && hover !== b.id && "opacity-60")}
                   // Scaled within the space left after the value label above it.
                   style={{ width: barWidth, height: `calc((100% - 26px) * ${Math.max(pct, b.value ? 1.5 : 0) / 100})` }}
                 />

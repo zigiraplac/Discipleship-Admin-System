@@ -64,9 +64,7 @@ export function CalendarView({
   );
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-      <UpcomingEventsCard title="This week" subtitle="Next 7 days, across the cohort" rows={upcomingRows} />
-
+    <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
           <Button
@@ -111,6 +109,8 @@ export function CalendarView({
           canOpenStudent={canOpenStudent}
         />
       </Card>
+
+      <UpcomingEventsCard title="This week" subtitle="Next 7 days, across the cohort" rows={upcomingRows} />
     </div>
   );
 }

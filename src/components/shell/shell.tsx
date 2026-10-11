@@ -35,7 +35,7 @@ const PAGE_LABELS: Record<string, string> = {
   students: "Students",
   followup: "Follow Up",
   catchup: "Catch ups",
-  crusades: "Crusades",
+  activities: "Activities",
   calendar: "Calendar",
   reports: "Reports",
   cohorts: "Cohorts",
@@ -136,18 +136,13 @@ export async function Shell({
       context === "unit" && levelNav?.current ? w.href === unitHref(levelNav.current.slug) : w.href === `/c/${navCohort?.slug}`
     ) ?? null;
   // Breadcrumbs: the levels above what's on screen; a level is a link only
-  // if this person may open it.
+  // if this person may open it. Cohort pages show none.
   const crumbUnits = (u: OrgUnit | undefined) => (u ? ancestryOf(u, units) : []);
   const crumbs: Crumb[] = [];
   if (context === "unit" && levelNav?.current) {
     for (const u of crumbUnits(investigated ?? units.find((x) => x.slug === levelNav!.current!.slug))) {
       crumbs.push({ label: u.name, href: decide(responsibilities, "view_org", unitTarget(u)).allowed ? unitHref(u.slug) : undefined });
     }
-  } else if (activeCohort) {
-    for (const u of crumbUnits(units.find((x) => x.id === activeCohort.orgUnitId))) {
-      crumbs.push({ label: u.name, href: decide(responsibilities, "view_org", unitTarget(u)).allowed ? unitHref(u.slug) : undefined });
-    }
-    crumbs.push({ label: activeCohort.name.trim(), href: `/c/${activeCohort.slug}` });
   }
 
   // System support access: an administrator opening a cohort they don't

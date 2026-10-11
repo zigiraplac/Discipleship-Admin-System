@@ -1,13 +1,14 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { Input } from "@/components/ui/input";
-import { SplitRow, Table, THead, TH, TR, TD } from "@/components/ui/table";
+import { Table, THead, TH, TR, TD } from "@/components/ui/table";
+import { Segmented } from "@/components/ui/segmented";
 import { SortableTH, nextSort, type SortState } from "@/components/ui/sortable-th";
-import { CaretRight, UserGear, X } from "@phosphor-icons/react";
+import { UserGear, X } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -33,121 +34,132 @@ export interface DirectoryRow {
   assignments: StaffAssignment[];
 }
 
-type SortKey = "name" | "role" | "place";
 const ROLE_ORDER: StaffRoleLabel[] = ["Leader", "Viewer", "Facilitator", "Teacher"];
-
+const ROLE_PLURAL: Record<StaffRoleLabel, string> = { Leader: "Leaders", Viewer: "Viewers", Facilitator: "Facilitators", Teacher: "Teachers" };
 const ROLE_TONE: Record<StaffRoleLabel, PillTone> = { Leader: "cyan", Viewer: "grey", Facilitator: "teal", Teacher: "violet" };
 
-/**
- * Everyone serving below the level being viewed — the same table as a
- * cohort's Students, split by the direct child they work in (Africa, then
- * every African staff member; …). Each row says what the person is
- * responsible for. The viewed level's own staff, and anyone above it,
- * never appear: each level sees what is in its responsibility.
- */
-export function StaffDirectory({ rows, groupLabel }: { rows: DirectoryRow[]; groupLabel: string }) {
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
-  const [open, setOpen] = useState<DirectoryRow | null>(null);
+/** The name column's width — the drawer starts right after it. */
+const NAME_COL = "w-[260px] min-w-[260px] max-w-[260px]";
 
-  const groups = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const shown = rows.filter(
-      (r) =>
-        (!q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.assignments.some((a) => a.place.toLowerCase().includes(q)))
-    );
-    const dir = sort?.dir === "desc" ? -1 : 1;
-    const sorted = [...shown].sort((a, b) =>
-      sort?.key === "place"
-        ? dir * (a.assignments[0]?.place ?? "").localeCompare(b.assignments[0]?.place ?? "")
-        : sort?.key === "role"
-          ? dir * (ROLE_ORDER.indexOf(a.assignments[0]?.role ?? "Teacher") - ROLE_ORDER.indexOf(b.assignments[0]?.role ?? "Teacher")) || a.name.localeCompare(b.name)
-          : dir * a.name.localeCompare(b.name)
-    );
-    const map = new Map<string, { id: string; name: string; rows: DirectoryRow[] }>();
-    for (const r of sorted) {
-      const g = map.get(r.groupId) ?? { id: r.groupId, name: r.groupName, rows: [] };
-      g.rows.push(r);
+type SortKey = "name" | "staff";
+
+interface Group {
+  id: string;
+  name: string;
+  people: DirectoryRow[];
+  /** People holding each role here (someone with two roles counts in both). */
+  byRole: Map<StaffRoleLabel, number>;
+}
+
+/**
+ * Staff below the level being viewed, one row per direct child (each
+ * cohort, in a promotion) with how many people serve there in each role —
+ * the same table as the Cohorts page. Clicking a row opens everyone who
+ * serves there, by role, in a drawer over the table beside the names. The
+ * viewed level's own staff, and anyone above it, never appear.
+ */
+export function StaffDirectory({
+  rows,
+  groupLabel,
+  places,
+}: {
+  rows: DirectoryRow[];
+  groupLabel: string;
+  /** Every direct child, so one with nobody yet still shows (as a gap). */
+  places: { id: string; name: string }[];
+}) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "empty">("all");
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const all = useMemo(() => {
+    const map = new Map<string, Group>(places.map((pl): [string, Group] => [pl.id, { id: pl.id, name: pl.name, people: [], byRole: new Map() }]));
+    for (const r of rows) {
+      const g: Group = map.get(r.groupId) ?? { id: r.groupId, name: r.groupName, people: [], byRole: new Map() };
+      g.people.push(r);
+      for (const role of new Set(r.assignments.map((x) => x.role))) g.byRole.set(role, (g.byRole.get(role) ?? 0) + 1);
       map.set(r.groupId, g);
     }
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows, query, sort]);
+    return [...map.values()];
+  }, [rows, places]);
+
+  // A column for each role anyone holds here, in the usual order.
+  const roles = ROLE_ORDER.filter((role) => all.some((g) => g.byRole.has(role)));
+  const empty = all.filter((g) => !g.people.length).length;
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = all.filter(
+      (g) => (filter === "all" || !g.people.length) && (!q || g.name.toLowerCase().includes(q) || g.people.some((r) => r.name.toLowerCase().includes(q)))
+    );
+    const dir = sort?.dir === "desc" ? -1 : 1;
+    return list.sort((a, b) => (sort?.key === "staff" ? dir * (a.people.length - b.people.length) : dir * a.name.localeCompare(b.name)));
+  }, [all, filter, query, sort]);
+
+  const open = openId ? (all.find((g) => g.id === openId) ?? null) : null;
+  const onSort = (k: SortKey) => setSort((s) => nextSort(s, k));
 
   return (
-    <Card className="overflow-hidden">
+    // The drawer covers the card from its top edge (toolbar included), right of the names.
+    <Card className={cn("relative overflow-clip", open && "min-h-[70vh]")}>
       <div className="flex flex-wrap items-center gap-3 border-b border-divider px-[18px] py-4">
-        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a name or place" className="ml-auto" style={{ width: 210 }} />
+        {empty > 0 && (
+          <Segmented
+            options={[
+              { value: "all", label: `All ${all.length}` },
+              { value: "empty", label: `Without staff ${empty}` },
+            ]}
+            value={filter}
+            onChange={setFilter}
+          />
+        )}
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find a place or name" className="ml-auto" style={{ width: 210 }} />
       </div>
       <Table>
         <THead>
-          <SortableTH label="Staff" sortKey="name" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <SortableTH label="Role" sortKey="role" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <SortableTH label="Responsible for" sortKey="place" sort={sort} onSort={(k) => setSort((s) => nextSort(s, k))} />
-          <TH>Status</TH>
-          <TH align="right" />
+          <SortableTH label={groupLabel} sortKey="name" sort={sort} onSort={onSort} className={NAME_COL} />
+          <SortableTH label="Staff" sortKey="staff" sort={sort} onSort={onSort} align="right" />
+          {roles.map((role) => (
+            <TH key={role} align="right">
+              {ROLE_PLURAL[role]}
+            </TH>
+          ))}
         </THead>
         <tbody>
-          {groups.map((g) => {
-            return (
-              <Fragment key={g.id}>
-                {/* The split: where these people work. */}
-                <SplitRow colSpan={5} title={g.name} />
-                {g.rows.map((r) => {
-                    const [first, ...more] = r.assignments;
-                    const otherRoles = [...new Set(more.map((a) => a.role))].filter((x) => x !== first?.role);
-                    return (
-                      <TR
-                        key={`${g.id}-${r.userId}`}
-                        className={cn("cursor-pointer hover:bg-hover", r.state === "deactivated" && "opacity-60")}
-                        onClick={() => setOpen(r)}
-                      >
-                        <TD>
-                          <span className="flex items-center gap-2.5">
-                            <Avatar name={r.name} />
-                            <span className="min-w-0">
-                              <span className="block truncate text-[13px] font-semibold text-ink">{r.name}</span>
-                              <span className="block truncate text-[11px] text-ink-muted">{r.email}</span>
-                            </span>
-                          </span>
-                        </TD>
-                        <TD>
-                          <span className="flex items-center gap-1.5 whitespace-nowrap">
-                            {first && <Pill tone={ROLE_TONE[first.role]}>{first.role}</Pill>}
-                            {otherRoles.length > 0 && <span className="text-[11px] font-semibold text-ink-muted">+{otherRoles.length}</span>}
-                          </span>
-                        </TD>
-                        <TD className="max-w-[280px]">
-                          {first && (
-                            <span className="block min-w-0">
-                              <span className="block truncate text-[13px] text-ink">
-                                {first.place}
-                                {more.length > 0 && <span className="text-ink-muted"> · +{more.length} more</span>}
-                              </span>
-                            </span>
-                          )}
-                        </TD>
-                        <TD>
-                          <StatusText state={r.state} />
-                        </TD>
-                        <TD align="right" className="w-8">
-                          <CaretRight size={13} className="text-ink-faint" />
-                        </TD>
-                      </TR>
-                    );
-                  })}
-              </Fragment>
-            );
-          })}
-          {!groups.length && (
+          {shown.map((g) => (
+            <TR key={g.id} className={cn("cursor-pointer hover:bg-hover", g.id === openId && "bg-accent-100 hover:bg-accent-100")} onClick={() => setOpenId(g.id)}>
+              <TD className={NAME_COL}>
+                <span className="block truncate text-[13px] font-semibold text-ink" title={g.name}>
+                  {g.name}
+                </span>
+              </TD>
+              <TD align="right" className="text-[13px] font-semibold tabular">
+                {g.people.length ? g.people.length : <Pill tone="yellow">No staff</Pill>}
+              </TD>
+              {roles.map((role) => (
+                <TD key={role} align="right" className="text-[13px] tabular text-ink-secondary">
+                  {g.byRole.get(role) ?? "—"}
+                </TD>
+              ))}
+            </TR>
+          ))}
+          {!shown.length && (
             <TR>
-              <TD colSpan={5} className="py-6 text-center text-ink-faint">
-                {rows.length ? "No one matches." : "No staff below this level yet."}
+              <TD colSpan={2 + roles.length} className="py-6 text-center text-ink-faint">
+                {all.length ? "No one matches." : "No staff below this level yet."}
               </TD>
             </TR>
           )}
         </tbody>
       </Table>
-      {open && <StaffDetails row={open} groupLabel={groupLabel} onClose={() => setOpen(null)} />}
+      {open && (
+        <div className="absolute inset-y-0 right-0 left-0 z-10 border-l border-border bg-card shadow-modal lg:left-[260px]">
+          <div className="sticky top-[76px] flex max-h-[calc(100dvh-88px)] flex-col">
+            <PlaceStaff group={open} groupLabel={groupLabel} onClose={() => setOpenId(null)} />
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -157,55 +169,70 @@ function StatusText({ state }: { state: DirectoryRow["state"] }) {
     <Pill tone="grey">Invited</Pill>
   ) : state === "deactivated" ? (
     <Pill tone="magenta">Deactivated</Pill>
-  ) : (
-    <span className="text-[12px] text-ink-muted">Active</span>
-  );
+  ) : null;
 }
 
-/** Everything about one person: how to reach them, and every place they
- * are responsible for (the table shows only the first). */
-function StaffDetails({ row, groupLabel, onClose }: { row: DirectoryRow; groupLabel: string; onClose: () => void }) {
+/** Everyone serving in one place, by role: how to reach them, and what
+ * else they answer for there (each person listed once per role). */
+function PlaceStaff({ group, groupLabel, onClose }: { group: Group; groupLabel: string; onClose: () => void }) {
+  const sections = ROLE_ORDER.map((role) => ({
+    role,
+    people: group.people.filter((r) => r.assignments.some((a) => a.role === role)).sort((a, b) => a.name.localeCompare(b.name)),
+  })).filter((sec) => sec.people.length);
+
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogPopup width={460}>
-        <div className="flex items-start gap-3 px-5 pt-5">
-          <Avatar name={row.name} size="xl" />
-          <div className="min-w-0 flex-1">
-            <DialogTitle className="truncate text-[16px] font-bold text-ink">{row.name}</DialogTitle>
-            <DialogDescription className="mt-0.5 text-xs text-ink-muted">
-              <a href={`mailto:${row.email}`} className="text-accent-700 hover:underline">
-                {row.email}
-              </a>
-            </DialogDescription>
-            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-ink-muted">
-              <StatusText state={row.state} />
-              <span>
-                · {groupLabel} {row.groupName}
-              </span>
-            </div>
-          </div>
+    <>
+      <div className="flex items-start gap-3 border-b border-divider px-5 pb-3.5 pt-[18px]">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-accent-700">{groupLabel} staff</div>
+          <h2 className="mt-0.5 truncate text-[17px] font-bold text-ink">{group.name}</h2>
         </div>
-        <div className="px-5 py-4">
-          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-faint">
-            Responsible for · {row.assignments.length}
-          </div>
-          <ul className="flex flex-col">
-            {row.assignments.map((a, i) => (
-              <li key={i} className="flex items-start gap-3 border-t border-divider py-2.5 first:border-t-0">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-[13px] font-semibold text-ink">{a.place}</span>
-                  <span className="block text-[11px] text-ink-muted">{a.where}</span>
-                </span>
-                <Pill tone={ROLE_TONE[a.role]}>{a.role}</Pill>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="flex justify-end gap-2 border-t border-divider px-5 py-4">
-          <DialogClose render={<Button type="button" variant="secondary" />}>Close</DialogClose>
-        </div>
-      </DialogPopup>
-    </Dialog>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close staff"
+          className="grid size-8 flex-none place-items-center rounded-control border border-border bg-card text-ink-secondary hover:bg-hover"
+        >
+          <X size={15} />
+        </button>
+      </div>
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-4">
+        {!sections.length && <p className="text-[13px] text-ink-muted">Nobody serves here yet. Assign people from Appointments.</p>}
+        {sections.map((sec) => (
+          <section key={sec.role} className="flex flex-col gap-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-wide text-ink-faint">
+              {ROLE_PLURAL[sec.role]} · {sec.people.length}
+            </h3>
+            <ul className="flex flex-col rounded-card border border-border">
+              {sec.people.map((r) => {
+                const places = r.assignments.filter((a) => a.role === sec.role);
+                return (
+                  <li key={r.userId} className={cn("flex items-start gap-3 border-t border-divider px-3.5 py-3 first:border-t-0", r.state === "deactivated" && "opacity-60")}>
+                    <Avatar name={r.name} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate text-[13px] font-semibold text-ink">{r.name}</span>
+                        <StatusText state={r.state} />
+                      </span>
+                      <a href={`mailto:${r.email}`} className="block truncate text-[12px] text-accent-700 hover:underline">
+                        {r.email}
+                      </a>
+                      {/* Only worth saying when it isn't simply this place. */}
+                      {places.some((a) => a.place !== group.name) && (
+                        <span className="mt-1 block text-[11px] text-ink-muted">
+                          {places.map((a) => [a.place, a.where].filter(Boolean).join(" · ")).join("; ")}
+                        </span>
+                      )}
+                    </span>
+                    <Pill tone={ROLE_TONE[sec.role]}>{sec.role}</Pill>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
 

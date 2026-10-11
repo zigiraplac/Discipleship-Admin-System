@@ -3,11 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { MagnifyingGlass, Plus, GlobeHemisphereEast, UsersThree } from "@phosphor-icons/react";
+import { MagnifyingGlass, Plus } from "@phosphor-icons/react";
 import type { Icon } from "@phosphor-icons/react";
 import { NAV_ITEMS, NAV_GROUP_LABELS, NAV_GROUP_ORDER, type NavItem } from "./nav-items";
 import { UNIT_SECTIONS, unitHref, type OrgNav } from "./org-nav";
 import { SearchTrigger } from "./search-palette";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, roleLabel } from "@/lib/roles";
 import type { Role } from "@/lib/domain/types";
@@ -22,7 +23,7 @@ function navLabel(item: NavItem, role: Role): string {
 
 function isActive(id: string, pathname: string, cohortSlug: string | null): boolean {
   if (id === "dashboard") return pathname === `/c/${cohortSlug}`;
-  if (["lessons", "students", "followup", "catchup", "crusades", "calendar", "reports"].includes(id)) {
+  if (["lessons", "students", "followup", "catchup", "activities", "calendar", "reports"].includes(id)) {
     return pathname.startsWith(`/c/${cohortSlug}/${id}`);
   }
   if (id === "cohorts") return pathname.startsWith("/cohorts");
@@ -114,9 +115,7 @@ export function Sidebar({
   // a global page (Shell resolves that) — it's only still null when
   // there genuinely isn't one yet, in which case those items would point
   // nowhere (`/c/null`) and are hidden instead of shown broken.
-  const primary = levelPortal
-    ? []
-    : NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
+  const primary = levelPortal ? [] : NAV_ITEMS.filter((n) => n.cohortScoped && allowed.has(n.id) && activeCohortSlug);
   // Dashboard has no group — stays standalone above every section, the way
   // a "home" item usually does. Everything else is grouped by function
   // (Schedule / Students / Reports) so the sidebar reads as a few short
@@ -208,7 +207,6 @@ export function Sidebar({
           </div>
         )}
 
-
         {ungrouped.length > 0 && <div className="flex flex-col gap-0.5">{ungrouped.map(renderItem)}</div>}
 
         {sections.map((section) => (
@@ -218,36 +216,6 @@ export function Sidebar({
           </div>
         ))}
 
-        {workspaces.length > 1 && (
-          <div className="flex flex-col gap-0.5">
-            <GroupLabel>Your workspaces</GroupLabel>
-            {workspaces.map((w) => {
-              const active = org?.activeWorkspace === w.href;
-              return (
-                <Link
-                  key={w.href}
-                  href={w.href}
-                  onClick={onNavigate}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-control px-2.5 py-[7px] hover:bg-hover",
-                    active && "bg-accent-100 hover:bg-accent-100"
-                  )}
-                >
-                  {w.kind === "unit" ? (
-                    <GlobeHemisphereEast size={16} className={active ? "text-accent-800" : "text-ink-tertiary"} />
-                  ) : (
-                    <UsersThree size={16} className={active ? "text-accent-800" : "text-ink-tertiary"} />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className={cn("block truncate text-[13px] font-medium", active ? "font-bold text-accent-800" : "text-ink-secondary")}>{w.title}</span>
-                    <span className="block truncate text-[11px] text-ink-muted">{w.role}</span>
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
         {manage.length > 0 && (
           <div className="flex flex-col gap-0.5">
             <GroupLabel>Manage</GroupLabel>
@@ -256,16 +224,22 @@ export function Sidebar({
         )}
       </nav>
 
-      {canCreateCohort && (
-        <div className="border-t border-divider p-3">
-          <Link
-            href="/cohorts/new"
-            onClick={onNavigate}
-            className="flex w-full items-center justify-center gap-1.5 rounded-control bg-accent px-2.5 py-2.5 text-[13px] font-semibold text-white hover:bg-accent-600"
-          >
-            <Plus size={15} />
-            New cohort
-          </Link>
+      {/* Switching roles lives down here, apart from the current place's pages. */}
+      {(workspaces.length > 1 || canCreateCohort) && (
+        <div className="flex flex-col gap-2 border-t border-divider p-3">
+          {workspaces.length > 1 && (
+            <WorkspaceSwitcher workspaces={workspaces} activeHref={org?.activeWorkspace ?? null} onNavigate={onNavigate} />
+          )}
+          {canCreateCohort && (
+            <Link
+              href="/cohorts/new"
+              onClick={onNavigate}
+              className="flex w-full items-center justify-center gap-1.5 rounded-control bg-accent px-2.5 py-2.5 text-[13px] font-semibold text-white hover:bg-accent-600"
+            >
+              <Plus size={15} />
+              New cohort
+            </Link>
+          )}
         </div>
       )}
     </aside>

@@ -219,6 +219,29 @@ export interface Database {
           },
         ];
       };
+      activity: {
+        Row: {
+          id: string;
+          cohort_id: string;
+          kind: string;
+          activity_date: string;
+          theme: string | null;
+          preacher: string | null;
+          status: "planned" | "done" | "not_done";
+          notes: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_by: string | null;
+          updated_at: string | null;
+        };
+        Insert: Partial<Database["public"]["Tables"]["activity"]["Row"]> & {
+          cohort_id: string;
+          kind: string;
+          activity_date: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["activity"]["Row"]>;
+        Relationships: [];
+      };
       crusade_report: {
         Row: {
           id: string;
@@ -230,6 +253,7 @@ export interface Database {
           highlights: string | null;
           recorded_by: string | null;
           recorded_at: string | null;
+          status: "done" | "not_done";
         };
         Insert: Partial<Database["public"]["Tables"]["crusade_report"]["Row"]> & {
           cohort_id: string;
